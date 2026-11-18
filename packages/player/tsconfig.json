@@ -1,0 +1,1 @@
+{ "extends": "../../tsconfig.base.json", "include": ["src", "dev", "test", "scripts", "vite.dev.config.ts"], "compilerOptions": { "types": ["vite/client", "node"] } }

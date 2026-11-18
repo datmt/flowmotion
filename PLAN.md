@@ -337,7 +337,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   `zod`, `elkjs`, or `shiki` inputs.
   *Commit:* `feat(core): F08 pure sample() runtime`
 
-- [~] **F09 Konva player + `<flow-player>`**
+- [x] **F09 Konva player + `<flow-player>`**
   *Depends:* F08 · *PRD:* §4.2, §4.3, §6 (Step/Play modes, navigation, accessibility)
   `packages/player`: `createPlayer(container, compiled, { mode, scenario, step, onStep }) → Player`
   (`play`, `pause`, `seek(t)`, `setSpeed`, `goToStep(id)`, `setScenario(id)`, `destroy`, `stage`).

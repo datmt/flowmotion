@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>flow-player dev</title>
+<style>body{font:14px system-ui;margin:24px;max-width:960px}select{margin-bottom:12px}</style>
+<label>Flow: <select id="pick"></select></label>
+<div id="host"></div>
+<script type="module">
+  import "../src/element.ts";
+  const files = Object.keys(import.meta.glob("./*.flow.json", { query: "?url", import: "default" }));
+  const pick = document.getElementById("pick");
+  const urls = import.meta.glob("./*.flow.json", { query: "?url", import: "default", eager: true });
+  for (const f of files) pick.append(new Option(f.replace("./", ""), urls[f]));
+  const params = new URLSearchParams(location.search);
+  const load = (src) => {
+    const host = document.getElementById("host");
+    host.replaceChildren();
+    const el = document.createElement("flow-player");
+    el.setAttribute("src", src);
+    host.append(el);
+    window.__el = el;
+  };
+  pick.onchange = () => load(pick.value);
+  const want = params.get("src");
+  if (want) { pick.value = [...pick.options].find((o) => o.text === want)?.value ?? pick.value; }
+  load(pick.value);
+</script>

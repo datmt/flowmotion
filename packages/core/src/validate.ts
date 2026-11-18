@@ -71,7 +71,7 @@ export function validate(input: unknown): ValidateResult {
   // — limits —
   const count = [doc.groups, doc.nodes, doc.edges, doc.arrays, doc.grids, doc.tokens, doc.code].reduce((n, a) => n + (a?.length ?? 0), 0);
   if (count > MAX_ENTITIES) err([], "limit_exceeded", `${count} entities; the limit is ${MAX_ENTITIES}.`, "Split into several flows or remove detail.");
-  const bytes = Buffer.byteLength(JSON.stringify(input));
+  const bytes = new TextEncoder().encode(JSON.stringify(input)).length;
   if (bytes > MAX_BYTES) err([], "limit_exceeded", `Document is ${bytes} bytes; the limit is ${MAX_BYTES}.`);
   doc.code?.forEach((c, i) => {
     const n = c.code.split("\n").length;

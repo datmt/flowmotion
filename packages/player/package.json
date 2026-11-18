@@ -1,0 +1,24 @@
+{
+  "name": "@flowmotion/player",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "dev": "vite --config vite.dev.config.ts",
+    "build": "vite build --config vite.dev.config.ts",
+    "size": "node --experimental-strip-types scripts/size.ts",
+    "examples": "node --experimental-strip-types scripts/compile-examples.ts"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1",
+    "vite": "8.3.8"
+  },
+  "dependencies": {
+    "@flowmotion/core": "workspace:*",
+    "konva": "10.9.1"
+  }
+}

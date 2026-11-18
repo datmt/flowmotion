@@ -36,3 +36,4 @@ export interface Track {
   init: StateName | boolean | string | number | TokenAt;
   keys: { t0: number; t1: number; ease: Ease; to: Track["init"] }[]; // sorted, non-overlapping per track
 }
+export type { NodeKind, StateName };
