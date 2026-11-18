@@ -537,6 +537,127 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   (target ≤ 30 s median, §10). Fix regressions.
   *Commit:* `fix: F26 phase 2 hardening`
 
+### Phase 2b — Presentation, text DSL, icons
+
+Principle kept: agents never specify look (no colors, shapes, coordinates, absolute time). We grow the
+**vocabulary** (icons, tones, effects) and the **presentation** instead. FlowDoc JSON stays canonical;
+new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
+
+**Track A — Presentation (three-zone viewer)**
+
+- [ ] **F33 Step change-sets**
+  *Depends:* F09
+  Extend §1.1 `CompiledScenario.steps[]` with `changes: {target, prop, from, to}[]` (state, label, at,
+  visible; derived from `tracks` keys falling inside the step) and `stateAt(step)` helpers in
+  `core/src/runtime` returning the settled value of every array/grid cell, token position and node
+  state at step end (reuse `sample.ts`). No schema change.
+  *Done when:* test: binary-search step 2 reports `lo: 0→5` and `nums#0..4 state → disabled`; settled
+  state at step N equals sampling the tracks at that step's end time.
+  *Commit:* `feat(core): F33 per-step change sets`
+
+- [ ] **F34 Three-zone player UI**
+  *Depends:* F33, F14
+  Rework `player/src/element.ts` layout. **Left rail:** scenario tabs; main line as a step timeline
+  (done / current / upcoming), branches drawn as a fork off the step they leave; clicking jumps.
+  **Center:** stage with floating prev / play / next only (speed and mode in an overflow menu).
+  **Right "Now" panel:** step title (large), narration (readable size), "What changed" list from F33,
+  then a live state table of arrays/grids/tokens with changed cells highlighted. Below ~720 px: stage,
+  Now panel, then a collapsible rail. Keep the hidden accessible tables, arrow/space keys, `?s=&step=`.
+  *Done when:* Playwright: step through binary-search; Now panel shows the F33 changes and highlights
+  `lo`; branch tab switches scenario; mobile viewport has no horizontal scroll.
+  *Commit:* `feat(player): F34 three-zone layout with Now panel`
+
+**Track B — Text DSL (compiles to FlowDoc)**
+
+- [ ] **F35 DSL go/no-go spike**
+  *Depends:* F17
+  Hand-translate `saga-compensation` and the optimistic-lock flow into the draft DSL (one action per
+  line, see `docs/dsl-draft.md`, written here). Record token counts vs JSON (use the token counter).
+  *Done when:* `docs/dsl-draft.md` has the grammar sketch and the numbers. **Gate:** under 40 % token
+  saving → stop and drop F36-F38.
+  *Commit:* `docs: F35 DSL spike results`
+
+- [ ] **F36 DSL parser and printer**
+  *Depends:* F35
+  `core/src/dsl.ts`: `parseDsl(text) → {doc?, issues}` and `printDsl(doc) → string`. Hand-written
+  line parser (no dependency). Errors carry `line`/`col` and "did you mean" for action names and ids;
+  schema issues from `validate` are mapped back to source lines through a path→line table.
+  Indentation: 2 spaces; quote any value with spaces; cell values are always strings (no YAML-style
+  coercion).
+  *Done when:* all 7 templates round-trip `doc → printDsl → parseDsl → doc` deep-equal; a fixture with 5
+  typical mistakes yields line-numbered errors.
+  *Commit:* `feat(core): F36 flow text DSL parser and printer`
+
+- [ ] **F37 DSL in MCP, API, CLI, web**
+  *Depends:* F36, F15, F17
+  `flow_create`/`flow_edit` accept `dsl` (string) beside `doc`/`ops`; `flow_get view:"dsl"`; the API
+  mirrors it; CLI `validate` reads `.flow` text files; web import/export of `.flow`. Rewrite
+  `docs/guide.md` around DSL with the JSON form as appendix; keep the guide under 6000 tokens.
+  *Done when:* MCP test creates a flow from DSL and reads it back as DSL; invalid DSL returns
+  line-numbered issues with `isError`.
+  *Commit:* `feat(server): F37 DSL authoring over MCP/API/CLI`
+
+- [ ] **F38 Authoring eval: JSON vs DSL**
+  *Depends:* F37, F19
+  Reuse the F19 prompts. Fresh agent runs per format. Metrics: first-try validity, rounds to valid,
+  tokens, lint warnings. Results in `evals/results/`.
+  *Done when:* report committed with a recommendation (default format in the guide).
+  *Commit:* `feat(evals): F38 JSON vs DSL authoring comparison`
+
+**Track C — Vocabulary and icons**
+
+- [ ] **F39 Icon field, packs, resolver**
+  *Depends:* F09, F13
+  Optional `icon: "<pack>:<name>"` on nodes (regex-validated). Open-source packs only, from Iconify
+  JSON: `lucide` (ISC), `simple-icons` (CC0), plus open infra/dev packs after a license check recorded
+  in `assets/icons/LICENSES.md` (nothing proprietary, no AWS set). `gen:icons` script builds compact
+  pack data under `core/src/icons/` (server and web compile only, lazily imported; never in the
+  player bundle). Compiler resolves used refs into `compiled.icons: Record<ref, {viewBox, body, mono}>`.
+  Mono icons draw with the node's text color (theme and state aware); colored logos keep colors.
+  Player draws the icon in the node; no icon = the kind glyph. Unknown ref → error `unknown_icon`
+  with nearest names as `hint`.
+  *Done when:* test: `icon: "si:postgresql"` compiles with exactly one `icons` entry; unknown name
+  errors with a suggestion; snapshot renders identically with the pack data absent (self-contained).
+  *Commit:* `feat(core): F39 icon packs and resolver`
+
+- [ ] **F40 Icon search for agents**
+  *Depends:* F39
+  `flow_icons {query, pack?, limit?}` MCP tool + `GET /api/icons?q=` returning `pack:name` and a tag
+  list; guide lists packs and the naming rule only. Tool count stays ≤ 10.
+  *Done when:* test: query "postgres" returns `si:postgresql`; MCP tool list schema still has no `$ref`.
+  *Commit:* `feat(server): F40 icon search tool`
+
+- [ ] **F41 Local icon import**
+  *Depends:* F39, F14
+  `local:<name>` pack in IndexedDB (browser only). Import by file drop or pasted SVG; sanitize (strip
+  script, foreignObject, event handlers, external hrefs/urls, `<style>` with imports), normalize to a
+  viewBox, cap 20 KB, store body only, render as inline paths (never `<img>`). Server/MCP: `local:`
+  passes schema but gives warning `icon_unresolved` and falls back to the kind glyph. Share dialog:
+  lists local icons used; default = share with fallback glyph; opt-in "embed these in the public
+  snapshot". The stored doc keeps `local:` refs either way.
+  *Done when:* tests: hostile SVG is sanitized to safe output; server compile of a `local:` ref warns
+  and succeeds; Playwright: share without embed shows fallback, with embed shows the icon.
+  *Commit:* `feat(web): F41 local icon import and share rules`
+
+- [ ] **F42 Tones**
+  *Depends:* F09
+  Optional `tone: primary | muted | danger` on nodes and groups: semantic emphasis mapped by the theme
+  (light and dark), orthogonal to `state`. Lint: more than a third of nodes `primary` → warning.
+  *Done when:* schema + compile test; player draws three distinct tones; guide updated.
+  *Commit:* `feat(core): F42 semantic tones`
+
+- [ ] **F43 Named effects**
+  *Depends:* F09
+  New action `effect` with `{target(s), name: shake | grow | fade | flash}` (no numeric transforms, no
+  rotation); timing keys like other actions; ends with its step if transient.
+  *Done when:* each effect compiles to deterministic tracks (same output twice); player test; guide
+  lists the four.
+  *Commit:* `feat(core): F43 named effects`
+
+Dependency notes: A, B, C are independent lanes. F34 gates the visual quality pass; F35 gates all of B.
+Icons and DSL syntax meet in F36/F37 (`icon=pack:name`, `tone=`, `effect` lines) — add them to the
+grammar when F39/F42/F43 land.
+
 ### Phase 3 — Visual editor
 
 - [ ] **F27 Editor shell, store, local persistence**
