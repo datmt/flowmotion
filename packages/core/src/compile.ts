@@ -40,7 +40,7 @@ export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow
   const compiled: CompiledFlow = {
     version: "2.1",
     meta: { title: doc.meta.title, ...(doc.meta.summary ? { summary: doc.meta.summary } : {}), theme, aspect: doc.meta.aspect ?? "16:9" },
-    bounds: lay.bounds,
+    bounds: lay.bounds, shift: lay.shift,
     groups: lay.groups, nodes: lay.nodes, edges: lay.edges,
     ...(lay.lifelines.length ? { lifelines: lay.lifelines } : {}),
     arrays: lay.arrays, grids: lay.grids, code,

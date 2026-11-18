@@ -75,3 +75,108 @@ test("F20 render page: identical pixels across loads; sheet mode within 1600px",
   expect(Math.max(s.size.w, s.size.h)).toBeLessThanOrEqual(1600);
   expect(s.nonBlank).toBe(true);
 }, 120_000);
+
+test("F27/F28 editor: drag pins, label + connect + delete are undoable and survive reload", async () => {
+  const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("dialog", (d) => void d.accept());
+  await page.goto(`${base}/`);
+  await page.getByRole("listitem").filter({ hasText: "Circuit Breaker" }).getByRole("button", { name: "Use" }).click();
+  await page.waitForURL(/\/local\//);
+  await page.goto(page.url().replace("/local/", "/edit/"));
+  await page.locator("[data-testid=canvas] canvas").first().waitFor({ timeout: 60_000 });
+  const doc = () => page.evaluate(() => (window as any).__EDITOR__.store.get().doc);
+  /** screen centre of a compiled entity (or the connect handle) */
+  const at = (what: string) => page.evaluate((what) => {
+    const e = (window as any).__EDITOR__, p = e.player, root = p.stage.getLayers().at(-1).children[0];
+    const r = what === "handle" ? { x: root.children.at(-1).x() - 1, y: root.children.at(-1).y() - 1, w: 2, h: 2 } : [...p.compiled.nodes, ...p.compiled.arrays].find((n: any) => n.id === what).rect;
+    const pt = root.getAbsoluteTransform().point({ x: r.x + r.w / 2, y: r.y + r.h / 2 }), b = p.stage.container().getBoundingClientRect();
+    return { x: b.left + pt.x, y: b.top + pt.y };
+  }, what);
+  const drag = async (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 }); await page.mouse.move(b.x, b.y, { steps: 4 }); await page.mouse.up();
+  };
+  const ids = (await doc()).nodes.map((n: any) => n.id) as string[];
+  const [n0, n1] = ids;
+
+  const c0 = await at(n0!);
+  await drag(c0, { x: c0.x + 140, y: c0.y + 90 });
+  await expect.poll(async () => (await doc()).nodes[0].pos).toBeTruthy();
+
+  await page.getByLabel("Label").fill("Renamed");
+  await page.getByLabel("Label").press("Enter");
+  await expect.poll(async () => (await doc()).nodes[0].label).toBe("Renamed");
+
+  const edges = (await doc()).edges.length;
+  const from = (await doc()).edges.some((e: any) => e.from === n0 && e.to === n1) ? ids[2]! : n1!;
+  await page.waitForTimeout(500);
+  await drag(await at("handle"), await at(from));
+  await expect.poll(async () => (await doc()).edges.length).toBe(edges + 1);
+
+  await page.waitForTimeout(600); // autosave
+  await page.reload();
+  await page.locator("[data-testid=canvas] canvas").first().waitFor({ timeout: 60_000 });
+  expect((await doc()).nodes[0].label).toBe("Renamed");
+  await page.getByRole("button", { name: "Undo" }).click(); // undoes the connect
+  await expect.poll(async () => (await doc()).edges.length).toBe(edges);
+  await page.getByRole("button", { name: "Undo" }).click(); // undoes the label
+  await expect.poll(async () => (await doc()).nodes[0].label).not.toBe("Renamed");
+  expect((await doc()).nodes[0].pos).toBeTruthy(); // pin survived
+  await page.getByRole("button", { name: "Re-layout" }).click();
+  await expect.poll(async () => (await doc()).nodes.some((n: any) => n.pos)).toBe(false);
+  expect(errors).toEqual([]);
+}, 120_000);
+
+test("F29/F30 inspector + step editor: edit text, cells, narration, add/move/remove steps; all undoable", async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("dialog", (d) => void d.accept());
+  await page.goto(`${base}/`);
+  await page.getByRole("listitem").filter({ hasText: "Binary Search" }).getByRole("button", { name: "Use" }).click();
+  await page.waitForURL(/\/local\//);
+  await page.goto(page.url().replace("/local/", "/edit/"));
+  await page.locator("[data-testid=canvas] canvas").first().waitFor({ timeout: 60_000 });
+  const doc = () => page.evaluate(() => (window as any).__EDITOR__.store.get().doc);
+  const arr = (await doc()).arrays[0];
+
+  // flow title (nothing selected)
+  await page.getByLabel("Title", { exact: true }).fill("My search");
+  await page.getByLabel("Title", { exact: true }).press("Enter");
+  await expect.poll(async () => (await doc()).meta.title).toBe("My search");
+
+  // array values
+  await page.evaluate((id) => (window as any).__EDITOR__.store.select(id), arr.id);
+  await page.getByLabel("Values (one per line)").fill("9\n8\n7\n6\n5\n4\n3\n2\n1\n0");
+  await page.getByLabel("Label", { exact: true }).focus(); // blur commits
+  await expect.poll(async () => (await doc()).arrays[0].values[0]).toBe("9");
+
+  // steps tab: narration, add step, move, remove
+  await page.getByRole("tab", { name: "Steps" }).click();
+  await page.getByLabel("Narration").fill("Edited narration");
+  await page.getByLabel("Step title").focus();
+  await expect.poll(async () => (await doc()).scenarios[0].steps[0].narration).toBe("Edited narration");
+  const n = (await doc()).scenarios[0].steps.length;
+  await page.getByRole("button", { name: "+ step" }).click();
+  await expect.poll(async () => (await doc()).scenarios[0].steps.length).toBe(n + 1);
+  const added = (await doc()).scenarios[0].steps[1].id;
+  await page.getByRole("button", { name: "↑" }).click();
+  await expect.poll(async () => (await doc()).scenarios[0].steps[0].id).toBe(added);
+  await page.getByRole("button", { name: "remove", exact: true }).click();
+  await expect.poll(async () => (await doc()).scenarios[0].steps.length).toBe(n);
+
+  // too-long narration is rejected with a visible error, doc unchanged
+  await page.getByLabel("Narration").fill("x".repeat(401));
+  await page.getByLabel("Step title").focus();
+  await expect.poll(() => page.getByRole("alert").count()).toBeGreaterThan(0);
+
+  // undo everything back: remove, move, add, narration, values, title
+  await page.getByLabel("Narration").fill("");
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Undo" }).click();
+  const d = await doc();
+  expect(d.meta.title).not.toBe("My search");
+  expect(d.arrays[0].values[0]).not.toBe("9");
+  expect(d.scenarios[0].steps[0].narration).not.toBe("Edited narration");
+  expect(errors).toEqual([]);
+}, 120_000);

@@ -57,7 +57,7 @@ export function createApp({ store, env, renderer }: { store: BlobStore; env: Env
   app.post("/mcp", write, mcpHandler(c));
   app.all("/mcp", (_req, res) => void res.status(405).set("allow", "POST").json({ error: "method_not_allowed" })); // stateless: no SSE/session
 
-  // Built web app + SPA fallback (client routes: /, /v/:id, /local/:id). Skipped when not built.
+  // Built web app + SPA fallback (client routes: /, /v/:id, /local/:id, /edit/:id). Skipped when not built.
   const dist = env.WEB_DIST ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
   if (existsSync(dist)) {
     app.use(express.static(dist));

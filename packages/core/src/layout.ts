@@ -10,6 +10,7 @@ import type { Rect } from "./runtime/compiled.ts";
 export type { Rect };
 export interface Layout {
   bounds: Rect;
+  shift: { x: number; y: number }; // compiled = ELK space + shift; `pos` pins live in ELK space
   groups: { id: string; label: string; rect: Rect }[];
   nodes: { id: string; kind: NodeKind; rect: Rect }[];
   edges: { id: string; from: string; to: string; arrow: boolean; dashed: boolean; points: number[]; length: number; labelAt: { x: number; y: number } }[];
@@ -227,6 +228,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
   const g2 = groups.map((g) => ({ ...g, rect: sh(g.rect) }));
   const bounds = union([...[...rect.keys()].map(R), ...g2.map((g) => g.rect)]);
   return {
+    shift: { x: dx, y: dy },
     bounds: { x: 0, y: 0, w: bounds.x + bounds.w + M, h: bounds.y + bounds.h + M },
     groups: g2,
     nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id) })),

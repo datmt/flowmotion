@@ -6,6 +6,7 @@ import { buildScene } from "./scene.ts";
 export interface PlayerOptions { scenario?: string; step?: number; reducedMotion?: boolean; onStep?: (step: number, scenario: string) => void; onTime?: (t: number, playing: boolean) => void }
 export interface Player {
   readonly stage: Konva.Stage;
+  readonly world: Konva.Group; // scene root; the editor mirrors its camera transform
   readonly compiled: CompiledFlow;
   readonly t: number; readonly playing: boolean; readonly scenario: string; readonly step: number; readonly duration: number;
   frame(): FrameState;
@@ -40,6 +41,7 @@ export function createPlayer(container: HTMLDivElement, compiled: CompiledFlow, 
   };
   const p: Player = {
     stage, compiled,
+    get world() { return scene.world; },
     get t() { return t; }, get playing() { return playing; }, get scenario() { return scenario; }, get step() { return step; }, get duration() { return sc().duration; },
     frame: () => fr,
     play() {

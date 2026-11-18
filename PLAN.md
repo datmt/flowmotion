@@ -660,33 +660,42 @@ grammar when F39/F42/F43 land.
 
 ### Phase 3 — Visual editor
 
-- [ ] **F27 Editor shell, store, local persistence**
+- [x] **F27 Editor shell, store, local persistence**
   *Depends:* F24 · *PRD:* §7, §5.7 (undo)
   `/edit/:id` (local flow) in `web`. zustand + immer store holding the doc, selection, and an undo/redo
   stack of op batches (forward/inverse from `applyOps`, run in the browser — core is browser-safe).
   Autosave to IndexedDB; revision snapshots on explicit "Save version". react-konva stage with pan/zoom,
   entities drawn via the player's `drawEntity`, selection. Live preview = compile in a Web Worker on change.
   *Done when:* Playwright: open editor, select node, undo/redo a label change across reload.
+  *Built (deviations):* no zustand/react-konva/Worker. Framework-free store (`editor/store.ts`) + Konva
+  overlay on the player (`editor/overlay.ts`, `Player.world` exposes the camera); compile runs on the main
+  thread. `CompiledFlow.shift` added (compiled = layout space + shift; `pos = compiled - shift`).
+  Undo history and versions persist in the IndexedDB record. Version restore is a dropdown (full list = F31).
   *Commit:* `feat(web): F27 editor shell with undo and local persistence`
 
-- [ ] **F28 Canvas editing: drag-to-pin, re-layout, palette, connect**
+- [x] **F28 Canvas editing: drag-to-pin, re-layout, palette, connect**
   *Depends:* F27 · *PRD:* §7 Canvas
   Drag node/array/grid → `upsert` with `pos` (live edge re-route uses the F05 pin router); "Re-layout"
   clears all pins in one batch; palette adds node kinds/array/grid/token/code with generated kebab ids;
   drag from node handle to node creates an edge; delete key → `remove` (with cascade confirm).
+  *Deferred:* edges re-route after drop (recompile), not live while dragging.
   *Commit:* `feat(web): F28 canvas editing`
 
-- [ ] **F29 Inspector**
+- [x] **F29 Inspector**
   *Depends:* F27 · *PRD:* §7 Inspector
   Label, kind, group, initial state, hidden; inline cell editing for arrays/grids; theme swatch of every
   `StateName`. Each change = one op batch (debounced for text).
+  *Deferred:* theme swatches; array keys, grid row/col labels, token `at` not editable. Text commits on blur (one undo entry each).
   *Commit:* `feat(web): F29 inspector with cell editing`
 
-- [ ] **F30 Step + timeline editor**
+- [x] **F30 Step + timeline editor**
   *Depends:* F27 · *PRD:* §7 Step editor
   Scenario tabs, step list (add/reorder/remove via `upsertStep`/`removeStep`), narration field with
   length counter, per-step timeline: actions as bars from scheduled times (F03); drag bar edges → `dur`,
   drag body → `delay`; toggle sequence/parallel → `start`; click → seek the preview player.
+  *Deferred:* timeline bars (drag → `dur`/`delay`, `start` toggle). Steps are text fields; actions: edit
+  `label`/`callout` text and `state`, delete, add state/show/hide/pulse/focus/label/callout on the selection.
+  `send`/`move`/`swap`/`values`/`highlight` can't be added in the UI yet.
   *Commit:* `feat(web): F30 step and timeline editor`
 
 - [ ] **F31 AI panel + revision history**

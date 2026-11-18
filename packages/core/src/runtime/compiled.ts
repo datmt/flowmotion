@@ -7,6 +7,7 @@ export interface CompiledFlow {
   version: "2.1";
   meta: { title: string; summary?: string; theme: "light" | "dark"; aspect: "16:9" | "4:3" | "1:1" | "9:16" };
   bounds: Rect; // whole diagram incl. hidden entities
+  shift?: { x: number; y: number }; // compiled coords = layout coords + shift; editor pins `pos = compiled - shift`
   groups: { id: string; label: string; rect: Rect }[];
   nodes: { id: string; kind: NodeKind; rect: Rect }[];
   edges: { id: string; from: string; to: string; arrow: boolean; dashed: boolean; points: number[]; length: number; labelAt: { x: number; y: number } }[];

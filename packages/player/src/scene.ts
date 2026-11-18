@@ -207,5 +207,5 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
     layer.draw();
   }
   void sample;
-  return { update, destroy: () => layer.destroy() };
+  return { update, world, destroy: () => layer.destroy() };
 }

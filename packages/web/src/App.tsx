@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import * as db from "./db.ts";
 
 const templates = import.meta.glob<any>("../../../templates/*.flow.json", { eager: true, import: "default" });
 const Player = "flow-player" as any; // custom element, see packages/player
 
-const link = "text-blue-600 hover:underline";
-const btn = "rounded-md border border-stone-400 bg-white px-3 py-1 text-sm hover:border-emerald-600";
+const Editor = lazy(() => import("./editor/Editor.tsx")); // pulls core (zod/elk/shiki): keep off the first paint
+
+export const link = "text-blue-600 hover:underline";
+export const btn = "rounded-md border border-stone-400 bg-white px-3 py-1 text-sm hover:border-emerald-600";
 
 function Sidebar() {
   const [flows, setFlows] = useState<db.LocalFlow[]>([]);
@@ -28,7 +30,7 @@ function Sidebar() {
   );
 }
 
-function Shell({ children, side = true }: { children: React.ReactNode; side?: boolean }) {
+export function Shell({ children, side = true }: { children: React.ReactNode; side?: boolean }) {
   return (
     <div className="flex h-screen flex-col bg-stone-50 text-stone-900">
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-stone-300 bg-white px-5">
@@ -80,6 +82,7 @@ function Library() {
           {flows.map((f) => (
             <li key={f.id} className="flex items-center justify-between p-3">
               <a className={link} href={`/local/${f.id}`}>{f.doc?.meta?.title ?? f.id}</a>
+              <a className={`${btn} ml-auto mr-2`} href={`/edit/${f.id}`}>Edit</a>
               <button className={btn} onClick={() => db.remove(f.id).then(refresh)}>Delete</button>
             </li>
           ))}
@@ -124,6 +127,7 @@ function Local({ id }: { id: string }) {
     <Shell>
       <div className="flex items-center gap-2">
         <h1 className="mr-auto text-xl font-bold">{flow.doc.meta?.title}</h1>
+        <a className={btn} href={`/edit/${flow.id}`}>Edit</a>
         <button className={btn} onClick={async () => {
           const { printDsl } = await import("@flowmotion/core");
           const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([printDsl(flow.doc)], { type: "text/plain" })), download: `${flow.id}.flow` });
@@ -142,6 +146,7 @@ export function App() {
   switch (root) {
     case "v": return <Viewer id={id!} />;
     case "local": return <Local id={id!} />;
+    case "edit": return <Suspense fallback={null}><Editor id={id!} /></Suspense>;
     default: return <Library />;
   }
 }

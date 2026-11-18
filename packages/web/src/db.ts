@@ -1,5 +1,5 @@
 // Local library: one IndexedDB store of {id, doc, updated}. Flows never leave the browser until shared.
-export interface LocalFlow { id: string; doc: any; updated: number }
+export interface LocalFlow { id: string; doc: any; updated: number; hist?: { undo: any[]; redo: any[] }; versions?: { t: number; label: string; doc: any }[] }
 
 const open = () => new Promise<IDBDatabase>((res, rej) => {
   const r = indexedDB.open("flowmotion", 1);
@@ -15,7 +15,7 @@ async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequ
 export const list = () => tx<LocalFlow[]>("readonly", (s) => s.getAll()).then((a) => a.sort((x, y) => y.updated - x.updated));
 export const load = (id: string) => tx<LocalFlow | undefined>("readonly", (s) => s.get(id));
 export const remove = (id: string) => tx("readwrite", (s) => s.delete(id));
-export async function save(doc: any, id = crypto.randomUUID()) {
-  await tx("readwrite", (s) => s.put({ id, doc, updated: Date.now() }));
+export async function save(doc: any, id: string = crypto.randomUUID(), extra: Pick<LocalFlow, "hist" | "versions"> = {}) {
+  await tx("readwrite", (s) => s.put({ ...extra, id, doc, updated: Date.now() }));
   return id;
 }
