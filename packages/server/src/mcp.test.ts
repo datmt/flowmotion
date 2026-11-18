@@ -1,0 +1,33 @@
+import { readFileSync } from "node:fs";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { expect, test } from "vitest";
+import { createApp } from "./app.ts";
+import { memoryStore } from "./store.ts";
+
+const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+
+test("mcp: tools list, create → edit roundtrip, invalid → isError", async () => {
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" } }).listen(0);
+  const client = new Client({ name: "t", version: "0" });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`)));
+    const { tools } = await client.listTools();
+    expect(tools.length).toBeLessThanOrEqual(10);
+    expect(JSON.stringify(tools.map((t) => t.inputSchema))).not.toContain("$ref");
+    expect(tools.find((t) => t.name === "flow_get")?.annotations?.readOnlyHint).toBe(true);
+
+    const call = (name: string, args: Record<string, unknown> = {}) => client.callTool({ name, arguments: args }) as Promise<any>;
+    const a = (await call("flow_create", { doc: tpl })).structuredContent;
+    const b = (await call("flow_edit", { id: a.id, ops: [{ op: "setMeta", value: { title: "Renamed" } }] })).structuredContent;
+    expect(b.id).not.toBe(a.id);
+    expect((await call("flow_get", { id: b.id, view: "full" })).structuredContent.doc.meta.title).toBe("Renamed");
+    expect((await call("flow_get", { id: a.id, view: "full" })).structuredContent.doc.meta.title).toBe(tpl.meta.title);
+
+    const bad = await call("flow_create", { doc: { version: "2.1", meta: {}, nodes: [{ id: "a" }, { id: "a" }], edges: [] } });
+    expect(bad.isError).toBe(true);
+    expect(bad.structuredContent.issues.length).toBeGreaterThan(1);
+    expect((await call("flow_guide")).content[0].text).toContain("FlowDoc");
+    expect((await client.getPrompt({ name: "explain", arguments: { topic: "sagas" } })).messages[0]).toBeTruthy();
+  } finally { await client.close(); server.close(); }
+}, 60_000);

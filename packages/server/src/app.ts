@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import { readFileSync } from "node:fs";
 import type { BlobStore } from "./store.ts";
+import { mcpHandler } from "./mcp.ts";
 import * as tools from "./tools.ts";
 
 export type Env = Record<string, string | undefined>;
@@ -37,6 +38,8 @@ export function createApp({ store, env }: { store: BlobStore; env: Env }) {
   api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, req.body?.doc)));
   api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops })));
   app.use("/api", api);
+  app.post("/mcp", write, mcpHandler(c));
+  app.all("/mcp", (_req, res) => void res.status(405).set("allow", "POST").json({ error: "method_not_allowed" })); // stateless: no SSE/session
 
   app.use(((err, _req, res, _next) => {
     if (err instanceof tools.ToolError) return void res.status(err.status).json(err.body);
