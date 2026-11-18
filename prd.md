@@ -353,13 +353,13 @@ Risks and mitigations:
 | Not every client shows or uses images from tool results. | `flow_preview` returns image + text (outline, lint) + viewer URL. |
 | Video export takes minutes, longer than tool-call timeouts. | `flow_export` returns a job ID and `flow_job` polls it. Use the MCP Tasks extension where the client declares it, with the synchronous job-poll fallback otherwise. |
 | Tool descriptions consume context on every turn. | ≤ 10 tools with short descriptions. The full authoring guide is fetched on demand via `flow_guide`, not embedded in descriptions. |
-| Prompt injection through user-authored text (public flows, remixes) that an agent reads. | Tool results mark narration and labels as user data. Writes are scoped to the caller's workspace. Featured templates are curated. |
+| Prompt injection through user-authored text (public flows, remixes) that an agent reads. | Tool results mark narration and labels as user data. Featured templates are curated. |
 | Concurrent human + agent edits. | `baseRevision` on every edit → `409` with the current outline. The editor streams agent revisions live (SSE). |
 | Protocol churn (stateless rewrite in 2026-07-28; Sampling, Roots, Logging deprecated). | Use the official TypeScript SDK. Depend only on tools, structured tool output, image content, and the Apps and Tasks extensions with fallbacks. Never depend on sampling. |
 
 ### 5.2 Deployment
 
-* **Remote MCP server** at `/mcp` on the API host: Streamable HTTP, stateless. Auth is OAuth 2.1 per the MCP authorization spec (for claude.ai / ChatGPT connectors), plus bearer API keys for CI and headless agents.
+* **Remote MCP server** at `/mcp` on the API host: Streamable HTTP, stateless. **No auth**: the endpoint is public, so claude.ai / ChatGPT connectors need no authorization.
 * **No local stdio MCP server in v2.** Coding agents with a shell use the CLI (`validate`, `preview`, `render` write files they can read back). Add stdio only if a shell-less client needs offline use.
 * **In-app co-pilot** calls the same tool implementations in-process: one tool surface, one eval suite.
 
@@ -458,7 +458,7 @@ Constraint: do not rely on forced tool choice. Use structured outputs, or `auto`
 * **Navigation:** step list (table of contents), ← / → keys, branch buttons at branch points, scenario switcher.
 * **Deep links:** `?s=<scenario>&step=<stepId>` (stable because IDs are stable).
 * **Accessibility:** narration lives in an `aria-live` region. Every step is reachable by keyboard. The step list doubles as a text transcript. Array and grid values are exposed as accessible tables.
-* **Remix:** clones any public flow into the viewer's workspace.
+* **Remix:** clones any shared flow into the viewer's local library.
 
 ---
 
@@ -487,7 +487,7 @@ The editor refines agent output. It is not the primary authoring path.
 ## 9. Non-Functional Requirements
 
 * **Trust boundary:** every FlowDoc from an agent or user is untrusted. It is Zod-validated on every write, limits are enforced (§3.5), text renders as canvas text or escaped DOM (narration supports only `code` and **bold**), and no URLs or HTML are allowed in the doc.
-* **API and MCP auth:** OAuth 2.1 for MCP connectors; per-workspace API keys scoped to read / write / export. Rate limits on generation, preview, and export.
+* **No accounts, no login, no API keys.** MCP and REST are public. Rate limits (per IP) on generation, preview, and export.
 * **Storage:** PostgreSQL. `flows` (current doc, JSONB) plus an append-only `flow_revisions` table (ops, inverse ops, author type: user / in-app agent / MCP client, prompt if known). `CompiledFlow` is cached by revision.
 * **Versioning:** `version` field. Breaking schema changes ship a migrator, and old docs load forever.
 
