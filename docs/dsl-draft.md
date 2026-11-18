@@ -21,6 +21,14 @@ timing    := "with" | "delay=" N | "dur=" N | "ease=" EASE
 ```
 Strings are double-quoted; cell values are always strings; `#` starts a comment line.
 
+## Final syntax (F36, `packages/core/src/dsl.ts`)
+
+Differs from the sketch above only in uniformity: every option is `key=value` or a bare flag
+(`in=services`, `from=happy/charge`, `at=nums#0`, `keys=lo,mid,hi`, `hidden`, `dashed`, `noarrow`).
+Arrays/`values` put cell values after a bare `=`; grids use indented `row` / `rowlabels` / `collabels`
+lines; code blocks use indented `| text` lines. The spike samples below use the earlier draft syntax
+(`in services`); token counts are unaffected.
+
 ## Spike: hand-translated flows
 
 Optimistic-lock flow does not exist in `templates/`; `oauth-pkce` (also two scenarios, a hidden

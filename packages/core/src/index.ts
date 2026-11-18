@@ -8,3 +8,4 @@ export * from "./compile.ts";
 export * from "./lint.ts";
 export * from "./ops.ts";
 export * from "./outline.ts";
+export * from "./dsl.ts";

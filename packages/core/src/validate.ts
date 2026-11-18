@@ -29,7 +29,7 @@ const ANY: EType[] = ["group", "node", "edge", "array", "grid", "token", "code"]
 
 const ptr = (p: (string | number | symbol)[]) => p.map((s) => "/" + String(s).replace(/~/g, "~0").replace(/\//g, "~1")).join("");
 
-function lev(a: string, b: string): number {
+export function lev(a: string, b: string): number {
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
     const cur = [i];
