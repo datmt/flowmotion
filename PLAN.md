@@ -324,7 +324,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Done when:* one test doc per warning code; PRD examples produce ≤ 1 warning.
   *Commit:* `feat(core): F07 explainer-quality lint`
 
-- [ ] **F08 Runtime `sample()`**
+- [~] **F08 Runtime `sample()`**
   *Depends:* F06 · *PRD:* §3.3 "Seeking is pure", §4.2 · *Contract:* §1.1
   `core/src/runtime/sample.ts` + `ease.ts`. Binary-search keys per track; interpolate `slot` →
   x/y via owner's slot rects; `at` → node center / cell position / point on edge polyline by arc length;
