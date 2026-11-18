@@ -4,7 +4,9 @@ import { applyOps, compile, outline, validate, type FlowDoc, type Issue } from "
 import type { BlobStore } from "./store.ts";
 
 export class ToolError extends Error {
-  constructor(public status: number, public body: Record<string, unknown>) { super(String(body.error)); }
+  status: number;
+  body: Record<string, unknown>;
+  constructor(status: number, body: Record<string, unknown>) { super(String(body.error)); this.status = status; this.body = body; }
 }
 export interface Ctx { store: BlobStore; baseUrl?: string }
 
