@@ -62,7 +62,6 @@
       "additionalProperties": false
     },
     "groups": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -85,7 +84,6 @@
       }
     },
     "nodes": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -157,7 +155,6 @@
       }
     },
     "edges": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -196,7 +193,6 @@
       }
     },
     "arrays": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -264,7 +260,6 @@
       }
     },
     "grids": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -339,7 +334,6 @@
       }
     },
     "tokens": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
@@ -369,7 +363,6 @@
       }
     },
     "code": {
-      "maxItems": 300,
       "type": "array",
       "items": {
         "type": "object",
