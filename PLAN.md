@@ -722,5 +722,5 @@ Good parallel lanes after F00: **core** (F01→F03 ∥ F04, then F05), **server*
 
 ## 4. Out of scope (PRD §13) — do not build
 
-Sequence-diagram layout, free-form drawing/custom shapes/per-entity colors, TTS, real-time co-editing,
+(Sequence layout shipped as `layout.algorithm: "sequence"`.) free-form drawing/custom shapes/per-entity colors, TTS, real-time co-editing,
 local stdio MCP server, MCP sampling.

@@ -48,7 +48,8 @@
           "enum": [
             "layered",
             "tree",
-            "stress"
+            "stress",
+            "sequence"
           ]
         },
         "direction": {

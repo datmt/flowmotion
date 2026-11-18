@@ -45,6 +45,10 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
     const lab = labelPair(gr, { x: 12, y: 10, fontSize: 12, fontStyle: "bold", width: g.rect.w - 24 });
     add(g.id, gr, (f, t, dim) => { r.fill(t.group.fill); r.stroke(t.group.stroke); lab(f, t.group.label); gr.opacity(f.opacity * dim); });
   }
+  // sequence lifelines (under edges)
+  for (const l of c.lifelines ?? []) {
+    world.add(new Konva.Line({ points: [l.x, l.y0, l.x, l.y1], strokeWidth: 1.5, dash: [6, 6], stroke: th.edge, opacity: 0.5 }));
+  }
   // edges (under nodes)
   for (const e of c.edges) {
     const gr = new Konva.Group(), a = new Konva.Arrow({ points: e.points, strokeWidth: 2, pointerLength: e.arrow ? 9 : 0, pointerWidth: e.arrow ? 9 : 0, dash: e.dashed ? [8, 5] : undefined, lineJoin: "round" });

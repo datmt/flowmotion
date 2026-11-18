@@ -16,6 +16,7 @@ export interface Layout {
   arrays: { id: string; label?: string; rect: Rect; orientation: "row" | "column"; keys?: string[]; slots: Rect[] }[];
   grids: { id: string; label?: string; rect: Rect; rows: number; cols: number; rowLabels?: string[]; colLabels?: string[]; slots: Rect[] }[];
   code: { id: string; title?: string; rect: Rect; lineCount: number }[];
+  lifelines: { id: string; x: number; y0: number; y1: number }[]; // sequence layout only
 }
 
 const { cell, groupPad } = metrics;
@@ -120,7 +121,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     children,
     edges: elkEdges,
     layoutOptions: {
-      "elk.algorithm": { layered: "layered", tree: "mrtree", stress: "stress" }[algorithm],
+      "elk.algorithm": { layered: "layered", tree: "mrtree", stress: "stress", sequence: "layered" }[algorithm],
       "elk.direction": dir,
       "elk.json.shapeCoords": "ROOT",
       "elk.json.edgeCoords": "ROOT",
@@ -134,28 +135,50 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
       "elk.stress.desiredEdgeLength": "160",
     },
   };
-  const out = await new ELK().layout(root);
+  const seq = algorithm === "sequence";
+  // sequence: nodes are columns on one row; ELK is skipped (ponytail: arrays/grids/code are ignored here)
+  const out = seq ? ({ id: "root", edges: [] } as ElkNode) : await new ELK().layout(root);
 
   // — collect rects (absolute coords) —
   const rect = new Map<string, Rect>();
   const walk = (n: ElkNode) => n.children?.forEach((c) => { rect.set(c.id, { x: c.x!, y: c.y!, w: c.width!, h: c.height! }); walk(c); });
   walk(out);
+  const lifelines: Layout["lifelines"] = [];
+  const colX = new Map<string, number>(), rowY: number[] = [];
+  if (seq) {
+    const ns = doc.nodes.map((n) => sizes.get(n.id)!);
+    const pitch = Math.max(Math.max(...ns.map((s) => s.w)) + 60, 220), headH = Math.max(...ns.map((s) => s.h)), ROW = 56;
+    doc.nodes.forEach((n, i) => {
+      const s = sizes.get(n.id)!, cx = i * pitch + s.w / 2;
+      rect.set(n.id, { x: cx - s.w / 2, y: 0, w: s.w, h: s.h }); colX.set(n.id, cx);
+    });
+    doc.edges.forEach((_, i) => rowY.push(headH + 48 + i * ROW));
+    const end = headH + 48 + Math.max(doc.edges.length - 1, 0) * ROW + 40;
+    doc.nodes.forEach((n) => lifelines.push({ id: n.id, x: colX.get(n.id)!, y0: rect.get(n.id)!.y + rect.get(n.id)!.h, y1: end }));
+  }
   const pinned = new Set<string>();
-  for (const l of leaves) if (l.pos) { rect.set(l.id, { x: l.pos.x, y: l.pos.y, w: l.w, h: l.h }); pinned.add(l.id); }
+  for (const l of leaves) if (l.pos && !seq) { rect.set(l.id, { x: l.pos.x, y: l.pos.y, w: l.w, h: l.h }); pinned.add(l.id); }
 
   // groups: ELK compound rect, or bbox of children (flat algorithms / pinned members)
   const groupRect = (id: string): Rect | undefined => {
     const kids = leaves.filter((l) => l.group === id).map((l) => rect.get(l.id)!);
     if (!kids.length) return undefined;
-    const needsBox = !compound || leaves.some((l) => l.group === id && pinned.has(l.id));
+    const needsBox = seq || !compound || leaves.some((l) => l.group === id && pinned.has(l.id));
     if (!needsBox && rect.has(id)) return rect.get(id);
     const u = union(kids);
-    return { x: u.x - groupPad, y: u.y - groupPad - 16, w: u.w + 2 * groupPad, h: u.h + 2 * groupPad + 16 };
+    const h = seq ? lifelines[0]!.y1 - u.y : u.h;
+    return { x: u.x - groupPad, y: u.y - groupPad - 16, w: u.w + 2 * groupPad, h: h + 2 * groupPad + 16 };
   };
   const groups = (doc.groups ?? []).flatMap((g) => { const r = groupRect(g.id); return r ? [{ id: g.id, label: g.label, rect: r }] : []; });
 
   // — edges —
-  const edges = doc.edges.map((e) => {
+  const edges = doc.edges.map((e, i) => {
+    if (seq) {
+      const x0 = colX.get(e.from)!, x1 = colX.get(e.to)!, y = rowY[i]!;
+      const points = e.from === e.to ? [x0, y, x0 + 40, y, x0 + 40, y + 24, x0, y + 24] : [x0, y, x1, y];
+      const length = polyLength(points);
+      return { id: e.id ?? `${e.from}-${e.to}`, from: e.from, to: e.to, arrow: e.arrow ?? true, dashed: e.dashed ?? false, points, length, labelAt: e.from === e.to ? { x: x0 + 40, y: y + 12 } : { x: (x0 + x1) / 2, y: y - 12 } };
+    }
     const id = e.id ?? `${e.from}-${e.to}`;
     const sec = out.edges?.find((x) => x.id === id)?.sections?.[0];
     let points = sec ? [sec.startPoint.x, sec.startPoint.y, ...(sec.bendPoints ?? []).flatMap((b) => [b.x, b.y]), sec.endPoint.x, sec.endPoint.y] : [];
@@ -196,6 +219,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     groups: g2,
     nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id) })),
     edges, arrays, grids,
+    lifelines: lifelines.map((l) => ({ ...l, x: l.x + dx, y0: l.y0 + dy, y1: l.y1 + dy })),
     code: (doc.code ?? []).map((c) => ({ id: c.id, ...(c.title ? { title: c.title } : {}), rect: R(c.id), lineCount: c.code.split("\n").length })),
   };
 }

@@ -123,7 +123,7 @@ export const FlowDoc = z.strictObject({
     aspect: z.enum(["16:9", "4:3", "1:1", "9:16"]).optional(),
   }),
   layout: z.strictObject({
-    algorithm: z.enum(["layered", "tree", "stress"]).optional(),
+    algorithm: z.enum(["layered", "tree", "stress", "sequence"]).optional(),
     direction: z.enum(["LR", "TB"]).optional(),
   }).optional(),
   groups: z.array(Group).optional(),

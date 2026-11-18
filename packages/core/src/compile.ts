@@ -42,6 +42,7 @@ export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow
     meta: { title: doc.meta.title, ...(doc.meta.summary ? { summary: doc.meta.summary } : {}), theme, aspect: doc.meta.aspect ?? "16:9" },
     bounds: lay.bounds,
     groups: lay.groups, nodes: lay.nodes, edges: lay.edges,
+    ...(lay.lifelines.length ? { lifelines: lay.lifelines } : {}),
     arrays: lay.arrays, grids: lay.grids, code,
     tokens: (doc.tokens ?? []).map((t) => ({ id: t.id, ...(t.label ? { label: t.label } : {}) })),
     scenarios: doc.scenarios.map((s) => compileScenario(doc, lay, s.id)),

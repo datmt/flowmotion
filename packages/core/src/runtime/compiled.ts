@@ -14,6 +14,7 @@ export interface CompiledFlow {
   grids: { id: string; label?: string; rect: Rect; rows: number; cols: number; rowLabels?: string[]; colLabels?: string[]; slots: Rect[] }[];
   code: { id: string; title?: string; rect: Rect; lines: { text: string; color: string }[][] }[];
   tokens: { id: string; label?: string }[];
+  lifelines?: { id: string; x: number; y0: number; y1: number }[]; // sequence layout only
   scenarios: CompiledScenario[];
 }
 
