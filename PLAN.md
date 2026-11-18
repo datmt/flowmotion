@@ -235,7 +235,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 ### Phase 1 — Schema, compiler, viewer, MCP
 
-- [~] **F01 FlowDoc Zod schema + JSON Schema**
+- [x] **F01 FlowDoc Zod schema + JSON Schema**
   *Depends:* F00 · *PRD:* §3.1, §3.2, §3.5
   `core/src/schema.ts`: Zod 4 `z.strictObject` everywhere; `Id` regex; `Ref` regex covering the four
   forms; Action as `z.discriminatedUnion("do", …)` with the Timing fields merged into each member; all

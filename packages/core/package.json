@@ -3,6 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./runtime": "./src/runtime/index.ts" },
-  "scripts": { "typecheck": "tsc -p .", "gen:schema": "echo 'F01'" }
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "gen:schema": "node --experimental-strip-types scripts/gen-schema.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
 }
