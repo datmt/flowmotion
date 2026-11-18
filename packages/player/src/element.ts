@@ -27,7 +27,7 @@ ol.steps li[data-s=current]>button{font-weight:700;color:var(--accent)} ol.steps
 ol.steps button{border:0;padding:2px 4px;text-align:left;width:100%}
 .branches{margin:2px 0 4px 6px;padding-left:8px;border-left:2px dashed var(--accent)}.branches>span{color:var(--accent);font-size:12px;font-weight:600}.branches ol.steps{border-left:0;padding-left:12px}
 .center{position:relative;min-width:0}.stage{width:100%}
-.ctl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
+.ctl{display:flex;gap:6px;justify-content:center;width:max-content;margin:8px auto;background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
 .more{position:absolute;top:8px;right:8px}.more summary{cursor:pointer;list-style:none;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .more div{display:flex;flex-direction:column;gap:6px;margin-top:4px;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 .now{border-left:1px solid var(--line);padding:12px 16px;overflow:auto;max-height:640px}
@@ -50,7 +50,8 @@ input[type=range]{accent-color:var(--accent)}
 .strip b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);font-size:11px}
 .strip [data-s=done]{opacity:1}.strip [data-s=done] b{background:var(--accent);border-color:var(--accent);color:var(--bg)}
 .strip [data-s=current]{opacity:1;font-weight:700}.strip [data-s=current] b{border-color:var(--accent);color:var(--accent)}
-:host([fill]) .ctl{bottom:84px}:host([fill]) .stage{margin:auto 0}:host([fill]) .center{display:flex;flex-direction:column;background:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--fg) 12%,transparent) 1px,transparent 0) 0 0/18px 18px}
+:host([fill]) .stage{margin:auto 0}:host([fill]) .center{display:flex;flex-direction:column;background:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--fg) 12%,transparent) 1px,transparent 0) 0 0/18px 18px}
+.hint{margin:10px 0 0;padding:8px 10px;border:1px dashed var(--accent);border-radius:8px;font-size:13px}.hint:empty{display:none}.hint p{margin:0 0 6px}.hint button{display:block;width:100%;text-align:left;margin-top:4px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:720px){
   .wrap{grid-template-columns:minmax(0,1fr)}.center{order:1}.now{order:2;border-left:0;border-top:1px solid var(--line);max-height:none}
@@ -113,14 +114,14 @@ export class FlowPlayerElement extends HTMLElement {
     const next = h("button", { class: "next", textContent: "▶▶", ariaLabel: "Next step" } as object);
     const scrub = h("input", { type: "range", min: "0", max: "1000", value: "0", ariaLabel: "Seek" } as object) as HTMLInputElement;
     const speed = h("select", { ariaLabel: "Speed" } as object, ...["0.5", "1", "1.5", "2"].map((v) => h("option", { value: v, textContent: `${v}×`, selected: v === "1" }))) as HTMLSelectElement;
-    const mode = h("select", { ariaLabel: "Mode" } as object, h("option", { value: "step", textContent: "Step" }), h("option", { value: "play", textContent: "Play" })) as HTMLSelectElement;
-    const more = h("details", { class: "more" }, h("summary", { textContent: "⋯", ariaLabel: "More controls" } as object), h("div", {}, speed, mode, scrub));
+    const more = h("details", { class: "more" }, h("summary", { textContent: "⋯", ariaLabel: "More controls" } as object), h("div", {}, speed, scrub));
     const steps = h("ol", { class: "steps", ariaLabel: "Steps" } as object);
     const rail = h("details", { class: "rail" }, h("summary", { textContent: "Steps" }), steps);
     const strip = h("div", { class: "strip" });
     const narrow = matchMedia("(max-width:720px)");
     rail.open = !narrow.matches; narrow.onchange = () => (rail.open = !narrow.matches);
-    const now = h("div", { class: "now" }, title, narr, h("h3", { textContent: "What changed" }), changes, stateH, state);
+    const hint = h("div", { class: "hint" });
+    const now = h("div", { class: "now" }, title, narr, hint, h("h3", { textContent: "What changed" }), changes, stateH, state);
     const tables = h("div", { class: "sr" });
     root.append(h("div", { class: "wrap" }, rail, h("div", { class: "center" }, stageEl, h("div", { class: "ctl" }, prev, playBtn, next), more, strip), now), tables);
 
@@ -187,17 +188,28 @@ export class FlowPlayerElement extends HTMLElement {
         return h("table", {}, h("caption", { textContent: o.label ?? o.id }), ...rows.map((r) => h("tr", {}, ...r.map(([, f]) => h("td", { textContent: f.label ?? "" })))));
       }));
     };
+    // "what next" prompt: before play, mid-flow what-ifs, and the end of a path
+    let hk = "";
+    const showHint = () => {
+      const s = p.compiled.scenarios.find((x) => x.id === p.scenario)!, ended = !p.playing && p.t >= p.duration - 1e-6;
+      const brs = ended ? [...new Map(s.steps.flatMap((x) => x.branches).map((b) => [b.scenario, b])).values()] : s.steps[p.step]!.branches;
+      const fresh = !p.playing && p.t === 0, k = `${p.scenario}|${p.step}|${ended}|${fresh}`;
+      if (k === hk) return; hk = k;
+      const say = ended ? "End of this path. ▶ replays it from the start." + (brs.length ? " Or explore a what-if:" : "") : fresh ? "Press ▶ to play from the start, or ▶▶ to go one step at a time." : brs.length ? "What if…?" : "";
+      const go = (b: { scenario: string }) => { p.setScenario(b.scenario); p.goToStep(Math.max(0, p.compiled.scenarios.find((x) => x.id === b.scenario)!.steps.findIndex((x) => !x.inherited))); p.play(); };
+      hint.replaceChildren(...(say ? [h("p", { textContent: say })] : []), ...(say ? brs.map((b) => h("button", { textContent: `⑂ ${b.title}`, onclick: () => go(b) })) : []));
+    };
     p = createPlayer(stageEl, c, {
       scenario: this.getAttribute("scenario") ?? undefined, step: Number(this.getAttribute("step")) || undefined,
       onStep: () => showStep(),
-      onTime: (t, playing) => { if (!p) return; scrub.value = String(Math.round((t / p.duration) * 1000)); playBtn.textContent = playing ? "⏸" : "▶"; playBtn.ariaLabel = playing ? "Pause" : "Play"; },
+      onTime: (t, playing) => { if (!p) return; scrub.value = String(Math.round((t / p.duration) * 1000)); playBtn.textContent = playing ? "⏸" : "▶"; playBtn.ariaLabel = playing ? "Pause" : "Play"; showHint(); },
     });
     this.player = p;
-    showStep();
+    showStep(); showHint();
     playBtn.onclick = () => (p.playing ? p.pause() : p.play());
     next.onclick = () => p.next(); prev.onclick = () => p.prev();
     scrub.oninput = () => p.seek((+scrub.value / 1000) * p.duration);
-    speed.onchange = () => p.setSpeed(+speed.value); mode.onchange = () => p.setMode(mode.value as "step" | "play");
+    speed.onchange = () => p.setSpeed(+speed.value);
     this.tabIndex = 0;
     this.addEventListener("keydown", (e) => { if (e.key === "ArrowRight") p.next(); else if (e.key === "ArrowLeft") p.prev(); else if (e.key === " ") { e.preventDefault(); playBtn.click(); } });
     this.#ro = new ResizeObserver(() => p.resize());

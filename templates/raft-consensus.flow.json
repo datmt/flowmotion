@@ -223,8 +223,8 @@
   ],
   "scenarios": [
     {
-      "id": "election",
-      "title": "Leader election",
+      "id": "main",
+      "title": "Election, then replication",
       "steps": [
         {
           "id": "boot",
@@ -435,17 +435,7 @@
               "start": "with"
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "replication",
-      "title": "Log replication",
-      "branchFrom": {
-        "scenario": "election",
-        "afterStep": "heartbeat"
-      },
-      "steps": [
+        },
         {
           "id": "write",
           "title": "A client writes x=5",
@@ -711,7 +701,7 @@
       "id": "crash",
       "title": "What if the leader crashes mid-replication?",
       "branchFrom": {
-        "scenario": "replication",
+        "scenario": "main",
         "afterStep": "partial"
       },
       "steps": [
@@ -1076,7 +1066,7 @@
       "id": "partition",
       "title": "What if the network partitions?",
       "branchFrom": {
-        "scenario": "replication",
+        "scenario": "main",
         "afterStep": "commit"
       },
       "steps": [
