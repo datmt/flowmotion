@@ -577,7 +577,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   saving → stop and drop F36-F38.
   *Commit:* `docs: F35 DSL spike results`
 
-- [ ] **F36 DSL parser and printer**
+- [~] **F36 DSL parser and printer**
   *Depends:* F35
   `core/src/dsl.ts`: `parseDsl(text) → {doc?, issues}` and `printDsl(doc) → string`. Hand-written
   line parser (no dependency). Errors carry `line`/`col` and "did you mean" for action names and ids;
