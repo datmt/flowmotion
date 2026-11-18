@@ -569,7 +569,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
 
 **Track B — Text DSL (compiles to FlowDoc)**
 
-- [ ] **F35 DSL go/no-go spike**
+- [~] **F35 DSL go/no-go spike**
   *Depends:* F17
   Hand-translate `saga-compensation` and the optimistic-lock flow into the draft DSL (one action per
   line, see `docs/dsl-draft.md`, written here). Record token counts vs JSON (use the token counter).
