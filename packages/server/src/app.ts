@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { BlobStore } from "./store.ts";
 import { mcpHandler } from "./mcp.ts";
 import * as tools from "./tools.ts";
+import { cardMeta, playerScript } from "./embed.ts";
 import { anthropicModel, editWithAI, generate, type Model } from "./generate.ts";
 
 export type Env = Record<string, string | undefined>;
@@ -34,10 +35,15 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
 
   app.get("/healthz", (_req, res) => void res.json({ ok: true }));
   app.get("/schema/flow-2.1.json", (_req, res) => void res.type("json").send(readFileSync(new URL("../../../schema/flow-2.1.json", import.meta.url))));
+  // Embeds on other sites fetch the script, fonts and snapshot cross-origin: all public, read-only.
+  app.use(["/flow-player.js", "/assets/fonts", "/api/share"], (req, res, next) => { if (req.method === "GET") res.set("access-control-allow-origin", "*"); next(); });
+  app.get("/flow-player.js", async (_req, res) => void res.type("js").set("cache-control", "public, max-age=3600").send(await playerScript()));
+  app.use("/assets/fonts", express.static(fileURLToPath(new URL("../../../assets/fonts", import.meta.url)), { maxAge: "1d" }));
   app.get("/llms.txt", (_req, res) => void res.type("text/plain").send(tools.guide()));
 
   const api = express.Router();
   api.get("/share/:id", read, async (req, res) => void res.json(await tools.snapshot(c, String(req.params.id))));
+  api.get("/share/:id/og.png", read, async (req, res) => void res.type("png").set("cache-control", "public, max-age=86400").send(Buffer.from(await tools.ogImage(c, String(req.params.id)))));
   api.get("/share/:id/dsl", read, async (req, res) => void res.type("text/plain").send((await tools.get(c, { id: String(req.params.id), view: "dsl" }) as { dsl: string }).dsl));
   api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body ?? {})));
   api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
@@ -77,8 +83,16 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
   // Built web app + SPA fallback (client routes: /, /v/:id, /local/:id, /edit/:id). Skipped when not built.
   const dist = env.WEB_DIST ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
   if (existsSync(dist)) {
-    app.use(express.static(dist));
-    app.get(/^\/(?!api\/|mcp|schema\/|llms\.txt).*/, (_req, res) => void res.sendFile(`${dist}/index.html`));
+    app.use(express.static(dist, { index: false }));
+    // Share cards: /v/:id gets og/twitter tags from the snapshot (unknown ids fall through to the SPA's not-found view).
+    app.get("/v/:id", read, async (req, res, next) => {
+      try {
+        const id = String(req.params.id), { doc } = await tools.snapshot(c, id), base = c.baseUrl ?? `${req.protocol}://${req.get("host")}`;
+        const meta = cardMeta({ title: doc.meta.title, description: doc.meta.summary, url: `${base}/v/${id}`, image: renderer ? `${base}/api/share/${id}/og.png` : undefined });
+        res.type("html").send(readFileSync(`${dist}/index.html`, "utf8").replace("<title>Flowmotion</title>", () => meta));
+      } catch (e) { if (e instanceof tools.ToolError && e.status === 404) return next(); next(e); }
+    });
+    app.get(/^\/(?!api\/|mcp|schema\/|llms\.txt|flow-player\.js|assets\/).*/, (_req, res) => void res.sendFile(`${dist}/index.html`));
   }
 
   app.use(((err, _req, res, _next) => {

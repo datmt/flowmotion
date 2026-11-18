@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import * as db from "./db.ts";
 
 const templates = import.meta.glob<any>("../../../templates/*.flow.json", { eager: true, import: "default" });
@@ -139,14 +139,60 @@ function Library() {
   );
 }
 
+/** Keeps `?s=&step=` (0-based step) in sync with the player's navigation, so the address bar is always a deep link. */
+function useDeepLink() {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current!;
+    const on = (e: Event) => { const { scenario, step } = (e as CustomEvent).detail; history.replaceState(null, "", `?s=${encodeURIComponent(scenario)}&step=${step}`); };
+    el.addEventListener("flow-step", on);
+    return () => el.removeEventListener("flow-step", on);
+  }, []);
+  return ref;
+}
+
+function EmbedDialog({ id, onClose }: { id: string; onClose(): void }) {
+  const o = location.origin, q = location.search;
+  const snippets = [
+    ["iframe", `<iframe src="${o}/embed/${id}${q}" width="100%" height="560" style="border:0" allowfullscreen></iframe>`],
+    ["<flow-player>", `<script src="${o}/flow-player.js"></script>\n<flow-player src="${o}/api/share/${id}"${new URLSearchParams(q).get("s") ? ` scenario="${new URLSearchParams(q).get("s")}" step="${new URLSearchParams(q).get("step") ?? 0}"` : ""} style="height:560px"></flow-player>`],
+  ] as const;
+  return (
+    <dialog open aria-label="Embed" className="fixed inset-0 z-10 m-auto w-[36rem] max-w-[95vw] rounded-lg border border-stone-400 p-4 shadow-xl">
+      <h2 className="mb-2 font-semibold">Embed this flow</h2>
+      {snippets.map(([name, code]) => (
+        <div key={name} className="mb-3">
+          <div className="mb-1 flex items-center"><span className="mr-auto text-xs font-bold uppercase text-stone-500">{name}</span><button className={btn} onClick={() => void navigator.clipboard?.writeText(code)}>Copy</button></div>
+          <textarea readOnly aria-label={`${name} snippet`} className="h-20 w-full rounded border border-stone-300 bg-stone-50 p-2 font-mono text-xs" value={code} onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      ))}
+      <button className={btn} onClick={onClose}>Close</button>
+    </dialog>
+  );
+}
+
 function Viewer({ id }: { id: string }) {
-  const q = new URLSearchParams(location.search);
+  const q = new URLSearchParams(location.search), ref = useDeepLink();
+  const [embed, setEmbed] = useState(false);
+  // Remix: copy the snapshot into this browser's library (client-only); the shared one stays untouched.
+  const remix = async () => { const r = await fetch(`/api/share/${id}`); location.href = `/local/${await db.save((await r.json()).doc)}`; };
   return (
     <Shell side={false}>
-      <div className="min-h-0 flex-1"><Player fill src={`/api/share/${id}`} scenario={q.get("s") ?? undefined} step={q.get("step") ?? undefined} /></div>
-      <p className="text-sm text-stone-500">Shared snapshot. <a className={link} href="/">Make your own</a></p>
+      <div className="flex items-center gap-2">
+        <span className="mr-auto text-sm text-stone-500">Shared snapshot. <a className={link} href="/">Make your own</a></span>
+        <button className={btn} onClick={() => setEmbed(true)}>Embed</button>
+        <button className={btn} onClick={() => void remix()}>Remix</button>
+      </div>
+      <div className="min-h-0 flex-1"><Player ref={ref} fill src={`/api/share/${id}`} scenario={q.get("s") ?? undefined} step={q.get("step") ?? undefined} /></div>
+      {embed && <EmbedDialog id={id} onClose={() => setEmbed(false)} />}
     </Shell>
   );
+}
+
+/** Chrome-less player for iframes. */
+function Embed({ id }: { id: string }) {
+  const q = new URLSearchParams(location.search), ref = useDeepLink();
+  return <div className="h-screen"><Player ref={ref} fill src={`/api/share/${id}`} scenario={q.get("s") ?? undefined} step={q.get("step") ?? undefined} /></div>;
 }
 
 function Local({ id }: { id: string }) {
@@ -178,6 +224,7 @@ export function App() {
   const [, root, id] = location.pathname.split("/");
   switch (root) {
     case "v": return <Viewer id={id!} />;
+    case "embed": return <Embed id={id!} />;
     case "local": return <Local id={id!} />;
     case "edit": return <Suspense fallback={null}><Editor id={id!} /></Suspense>;
     default: return <Library />;

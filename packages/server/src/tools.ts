@@ -154,3 +154,14 @@ export async function jobFile(c: Ctx, id: string) {
   if (!j || !bytes) throw new ToolError(404, { error: "not_found", message: "No finished output for this job." });
   return { bytes, ext: j.key!.split(".").pop()! };
 }
+
+/** Share-card image: end frame of the first scenario's last step, rendered once and stored next to the snapshot. */
+export async function ogImage(c: Ctx, id: string): Promise<Uint8Array> {
+  const { compiled } = (await snapshot(c, id)) as { compiled: { scenarios: { id: string; steps: unknown[] }[] } };
+  const k = `flows/${id}.og.png`, hit = await c.store.getBytes(k);
+  if (hit) return hit;
+  const sc = compiled.scenarios[0]!;
+  const png = await renderer(c).renderStill(id, sc.id, sc.steps.length - 1);
+  await c.store.put(k, png, "image/png").catch(() => {}); // a concurrent request may have written it first
+  return png;
+}

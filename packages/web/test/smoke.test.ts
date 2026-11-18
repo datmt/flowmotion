@@ -180,3 +180,49 @@ test("F29/F30 inspector + step editor: edit text, cells, narration, add/move/rem
   expect(d.scenarios[0].steps[0].narration).not.toBe("Edited narration");
   expect(errors).toEqual([]);
 }, 120_000);
+
+test("F24 deep link, embed, standalone script, share card, remix", async () => {
+  const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+  const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
+  const sc = tpl.scenarios[0].id;
+  const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+
+  // deep link opens on step 2; navigating rewrites the address bar
+  await page.goto(`${base}/v/${id}?s=${sc}&step=1`);
+  await expect.poll(() => page.locator("flow-player h2").textContent({ timeout: 30_000 })).toMatch(/^2\//);
+  await page.locator("flow-player").focus();
+  const settle = () => page.waitForFunction(() => !(document.querySelector("flow-player") as any).player.playing, null, { timeout: 15_000 });
+  await page.keyboard.press("ArrowRight"); await settle(); // first press plays out the current step
+  await page.keyboard.press("ArrowRight"); await settle();
+  await expect.poll(() => new URL(page.url()).search).toBe(`?s=${sc}&step=2`);
+
+  // embed dialog snippets
+  await page.getByRole("button", { name: "Embed" }).click();
+  expect(await page.getByLabel("iframe snippet").inputValue()).toContain(`/embed/${id}?s=${sc}&step=2`);
+  expect(await page.getByLabel("<flow-player> snippet").inputValue()).toContain(`/flow-player.js`);
+
+  // chrome-less embed
+  await page.goto(`${base}/embed/${id}?s=${sc}&step=1`);
+  await expect.poll(() => page.locator("flow-player h2").textContent({ timeout: 30_000 })).toMatch(/^2\//);
+  expect(await page.getByText("Make your own").count()).toBe(0);
+
+  // standalone script from another origin (CORS for script, fonts, snapshot)
+  const third = await browser.newPage();
+  await third.setContent(`<script src="${base}/flow-player.js"></script><flow-player src="${base}/api/share/${id}" step="1" style="height:500px"></flow-player>`);
+  await expect.poll(() => third.locator("flow-player h2").textContent({ timeout: 30_000 })).toMatch(/^2\//);
+  await third.close();
+
+  // share card: og tags on /v/:id, none-breaking for unknown ids
+  const html = await (await fetch(`${base}/v/${id}`)).text();
+  expect(html).toContain(`<meta property="og:title" content="${tpl.meta.title}">`);
+  expect((await fetch(`${base}/v/aaaaaaaaaaaa`)).status).toBe(200); // SPA shows not-found
+
+  // remix copies the snapshot into the local library
+  await page.goto(`${base}/v/${id}`);
+  await page.getByRole("button", { name: "Remix" }).click();
+  await page.waitForURL(/\/local\//);
+  await expect.poll(() => page.getByRole("heading", { level: 1 }).textContent()).toBe(tpl.meta.title);
+  expect(errors).toEqual([]);
+}, 120_000);

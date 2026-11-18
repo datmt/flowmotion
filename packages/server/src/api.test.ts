@@ -56,3 +56,23 @@ test("writes are rate limited per IP; reads are separate", async () => {
     expect((await call("/api/share/aaaaaaaaaaaa")).status).toBe(404);
   } finally { close(); }
 }, 60_000);
+
+test("og.png: rendered once from the first scenario's last step, then cached; 501 without a renderer", async () => {
+  const calls: unknown[][] = [], png = new Uint8Array([137, 80, 78, 71]);
+  const renderer = { renderStill: async (...a: unknown[]) => (calls.push(a), png), startExport: () => { throw new Error("n/a"); }, job: () => undefined };
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" }, renderer }).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
+    for (let i = 0; i < 2; i++) {
+      const r = await fetch(`${base}/api/share/${id}/og.png`);
+      expect(r.headers.get("content-type")).toBe("image/png");
+      expect(new Uint8Array(await r.arrayBuffer())).toEqual(png);
+    }
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0]).toBe(id);
+    expect((await fetch(`${base}/flow-player.js`)).headers.get("access-control-allow-origin")).toBe("*");
+  } finally { server.close(); }
+  const { call, close } = await serve();
+  try { expect((await call("/api/share/aaaaaaaaaaaa/og.png")).status).toBe(404); } finally { close(); }
+}, 60_000);

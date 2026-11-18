@@ -505,7 +505,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   noted in commit body.
   *Commit:* `feat(server): F23 MCP App inline player`
 
-- [ ] **F24 Embed, deep links, remix**
+- [x] **F24 Embed, deep links, remix**
   *Depends:* F14, F20 · *PRD:* §6
   `/embed/:id` (chrome-less, step mode default), copy-embed dialog (iframe + `<flow-player>` snippets),
   `<flow-player>` published as a standalone script at `/flow-player.js`, deep links `?s=&step=` kept in
@@ -513,6 +513,10 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   summary, `og:image` = cached still of the first scenario's last step, stored next to the snapshot). "Remix" button in the viewer
   imports the snapshot into the local library (client-only). Publish already exists (F13/F14).
   *Done when:* Playwright: deep link opens on the right step; remix adds a local flow.
+  *Built (deviations):* `<flow-player>` fires `flow-step`; viewer/embed write `?s=&step=` (0-based step) with `replaceState`.
+  `/flow-player.js` is an esbuild bundle built lazily (compiler stubbed: `src` must be a snapshot URL), with CORS `*` on the
+  script, `/assets/fonts` and `GET /api/share/:id`. `/v/:id` is served with og/twitter tags; `og:image` (`/api/share/:id/og.png`,
+  stored as `flows/<id>.og.png`) only when a renderer is configured. Embed is the plain player (no autoplay, as in the viewer).
   *Commit:* `feat(web): F24 embed, deep links, remix`
 
 - [x] **F25 In-app generation pipeline**

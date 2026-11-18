@@ -151,6 +151,7 @@ export class FlowPlayerElement extends HTMLElement {
     const showStep = () => {
       const s = p.compiled.scenarios.find((x) => x.id === p.scenario)!, st = s.steps[p.step]!;
       title.textContent = `${p.step + 1}/${s.steps.length} · ${st.title}`;
+      this.dispatchEvent(new CustomEvent("flow-step", { detail: { scenario: p.scenario, step: p.step }, bubbles: true, composed: true }));
       fmt(body, st.narration);
 
       strip.replaceChildren(...s.steps.map((x, i) => {
