@@ -6,7 +6,8 @@ import { maxLengths } from "./cells.ts";
 import { kinds, measure, metrics, wrap } from "./runtime/index.ts";
 import type { NodeKind } from "./schema.ts";
 
-export interface Rect { x: number; y: number; w: number; h: number }
+import type { Rect } from "./runtime/compiled.ts";
+export type { Rect };
 export interface Layout {
   bounds: Rect;
   groups: { id: string; label: string; rect: Rect }[];

@@ -1,0 +1,443 @@
+{
+ "version": "2.1",
+ "meta": {
+  "title": "Saga: order checkout",
+  "theme": "light",
+  "aspect": "16:9"
+ },
+ "bounds": {
+  "x": 0,
+  "y": 0,
+  "w": 559,
+  "h": 168
+ },
+ "groups": [
+  {
+   "id": "services",
+   "label": "Services",
+   "rect": {
+    "x": 367,
+    "y": 24,
+    "w": 168,
+    "h": 120
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": "client",
+   "kind": "actor",
+   "rect": {
+    "x": 24,
+    "y": 52,
+    "w": 90,
+    "h": 80
+   }
+  },
+  {
+   "id": "orch",
+   "kind": "service",
+   "rect": {
+    "x": 178,
+    "y": 64,
+    "w": 120,
+    "h": 56
+   }
+  },
+  {
+   "id": "payment",
+   "kind": "service",
+   "rect": {
+    "x": 391,
+    "y": 64,
+    "w": 120,
+    "h": 56
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "client-orch",
+   "from": "client",
+   "to": "orch",
+   "arrow": true,
+   "dashed": false,
+   "points": [
+    114,
+    92,
+    178,
+    92
+   ],
+   "length": 64,
+   "labelAt": {
+    "x": 146,
+    "y": 92
+   }
+  },
+  {
+   "id": "orch-payment",
+   "from": "orch",
+   "to": "payment",
+   "arrow": true,
+   "dashed": false,
+   "points": [
+    298,
+    92,
+    391,
+    92
+   ],
+   "length": 93,
+   "labelAt": {
+    "x": 344.5,
+    "y": 92
+   }
+  }
+ ],
+ "arrays": [],
+ "grids": [],
+ "code": [],
+ "tokens": [],
+ "scenarios": [
+  {
+   "id": "happy",
+   "title": "Happy path",
+   "duration": 3,
+   "steps": [
+    {
+     "id": "checkout",
+     "title": "Checkout",
+     "narration": "The client places an order.",
+     "start": 0,
+     "end": 3,
+     "inherited": false,
+     "branches": [
+      {
+       "scenario": "fail",
+       "title": "What if?"
+      }
+     ]
+    }
+   ],
+   "cells": [],
+   "tracks": [
+    {
+     "target": "client",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "client",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "client",
+     "prop": "label",
+     "init": "Client",
+     "keys": []
+    },
+    {
+     "target": "orch",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 1.2,
+       "t1": 1.5,
+       "ease": "inOut",
+       "to": "active"
+      }
+     ]
+    },
+    {
+     "target": "orch",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "orch",
+     "prop": "label",
+     "init": "Order Saga",
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "label",
+     "init": "Payment",
+     "keys": []
+    },
+    {
+     "target": "client-orch",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0,
+       "t1": 0.15,
+       "ease": "linear",
+       "to": "active"
+      },
+      {
+       "t0": 1.2,
+       "t1": 1.3499999999999999,
+       "ease": "linear",
+       "to": "idle"
+      }
+     ]
+    },
+    {
+     "target": "client-orch",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "client-orch",
+     "prop": "label",
+     "init": "",
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "label",
+     "init": "",
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "label",
+     "init": "Services",
+     "keys": []
+    }
+   ],
+   "packets": [
+    {
+     "edge": "client-orch",
+     "reverse": false,
+     "t0": 0,
+     "t1": 1.2,
+     "ease": "inOut",
+     "label": "PlaceOrder"
+    }
+   ],
+   "pulses": [],
+   "callouts": [],
+   "camera": []
+  },
+  {
+   "id": "fail",
+   "title": "What if?",
+   "duration": 4.8,
+   "steps": [
+    {
+     "id": "checkout",
+     "title": "Checkout",
+     "narration": "The client places an order.",
+     "start": 0,
+     "end": 3,
+     "inherited": true,
+     "branches": []
+    },
+    {
+     "id": "boom",
+     "title": "Boom",
+     "narration": "It fails.",
+     "start": 3,
+     "end": 4.8,
+     "inherited": false,
+     "branches": []
+    }
+   ],
+   "cells": [],
+   "tracks": [
+    {
+     "target": "client",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "client",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "client",
+     "prop": "label",
+     "init": "Client",
+     "keys": []
+    },
+    {
+     "target": "orch",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 1.2,
+       "t1": 1.5,
+       "ease": "inOut",
+       "to": "active"
+      }
+     ]
+    },
+    {
+     "target": "orch",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "orch",
+     "prop": "label",
+     "init": "Order Saga",
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "payment",
+     "prop": "label",
+     "init": "Payment",
+     "keys": []
+    },
+    {
+     "target": "client-orch",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0,
+       "t1": 0.15,
+       "ease": "linear",
+       "to": "active"
+      },
+      {
+       "t0": 1.2,
+       "t1": 1.3499999999999999,
+       "ease": "linear",
+       "to": "idle"
+      }
+     ]
+    },
+    {
+     "target": "client-orch",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "client-orch",
+     "prop": "label",
+     "init": "",
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "orch-payment",
+     "prop": "label",
+     "init": "",
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "services",
+     "prop": "label",
+     "init": "Services",
+     "keys": []
+    }
+   ],
+   "packets": [
+    {
+     "edge": "client-orch",
+     "reverse": false,
+     "t0": 0,
+     "t1": 1.2,
+     "ease": "inOut",
+     "label": "PlaceOrder"
+    }
+   ],
+   "pulses": [],
+   "callouts": [
+    {
+     "target": "payment",
+     "text": "x",
+     "t0": 3,
+     "t1": 4.8
+    }
+   ],
+   "camera": []
+  }
+ ]
+}

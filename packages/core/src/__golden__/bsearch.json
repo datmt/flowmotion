@@ -1,0 +1,563 @@
+{
+ "version": "2.1",
+ "meta": {
+  "title": "Binary search for 23",
+  "theme": "light",
+  "aspect": "16:9"
+ },
+ "bounds": {
+  "x": 0,
+  "y": 0,
+  "w": 404,
+  "h": 474
+ },
+ "groups": [],
+ "nodes": [],
+ "edges": [],
+ "arrays": [
+  {
+   "id": "nums",
+   "rect": {
+    "x": 24,
+    "y": 24,
+    "w": 356,
+    "h": 60
+   },
+   "orientation": "row",
+   "slots": [
+    {
+     "x": 24,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 84,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 144,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 204,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 264,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 324,
+     "y": 24,
+     "w": 56,
+     "h": 44
+    }
+   ]
+  },
+  {
+   "id": "vars",
+   "label": "Variables",
+   "rect": {
+    "x": 114,
+    "y": 124,
+    "w": 176,
+    "h": 82
+   },
+   "orientation": "row",
+   "keys": [
+    "lo",
+    "mid",
+    "hi"
+   ],
+   "slots": [
+    {
+     "x": 114,
+     "y": 146,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 174,
+     "y": 146,
+     "w": 56,
+     "h": 44
+    },
+    {
+     "x": 234,
+     "y": 146,
+     "w": 56,
+     "h": 44
+    }
+   ]
+  }
+ ],
+ "grids": [],
+ "code": [
+  {
+   "id": "c",
+   "rect": {
+    "x": 122,
+    "y": 246,
+    "w": 160,
+    "h": 204
+   },
+   "lines": [
+    [
+     {
+      "text": "a",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "b",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "c",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "d",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "e",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "f",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "g",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "h",
+      "color": "#24292E"
+     }
+    ],
+    [
+     {
+      "text": "i",
+      "color": "#24292E"
+     }
+    ]
+   ]
+  }
+ ],
+ "tokens": [
+  {
+   "id": "lo",
+   "label": "lo"
+  }
+ ],
+ "scenarios": [
+  {
+   "id": "main",
+   "title": "Find 23",
+   "duration": 3,
+   "steps": [
+    {
+     "id": "p1",
+     "title": "Probe",
+     "narration": "mid = 4.",
+     "start": 0,
+     "end": 3,
+     "inherited": false,
+     "branches": []
+    }
+   ],
+   "cells": [
+    {
+     "id": "nums@0",
+     "owner": "nums"
+    },
+    {
+     "id": "nums@1",
+     "owner": "nums"
+    },
+    {
+     "id": "nums@2",
+     "owner": "nums"
+    },
+    {
+     "id": "nums@3",
+     "owner": "nums"
+    },
+    {
+     "id": "nums@4",
+     "owner": "nums"
+    },
+    {
+     "id": "nums@5",
+     "owner": "nums"
+    },
+    {
+     "id": "vars@0",
+     "owner": "vars"
+    },
+    {
+     "id": "vars@1",
+     "owner": "vars"
+    },
+    {
+     "id": "vars@2",
+     "owner": "vars"
+    }
+   ],
+   "tracks": [
+    {
+     "target": "nums@0",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0.6,
+       "t1": 0.8999999999999999,
+       "ease": "inOut",
+       "to": "disabled"
+      }
+     ]
+    },
+    {
+     "target": "nums@0",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@0",
+     "prop": "label",
+     "init": "2",
+     "keys": []
+    },
+    {
+     "target": "nums@0",
+     "prop": "slot",
+     "init": 0,
+     "keys": []
+    },
+    {
+     "target": "nums@1",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0.6,
+       "t1": 0.8999999999999999,
+       "ease": "inOut",
+       "to": "disabled"
+      }
+     ]
+    },
+    {
+     "target": "nums@1",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@1",
+     "prop": "label",
+     "init": "5",
+     "keys": []
+    },
+    {
+     "target": "nums@1",
+     "prop": "slot",
+     "init": 1,
+     "keys": []
+    },
+    {
+     "target": "nums@2",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0.6,
+       "t1": 0.8999999999999999,
+       "ease": "inOut",
+       "to": "disabled"
+      }
+     ]
+    },
+    {
+     "target": "nums@2",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@2",
+     "prop": "label",
+     "init": "8",
+     "keys": []
+    },
+    {
+     "target": "nums@2",
+     "prop": "slot",
+     "init": 2,
+     "keys": []
+    },
+    {
+     "target": "nums@3",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0.6,
+       "t1": 0.8999999999999999,
+       "ease": "inOut",
+       "to": "disabled"
+      }
+     ]
+    },
+    {
+     "target": "nums@3",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@3",
+     "prop": "label",
+     "init": "12",
+     "keys": []
+    },
+    {
+     "target": "nums@3",
+     "prop": "slot",
+     "init": 3,
+     "keys": []
+    },
+    {
+     "target": "nums@4",
+     "prop": "state",
+     "init": "idle",
+     "keys": [
+      {
+       "t0": 0.6,
+       "t1": 0.8999999999999999,
+       "ease": "inOut",
+       "to": "disabled"
+      }
+     ]
+    },
+    {
+     "target": "nums@4",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@4",
+     "prop": "label",
+     "init": "16",
+     "keys": []
+    },
+    {
+     "target": "nums@4",
+     "prop": "slot",
+     "init": 4,
+     "keys": []
+    },
+    {
+     "target": "nums@5",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "nums@5",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "nums@5",
+     "prop": "label",
+     "init": "23",
+     "keys": []
+    },
+    {
+     "target": "nums@5",
+     "prop": "slot",
+     "init": 5,
+     "keys": []
+    },
+    {
+     "target": "vars@0",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "vars@0",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "vars@0",
+     "prop": "label",
+     "init": "0",
+     "keys": [
+      {
+       "t0": 0.8999999999999999,
+       "t1": 1.2,
+       "ease": "inOut",
+       "to": "5"
+      }
+     ]
+    },
+    {
+     "target": "vars@0",
+     "prop": "slot",
+     "init": 0,
+     "keys": []
+    },
+    {
+     "target": "vars@1",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "vars@1",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "vars@1",
+     "prop": "label",
+     "init": "4",
+     "keys": []
+    },
+    {
+     "target": "vars@1",
+     "prop": "slot",
+     "init": 1,
+     "keys": []
+    },
+    {
+     "target": "vars@2",
+     "prop": "state",
+     "init": "idle",
+     "keys": []
+    },
+    {
+     "target": "vars@2",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "vars@2",
+     "prop": "label",
+     "init": "9",
+     "keys": []
+    },
+    {
+     "target": "vars@2",
+     "prop": "slot",
+     "init": 2,
+     "keys": []
+    },
+    {
+     "target": "nums",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "vars",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "c",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "c",
+     "prop": "lines",
+     "init": "",
+     "keys": [
+      {
+       "t0": 1.2,
+       "t1": 1.5,
+       "ease": "inOut",
+       "to": "3-5,9"
+      }
+     ]
+    },
+    {
+     "target": "lo",
+     "prop": "visible",
+     "init": true,
+     "keys": []
+    },
+    {
+     "target": "lo",
+     "prop": "label",
+     "init": "lo",
+     "keys": []
+    },
+    {
+     "target": "lo",
+     "prop": "at",
+     "init": {
+      "target": "nums@0"
+     },
+     "keys": [
+      {
+       "t0": 0.8999999999999999,
+       "t1": 1.5,
+       "ease": "inOut",
+       "to": {
+        "target": "nums@5"
+       }
+      }
+     ]
+    }
+   ],
+   "packets": [],
+   "pulses": [
+    {
+     "target": "nums@4",
+     "t0": 0,
+     "t1": 0.6
+    }
+   ],
+   "callouts": [],
+   "camera": []
+  }
+ ]
+}
