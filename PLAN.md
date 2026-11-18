@@ -457,7 +457,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
 
 ### Phase 2 — Preview, inline player, generation, sharing, export
 
-- [ ] **F20 Render page**
+- [x] **F20 Render page**
   *Depends:* F14 · *PRD:* §8, §4.2 Determinism
   `/render/:flowId/:rev?s=&mode=still|sheet|video&step=&captions=1&w=&h=` in `web`: fixed-size stage,
   no controls, `window.__PLAYER__ = { ready: Promise, duration, steps, seek(t) → Promise<void> /* resolves

@@ -48,3 +48,30 @@ test("template published via API opens at /v/:id; → shows step 2 narration; li
   await expect.poll(() => page.getByText("Binary Search", { exact: false }).count()).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 }, 90_000);
+
+test("F20 render page: identical pixels across loads; sheet mode within 1600px", async () => {
+  const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+  const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
+  const hashAt = async (qs: string, t: number) => {
+    const page = await browser.newPage();
+    try {
+      await page.goto(`${base}/render/${id}?${qs}`);
+      await page.waitForFunction(() => (window as any).__PLAYER__, null, { timeout: 30_000 });
+      return await page.evaluate(async (t) => {
+        const p = (window as any).__PLAYER__;
+        await p.ready; await p.seek(t);
+        const d = p.frame() as Uint8ClampedArray;
+        const h = new Uint8Array(await crypto.subtle.digest("SHA-256", d as unknown as BufferSource));
+        return { hash: [...h].join(","), len: d.length, nonBlank: d.some((v, i) => i % 4 < 3 && v !== d[0]), size: p.size };
+      }, t);
+    } finally { await page.close(); }
+  };
+  const a = await hashAt("mode=video&w=640&h=360&captions=1", 2.5), b = await hashAt("mode=video&w=640&h=360&captions=1", 2.5);
+  expect(a.len).toBe(640 * 360 * 4);
+  expect(a.nonBlank).toBe(true);
+  expect(a.hash).toBe(b.hash);
+  expect((await hashAt("mode=video&w=640&h=360&captions=1", 5)).hash).not.toBe(a.hash); // seek actually changes the frame
+  const s = await hashAt("mode=sheet", 0);
+  expect(Math.max(s.size.w, s.size.h)).toBeLessThanOrEqual(1600);
+  expect(s.nonBlank).toBe(true);
+}, 120_000);

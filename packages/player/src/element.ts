@@ -7,7 +7,7 @@ const fonts: [string, string, string][] = [
   ["JetBrains Mono", "400", new URL("../../../assets/fonts/jetbrains-mono-latin-400-normal.woff2", import.meta.url).href],
 ];
 let fontsReady: Promise<unknown> | undefined;
-const loadFonts = () => (fontsReady ??= Promise.all(fonts.map(async ([family, weight, url]) => {
+export const loadFonts = () => (fontsReady ??= Promise.all(fonts.map(async ([family, weight, url]) => {
   const f = new FontFace(family, `url(${url})`, { weight });
   (document.fonts as unknown as Set<FontFace>).add(await f.load());
 })));
