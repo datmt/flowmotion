@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { build } from "vite";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { createApp } from "@flowmotion/server";
+import { createApp } from "../../server/src/app.ts";
 import { memoryStore } from "../../server/src/store.ts";
 import { createWorker } from "../src/worker.ts";
 

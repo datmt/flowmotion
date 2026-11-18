@@ -142,12 +142,6 @@ importers:
         specifier: 1.65.1
         version: 1.65.1
     devDependencies:
-      '@flowmotion/server':
-        specifier: workspace:*
-        version: link:../server
-      '@flowmotion/web':
-        specifier: workspace:*
-        version: link:../web
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
