@@ -1,0 +1,9 @@
+{
+  "name": "@flowmotion/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "flowmotion": "./src/main.ts" },
+  "scripts": { "typecheck": "tsc -p ." },
+  "dependencies": { "@flowmotion/core": "workspace:*" }
+}
