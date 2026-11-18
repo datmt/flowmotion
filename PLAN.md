@@ -302,7 +302,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   children; no two nodes overlap on the saga template; pinned node lands at its `pos`.
   *Commit:* `feat(core): F05 ELK auto-layout with groups and pins`
 
-- [ ] **F06 Compiler**
+- [~] **F06 Compiler**
   *Depends:* F03, F05 · *PRD:* §4.1 · *Contract:* §1.1
   `core/src/compile.ts`: `compile(doc) → Promise<{ compiled?, issues }>` = validate → layout → per-scenario
   schedule → tracks/packets/pulses/callouts/camera. Code blocks tokenized with shiki `codeToTokens` using
