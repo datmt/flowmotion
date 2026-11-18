@@ -287,7 +287,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   wrap test; theme has an entry for every `StateName` × theme and every `NodeKind`.
   *Commit:* `feat(core): F04 deterministic text measurement and theme`
 
-- [ ] **F05 ELK layout**
+- [~] **F05 ELK layout**
   *Depends:* F03, F04 · *PRD:* §3.1 rule 2, §4.1 Layout
   `core/src/layout.ts`: `layout(doc) → { nodes, groups, arrays, grids, code, edges: polylines, bounds }`
   using `elkjs/lib/elk.bundled.js` (no worker). `algorithm` → ELK `layered` (+ orthogonal routing),
