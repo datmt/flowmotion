@@ -357,7 +357,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   `stage.toDataURL()`.
   *Commit:* `feat(player): F09 Konva player and flow-player element`
 
-- [ ] **F10 Templates + authoring guide**
+- [~] **F10 Templates + authoring guide**
   *Depends:* F07 (F09 recommended, to eyeball them) · *PRD:* §5.4, §12 Phase 1
   `templates/`: `circuit-breaker`, `saga-compensation`, `temporal-replay`, `retry-backoff-dlq`,
   `oauth-pkce`, `binary-search`, `backprop` (`.flow.json`, each with ≥ 1 failure/edge-case branch
