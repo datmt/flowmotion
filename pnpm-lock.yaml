@@ -60,6 +60,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@flowmotion/core':
+        specifier: workspace:*
+        version: link:../core
       express:
         specifier: 5.3.0
         version: 5.3.0

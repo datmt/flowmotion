@@ -390,7 +390,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Done when:* test runs migrations on PGlite and round-trips a flow row.
   *Commit:* `feat(server): F12 Postgres schema and app skeleton`
 
-- [~] **F13 Tool layer + REST API + API keys**
+- [x] **F13 Tool layer + REST API + API keys**
   *Depends:* F07, F11, F12 · *PRD:* §5.3 (read/write tools), §9 auth
   `server/src/tools.ts` — one implementation per tool used by REST, MCP and (later) the co-pilot:
   `guide()`, `list({query})`, `get({id, view, ids})`, `create({doc, dryRun})`, `edit({id, baseRevision,
