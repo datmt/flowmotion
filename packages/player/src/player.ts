@@ -10,12 +10,13 @@ export interface Player {
   readonly t: number; readonly playing: boolean; readonly scenario: string; readonly step: number; readonly duration: number;
   frame(): FrameState;
   play(): void; pause(): void; seek(t: number): void; setSpeed(x: number): void;
-  next(): void; prev(): void; goToStep(i: number | string): void; setScenario(id: string): void; resize(): void; destroy(): void;
+  zoom(factor: number, at?: { x: number; y: number }): void; fit(): void; next(): void; prev(): void; goToStep(i: number | string): void; setScenario(id: string): void; resize(): void; destroy(): void;
 }
 
 /** Framework-free Konva player. Clock = requestAnimationFrame; every frame is sample() → setAttrs() → draw. */
 export function createPlayer(container: HTMLDivElement, compiled: CompiledFlow, opts: PlayerOptions = {}): Player {
-  const stage = new Konva.Stage({ container, width: container.clientWidth || 640, height: container.clientHeight || 360 });
+  const stage = new Konva.Stage({ container, width: container.clientWidth || 640, height: container.clientHeight || 360, draggable: true });
+  stage.container().style.cursor = "grab";
   let scenario = opts.scenario ?? compiled.scenarios[0]!.id, speed = 1, t = 0, playing = false, stopAt: number | undefined, raf = 0, last = 0, step = 0;
   let scene = buildScene(compiled, scenario, stage);
   const sc = () => compiled.scenarios.find((s) => s.id === scenario)!;
@@ -54,9 +55,16 @@ export function createPlayer(container: HTMLDivElement, compiled: CompiledFlow, 
     prev() { const ss = sc().steps; p.goToStep(Math.max(0, (t - ss[step]!.start > 0.3 || playing ? step : step - 1))); },
     goToStep(i) { const ss = sc().steps; const k = typeof i === "number" ? i : ss.findIndex((s) => s.id === i); if (k < 0) return; p.seek(ss[k]!.start); step = k; opts.onStep?.(k, scenario); },
     setScenario(id) { if (id === scenario || !compiled.scenarios.some((s) => s.id === id)) return; cancelAnimationFrame(raf); playing = false; stopAt = undefined; scene.destroy(); scenario = id; scene = buildScene(compiled, id, stage); t = Math.min(t, sc().duration); step = stepAt(t); opts.onStep?.(step, id); render(); },
+    zoom(f, at) {
+      const o = stage.scaleX(), n = Math.min(8, Math.max(0.2, o * f)), c = at ?? { x: stage.width() / 2, y: stage.height() / 2 };
+      stage.position({ x: c.x - ((c.x - stage.x()) / o) * n, y: c.y - ((c.y - stage.y()) / o) * n }); stage.scale({ x: n, y: n }); render();
+    },
+    fit() { stage.position({ x: 0, y: 0 }); stage.scale({ x: 1, y: 1 }); render(); },
     resize() { stage.size({ width: container.clientWidth || 640, height: container.clientHeight || 360 }); render(); },
     destroy() { cancelAnimationFrame(raf); stage.destroy(); },
   };
+  stage.on("wheel", (e) => { e.evt.preventDefault(); p.zoom(e.evt.deltaY < 0 ? 1.1 : 1 / 1.1, stage.getPointerPosition() ?? undefined); });
+  stage.on("dragend", render);
   if (opts.step) { const i = opts.step; t = sc().steps[Math.min(i, sc().steps.length - 1)]!.start; step = i; }
   render();
   return p;

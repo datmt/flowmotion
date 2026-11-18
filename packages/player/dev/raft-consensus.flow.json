@@ -1,0 +1,1396 @@
+{
+  "version": "2.1",
+  "meta": {
+    "title": "Raft consensus: election, replication, failure",
+    "summary": "Five servers elect a leader, replicate a log by quorum, then survive a leader crash and a network partition."
+  },
+  "layout": {
+    "algorithm": "stress"
+  },
+  "groups": [
+    {
+      "id": "cluster",
+      "label": "Raft cluster"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "client",
+      "label": "Client",
+      "kind": "actor",
+      "hidden": true,
+      "pos": {
+        "x": 80,
+        "y": 490
+      }
+    },
+    {
+      "id": "s1",
+      "label": "S1",
+      "kind": "service",
+      "group": "cluster",
+      "pos": {
+        "x": 80,
+        "y": 400
+      }
+    },
+    {
+      "id": "s2",
+      "label": "S2",
+      "kind": "service",
+      "group": "cluster",
+      "pos": {
+        "x": 410,
+        "y": 30
+      }
+    },
+    {
+      "id": "s3",
+      "label": "S3",
+      "kind": "service",
+      "group": "cluster",
+      "pos": {
+        "x": 740,
+        "y": 400
+      }
+    },
+    {
+      "id": "s4",
+      "label": "S4",
+      "kind": "service",
+      "group": "cluster",
+      "pos": {
+        "x": 580,
+        "y": 150
+      }
+    },
+    {
+      "id": "s5",
+      "label": "S5",
+      "kind": "service",
+      "group": "cluster",
+      "pos": {
+        "x": 240,
+        "y": 150
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "s1",
+      "to": "s2",
+      "arrow": false
+    },
+    {
+      "from": "s1",
+      "to": "s3",
+      "arrow": false
+    },
+    {
+      "from": "s1",
+      "to": "s4",
+      "arrow": false
+    },
+    {
+      "from": "s1",
+      "to": "s5",
+      "arrow": false
+    },
+    {
+      "from": "s2",
+      "to": "s3",
+      "arrow": false
+    },
+    {
+      "from": "s3",
+      "to": "s4",
+      "arrow": false
+    },
+    {
+      "from": "s3",
+      "to": "s5",
+      "arrow": false
+    },
+    {
+      "from": "client",
+      "to": "s1",
+      "hidden": true
+    },
+    {
+      "from": "client",
+      "to": "s3",
+      "hidden": true
+    }
+  ],
+  "arrays": [
+    {
+      "id": "roles",
+      "label": "Role (Foll / Cand / Lead)",
+      "values": [
+        "Foll",
+        "Foll",
+        "Foll",
+        "Foll",
+        "Foll"
+      ],
+      "keys": [
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+        "s5"
+      ],
+      "pos": {
+        "x": 460,
+        "y": 560
+      }
+    },
+    {
+      "id": "terms",
+      "label": "Term",
+      "values": [
+        "0",
+        "0",
+        "0",
+        "0",
+        "0"
+      ],
+      "keys": [
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+        "s5"
+      ],
+      "pos": {
+        "x": 460,
+        "y": 670
+      }
+    },
+    {
+      "id": "log-s1",
+      "label": "S1 log",
+      "values": [],
+      "pos": {
+        "x": 900,
+        "y": 60
+      }
+    },
+    {
+      "id": "log-s2",
+      "label": "S2 log",
+      "values": [],
+      "pos": {
+        "x": 900,
+        "y": 160
+      }
+    },
+    {
+      "id": "log-s3",
+      "label": "S3 log",
+      "values": [],
+      "pos": {
+        "x": 900,
+        "y": 260
+      }
+    },
+    {
+      "id": "log-s4",
+      "label": "S4 log",
+      "values": [],
+      "pos": {
+        "x": 900,
+        "y": 360
+      }
+    },
+    {
+      "id": "log-s5",
+      "label": "S5 log",
+      "values": [],
+      "pos": {
+        "x": 900,
+        "y": 460
+      }
+    }
+  ],
+  "code": [
+    {
+      "id": "rpc",
+      "title": "AppendEntries (receiver)",
+      "language": "go",
+      "code": "func (n *Node) AppendEntries(r Req) bool {\n  if r.Term < n.term { return false }\n  n.term, n.role = r.Term, Follower\n  if !n.log.Matches(r.PrevIdx, r.PrevTerm) {\n    return false\n  }\n  n.log.TruncateConflicts(r.Entries)\n  n.log.Append(r.Entries)\n  n.commit = min(r.Commit, n.log.Last())\n  return true\n}"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "main",
+      "title": "Election, then replication",
+      "steps": [
+        {
+          "id": "boot",
+          "title": "Everyone starts as a follower",
+          "narration": "All five servers are followers in term 0. Each waits a random election timeout. If no leader's heartbeat arrives before it fires, that server will start an election.",
+          "actions": [
+            {
+              "do": "callout",
+              "target": "s1",
+              "text": "Randomized timeouts avoid split votes"
+            }
+          ]
+        },
+        {
+          "id": "timeout",
+          "title": "S1's timer fires first",
+          "narration": "S1 hears nothing, so it becomes a candidate: it increments its term to 1 and votes for itself.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s1"
+              ],
+              "state": "warning"
+            },
+            {
+              "do": "label",
+              "target": "roles#s1",
+              "text": "Cand",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s1",
+              "text": "1",
+              "start": "with"
+            },
+            {
+              "do": "pulse",
+              "targets": [
+                "s1"
+              ]
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "ask",
+          "title": "S1 asks for votes",
+          "narration": "S1 sends RequestVote for term 1 to every peer it can reach. Each server grants at most one vote per term.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s2",
+              "label": "RequestVote t1"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s3",
+              "label": "RequestVote t1",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s4",
+              "label": "RequestVote t1",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s5",
+              "label": "RequestVote t1",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "vote",
+          "title": "Followers grant their votes",
+          "narration": "Each follower sees a higher term, adopts it and grants its vote. Updating the term is the first thing every RPC handler does.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "s2",
+              "to": "s1",
+              "label": "granted"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s1",
+              "label": "granted",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s4",
+              "to": "s1",
+              "label": "granted",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s5",
+              "to": "s1",
+              "label": "granted",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s2",
+              "text": "1",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s3",
+              "text": "1",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s4",
+              "text": "1",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s5",
+              "text": "1",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "win",
+          "title": "A majority makes S1 leader",
+          "narration": "Votes from itself plus two peers is 3 of 5, a majority; no two candidates can both reach it in the same term. S1 becomes leader.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s1"
+              ],
+              "state": "success"
+            },
+            {
+              "do": "label",
+              "target": "roles#s1",
+              "text": "Lead",
+              "start": "with"
+            },
+            {
+              "do": "focus",
+              "targets": [
+                "s1",
+                "s2",
+                "s3"
+              ],
+              "dim": true
+            },
+            {
+              "do": "callout",
+              "target": "s1",
+              "text": "3 of 5 votes = majority"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "heartbeat",
+          "title": "Heartbeats suppress new elections",
+          "narration": "The leader sends empty AppendEntries at a fixed interval. Followers reset their timers, so nobody else starts an election while S1 is healthy.",
+          "actions": [
+            {
+              "do": "focus",
+              "targets": []
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s2",
+              "label": "heartbeat"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s3",
+              "label": "heartbeat",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s4",
+              "label": "heartbeat",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s5",
+              "label": "heartbeat",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "write",
+          "title": "A client writes x=5",
+          "narration": "Clients talk only to the leader. S1 appends the command to its own log as an uncommitted entry tagged with the current term.",
+          "actions": [
+            {
+              "do": "show",
+              "targets": [
+                "client",
+                "client-s1"
+              ]
+            },
+            {
+              "do": "send",
+              "from": "client",
+              "to": "s1",
+              "label": "SET x=5"
+            },
+            {
+              "do": "values",
+              "target": "log-s1",
+              "values": [
+                "1:x=5"
+              ]
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#0"
+              ],
+              "state": "pending",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "explain",
+          "title": "What a follower checks",
+          "narration": "Before accepting entries a follower runs the consistency check: reject stale terms, then verify its log matches the leader's at the previous index. That check is what keeps all logs identical.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "rpc",
+              "lines": "2-5"
+            },
+            {
+              "do": "pulse",
+              "targets": [
+                "rpc"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "partial",
+          "title": "Replication reaches S2 first",
+          "narration": "S1 sends AppendEntries. Only S2 has it so far; the messages to S3-S5 are still in flight. The entry is on 2 of 5 servers, not yet safe.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "rpc",
+              "lines": "7-8"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s2",
+              "label": "Append 1:x=5"
+            },
+            {
+              "do": "values",
+              "target": "log-s2",
+              "values": [
+                "1:x=5"
+              ]
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s2#0"
+              ],
+              "state": "pending",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "log-s1",
+              "text": "Not committed: 2 of 5"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "fanout",
+          "title": "The rest catch up",
+          "narration": "The remaining followers receive the entry and append it. Every server now holds x=5, but the leader still cannot call it durable until it counts the acknowledgements.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s3",
+              "label": "Append 1:x=5"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s4",
+              "label": "Append 1:x=5",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s5",
+              "label": "Append 1:x=5",
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s3",
+              "values": [
+                "1:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s4",
+              "values": [
+                "1:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s5",
+              "values": [
+                "1:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s3#0",
+                "log-s4#0",
+                "log-s5#0"
+              ],
+              "state": "pending",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "quorum",
+          "title": "Quorum acknowledges",
+          "narration": "S2, S3 and S4 acknowledge. With the leader that is a majority, so the entry is committed. Any future leader's election quorum must overlap this one, so it will see the entry.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "s2",
+              "to": "s1",
+              "label": "ack"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s1",
+              "label": "ack",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s4",
+              "to": "s1",
+              "label": "ack",
+              "start": "with"
+            },
+            {
+              "do": "focus",
+              "targets": [
+                "s1",
+                "s2",
+                "s3",
+                "s4"
+              ],
+              "dim": true
+            },
+            {
+              "do": "callout",
+              "target": "s1",
+              "text": "4 of 5 stored it: committed"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "commit",
+          "title": "Commit and reply",
+          "narration": "The leader marks the entry committed, applies it to its state machine and answers the client. Followers learn the new commit index from the next heartbeat.",
+          "actions": [
+            {
+              "do": "focus",
+              "targets": []
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#0"
+              ],
+              "state": "success"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "client",
+              "label": "OK",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s2",
+              "label": "commit=1"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s3",
+              "label": "commit=1",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s4",
+              "label": "commit=1",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s5",
+              "label": "commit=1",
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s2#0",
+                "log-s3#0",
+                "log-s4#0",
+                "log-s5#0"
+              ],
+              "state": "success",
+              "start": "with"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crash",
+      "title": "What if the leader crashes mid-replication?",
+      "branchFrom": {
+        "scenario": "main",
+        "afterStep": "partial"
+      },
+      "steps": [
+        {
+          "id": "crash",
+          "title": "S1 crashes",
+          "narration": "The leader dies after the entry reached only S2. The client never got an OK, so it does not know whether x=5 was applied.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s1"
+              ],
+              "state": "error"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#0"
+              ],
+              "state": "disabled",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "roles#s1",
+              "text": "Down",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "log-s2",
+              "text": "Only copy besides S1"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "s3-timeout",
+          "title": "S3 times out",
+          "narration": "Heartbeats stop, S3's timer fires first and it starts term 2. Note S3's log is empty while S2's has the entry.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s3"
+              ],
+              "state": "warning"
+            },
+            {
+              "do": "label",
+              "target": "roles#s3",
+              "text": "Cand",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s3",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s2",
+              "label": "RequestVote t2"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s4",
+              "label": "RequestVote t2",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s5",
+              "label": "RequestVote t2",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "deny",
+          "title": "S2 denies the vote",
+          "narration": "S2's log is more up to date than S3's (it holds an entry S3 lacks), so it refuses. Voters never help a candidate whose log is behind theirs. S4 and S5 have equal logs and grant.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s2"
+              ],
+              "state": "error"
+            },
+            {
+              "do": "send",
+              "from": "s2",
+              "to": "s3",
+              "label": "denied"
+            },
+            {
+              "do": "send",
+              "from": "s4",
+              "to": "s3",
+              "label": "granted",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s5",
+              "to": "s3",
+              "label": "granted",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s2",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s4",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s5",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "s2",
+              "text": "My log is newer: no vote"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "elected",
+          "title": "S3 still wins with 3 of 5",
+          "narration": "Votes from S3, S4 and S5 are a majority, so S3 is leader for term 2. S2's denial only mattered for safety; it can no longer stop a quorum. The uncommitted x=5 entry is in danger.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s2"
+              ],
+              "state": "idle"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "s3"
+              ],
+              "state": "success"
+            },
+            {
+              "do": "label",
+              "target": "roles#s3",
+              "text": "Lead",
+              "start": "with"
+            },
+            {
+              "do": "focus",
+              "targets": [
+                "s3",
+                "s4",
+                "s5"
+              ],
+              "dim": true
+            }
+          ]
+        },
+        {
+          "id": "retry",
+          "title": "Client retries on the new leader",
+          "narration": "The client timed out, so it retries the write against S3. Commands must be idempotent or de-duplicated by request id, because x=5 might get applied twice.",
+          "actions": [
+            {
+              "do": "focus",
+              "targets": []
+            },
+            {
+              "do": "show",
+              "targets": [
+                "client-s3"
+              ]
+            },
+            {
+              "do": "send",
+              "from": "client",
+              "to": "s3",
+              "label": "SET x=5"
+            },
+            {
+              "do": "values",
+              "target": "log-s3",
+              "values": [
+                "2:x=5"
+              ]
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s3#0"
+              ],
+              "state": "pending",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "overwrite",
+          "title": "S2's stale entry is overwritten",
+          "narration": "S3 replicates its entry. S2's log conflicts at index 0 (term 1 vs term 2), so the follower deletes its entry and every entry after it, then appends the leader's. Uncommitted entries from a dead term are safe to discard.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "rpc",
+              "lines": "7-8"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s2",
+              "label": "Append 2:x=5"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s4",
+              "label": "Append 2:x=5",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s5",
+              "label": "Append 2:x=5",
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s2",
+              "values": [
+                "2:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s4",
+              "values": [
+                "2:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s5",
+              "values": [
+                "2:x=5"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s2#0",
+                "log-s4#0",
+                "log-s5#0"
+              ],
+              "state": "pending",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "committed",
+          "title": "Committed under the new leader",
+          "narration": "A majority stores the entry, so S3 commits it and answers the client.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "rpc",
+              "lines": ""
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s3#0",
+                "log-s2#0",
+                "log-s4#0",
+                "log-s5#0"
+              ],
+              "state": "success"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "client",
+              "label": "OK",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "rejoin",
+          "title": "S1 rejoins as a follower",
+          "narration": "S1 restarts, sees term 2 in the first heartbeat, steps down and copies S3's log. Its old uncommitted entry is replaced. All five logs agree again.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s1"
+              ],
+              "state": "idle"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#0"
+              ],
+              "state": "success",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "roles#s1",
+              "text": "Foll",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s1",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s1",
+              "label": "heartbeat"
+            },
+            {
+              "do": "values",
+              "target": "log-s1",
+              "values": [
+                "2:x=5"
+              ],
+              "start": "with"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "partition",
+      "title": "What if the network partitions?",
+      "branchFrom": {
+        "scenario": "main",
+        "afterStep": "commit"
+      },
+      "steps": [
+        {
+          "id": "cut",
+          "title": "The cluster splits 2 / 3",
+          "narration": "A partition separates {S1, S2} from {S3, S4, S5}. Nobody crashed; each side just cannot hear the other. S1 still believes it is leader.",
+          "actions": [
+            {
+              "do": "hide",
+              "targets": [
+                "s1-s3",
+                "s1-s4",
+                "s1-s5",
+                "s2-s3"
+              ]
+            },
+            {
+              "do": "focus",
+              "targets": [
+                "s1",
+                "s2"
+              ],
+              "dim": true
+            },
+            {
+              "do": "callout",
+              "target": "s1",
+              "text": "Still thinks it leads term 1"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "minority",
+          "title": "The minority accepts a write it cannot commit",
+          "narration": "A client still reaches S1 and writes y=9. S1 and S2 store it, but 2 of 5 is not a majority. The entry stays uncommitted and the client gets no reply.",
+          "actions": [
+            {
+              "do": "focus",
+              "targets": []
+            },
+            {
+              "do": "send",
+              "from": "client",
+              "to": "s1",
+              "label": "SET y=9"
+            },
+            {
+              "do": "values",
+              "target": "log-s1",
+              "values": [
+                "1:x=5",
+                "1:y=9"
+              ]
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#1"
+              ],
+              "state": "pending"
+            },
+            {
+              "do": "send",
+              "from": "s1",
+              "to": "s2",
+              "label": "Append 1:y=9"
+            },
+            {
+              "do": "values",
+              "target": "log-s2",
+              "values": [
+                "1:x=5",
+                "1:y=9"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s2#1"
+              ],
+              "state": "pending",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "log-s1",
+              "text": "2 of 5: can never commit"
+            }
+          ]
+        },
+        {
+          "id": "s3-vote",
+          "title": "The majority elects its own leader",
+          "narration": "S3, S4 and S5 stop hearing heartbeats. S3 times out, asks for votes in term 2 and wins 3 of 5. The cluster now has two leaders, but in different terms.",
+          "actions": [
+            {
+              "do": "state",
+              "targets": [
+                "s3"
+              ],
+              "state": "success"
+            },
+            {
+              "do": "label",
+              "target": "roles#s3",
+              "text": "Lead",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s3",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s4",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s5",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s4",
+              "label": "RequestVote t2"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s5",
+              "label": "RequestVote t2",
+              "start": "with"
+            },
+            {
+              "do": "focus",
+              "targets": [
+                "s3",
+                "s4",
+                "s5"
+              ],
+              "dim": true
+            },
+            {
+              "do": "callout",
+              "target": "s3",
+              "text": "Quorum: can commit"
+            }
+          ],
+          "hold": 1
+        },
+        {
+          "id": "majority",
+          "title": "The majority keeps making progress",
+          "narration": "A client writes z=1 to S3. S3, S4 and S5 store it, which is a majority, so it commits. Safety holds because only the side with a quorum can commit.",
+          "actions": [
+            {
+              "do": "focus",
+              "targets": []
+            },
+            {
+              "do": "show",
+              "targets": [
+                "client-s3"
+              ]
+            },
+            {
+              "do": "send",
+              "from": "client",
+              "to": "s3",
+              "label": "SET z=1"
+            },
+            {
+              "do": "values",
+              "target": "log-s3",
+              "values": [
+                "1:x=5",
+                "2:z=1"
+              ]
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s4",
+              "label": "Append 2:z=1"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s5",
+              "label": "Append 2:z=1",
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s4",
+              "values": [
+                "1:x=5",
+                "2:z=1"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s5",
+              "values": [
+                "1:x=5",
+                "2:z=1"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s3#1",
+                "log-s4#1",
+                "log-s5#1"
+              ],
+              "state": "success"
+            }
+          ]
+        },
+        {
+          "id": "heal",
+          "title": "The partition heals",
+          "narration": "Connectivity returns and S3's heartbeat reaches S1 carrying term 2.",
+          "actions": [
+            {
+              "do": "show",
+              "targets": [
+                "s1-s3",
+                "s1-s4",
+                "s1-s5",
+                "s2-s3"
+              ]
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s1",
+              "label": "heartbeat t2"
+            },
+            {
+              "do": "send",
+              "from": "s3",
+              "to": "s2",
+              "label": "heartbeat t2",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "stepdown",
+          "title": "The old leader steps down",
+          "narration": "S1 sees a higher term, so it drops to follower (line 3 of the handler). Its entry y=9 does not match S3's log, so the conflict check removes it and S1 and S2 copy the committed log. Nothing the client was told is lost, because y=9 was never acknowledged.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "rpc",
+              "lines": "3,7-8"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "s1"
+              ],
+              "state": "idle"
+            },
+            {
+              "do": "label",
+              "target": "roles#s1",
+              "text": "Foll",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s1",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "terms#s2",
+              "text": "2",
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s1",
+              "values": [
+                "1:x=5",
+                "2:z=1"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "values",
+              "target": "log-s2",
+              "values": [
+                "1:x=5",
+                "2:z=1"
+              ],
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "log-s1#1",
+                "log-s2#1"
+              ],
+              "state": "success",
+              "start": "with"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

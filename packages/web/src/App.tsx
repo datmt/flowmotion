@@ -11,14 +11,19 @@ function Sidebar() {
   const [flows, setFlows] = useState<db.LocalFlow[]>([]);
   useEffect(() => void db.list().then(setFlows), []);
   const here = location.pathname;
+  const head = "cursor-pointer px-2 pb-1 text-xs font-bold uppercase tracking-wide text-stone-500";
   const item = (active: boolean) => `block truncate rounded-md px-2 py-1.5 text-sm ${active ? "bg-emerald-100 font-semibold text-emerald-900" : "hover:bg-stone-200/60"}`;
   return (
     <nav className="hidden w-64 shrink-0 overflow-auto border-r border-stone-300 bg-stone-100 p-3 md:block">
-      <h2 className="px-2 pb-1 text-xs font-bold uppercase tracking-wide text-stone-500">My flows</h2>
-      {flows.length === 0 && <p className="px-2 pb-2 text-sm text-stone-400">Nothing yet</p>}
-      {flows.map((f) => <a key={f.id} href={`/local/${f.id}`} className={item(here === `/local/${f.id}`)}>{f.doc?.meta?.title ?? f.id}</a>)}
-      <h2 className="px-2 pb-1 pt-4 text-xs font-bold uppercase tracking-wide text-stone-500">Templates</h2>
-      {Object.values(templates).map((t) => <a key={t.meta.title} href="/" className={item(false)}>{t.meta.title}</a>)}
+      <details open>
+        <summary className={head}>My flows ({flows.length})</summary>
+        {flows.length === 0 && <p className="px-2 pb-2 text-sm text-stone-400">Nothing yet</p>}
+        {flows.map((f) => <a key={f.id} href={`/local/${f.id}`} className={item(here === `/local/${f.id}`)}>{f.doc?.meta?.title ?? f.id}</a>)}
+      </details>
+      <details open className="mt-3">
+        <summary className={head}>Templates</summary>
+        {Object.values(templates).map((t) => <a key={t.meta.title} href="/" className={item(false)}>{t.meta.title}</a>)}
+      </details>
     </nav>
   );
 }

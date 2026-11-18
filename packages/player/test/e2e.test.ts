@@ -69,7 +69,7 @@ test("saga: compiles in browser from .flow.json, branch button switches scenario
   await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 60_000 });
   await page.evaluate(() => (window as any).__el.player.goToStep(1));
 
-  const text = await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches span")?.textContent);
+  const text = await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches > summary")?.textContent);
   expect(text).toContain("What if inventory fails?");
   await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches ol.steps button").click());
   expect(await page.evaluate(() => (window as any).__el.player.scenario)).toBe("inventory-fails");
@@ -100,5 +100,17 @@ test("F34: Now panel shows changes + highlights lo; branch tab switches; mobile 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(200);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+}, 90_000);
+
+test.each(["raft-consensus", "raft-old"])("%s: nested branches render the step tree, no page errors", async (f) => {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}?src=${f}.flow.json`);
+  await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 60_000 });
+  const n = await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll(".rail > ol > li, .rail > .steps > li, .rail summary").length);
+  expect(n).toBeGreaterThan(5);
+  expect(await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches > summary")?.checkVisibility())).toBe(true);
   expect(errors).toEqual([]);
 }, 90_000);
