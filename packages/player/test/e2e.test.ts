@@ -69,9 +69,9 @@ test("saga: compiles in browser from .flow.json, branch button switches scenario
   await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 60_000 });
   await page.evaluate(() => (window as any).__el.player.goToStep(1));
 
-  const text = await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches button")?.textContent);
+  const text = await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches span")?.textContent);
   expect(text).toContain("What if inventory fails?");
-  await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches button").click());
+  await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches ol.steps button").click());
   expect(await page.evaluate(() => (window as any).__el.player.scenario)).toBe("inventory-fails");
   expect(errors).toEqual([]);
 }, 90_000);
@@ -93,8 +93,9 @@ test("F34: Now panel shows changes + highlights lo; branch tab switches; mobile 
 
   await page.goto(`${base}?src=saga-compensation.flow.json`);
   await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 60_000 });
-  await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll(".tabs button")[1].click());
+  await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll(".branches ol.steps button")[0].click());
   expect(await page.evaluate(() => (window as any).__el.player.scenario)).not.toBe("happy");
+  expect(await q("ol.steps[aria-label=Steps] > li")).toHaveLength(await page.evaluate(() => (window as any).__el.player.compiled.scenarios[0].steps.length)); // trunk stays visible
 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(200);

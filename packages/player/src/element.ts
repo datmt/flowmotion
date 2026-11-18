@@ -19,14 +19,13 @@ const CSS = `
 .wrap{background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;grid-template-columns:200px minmax(0,1fr) 300px;min-height:360px}
 .rail{border-right:1px solid var(--line);padding:8px;overflow:auto;max-height:640px}
 .rail summary{display:none;cursor:pointer;font-weight:700}
-.tabs{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}.tabs button[aria-selected=true]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 ol.steps{list-style:none;margin:0;padding:0 0 0 12px;border-left:2px solid var(--line)}
 ol.steps li{position:relative;margin:2px 0}
 ol.steps li::before{content:"";position:absolute;left:-18px;top:.6em;width:8px;height:8px;border-radius:50%;background:var(--line)}
 ol.steps li[data-s=done]::before{background:var(--accent)} ol.steps li[data-s=current]::before{background:var(--bg);border:2px solid var(--accent)}
 ol.steps li[data-s=current]>button{font-weight:700;color:var(--accent)} ol.steps li[data-s=upcoming]>button{opacity:.7}
 ol.steps button{border:0;padding:2px 4px;text-align:left;width:100%}
-.branches{display:flex;flex-direction:column;gap:2px;margin:2px 0 4px 10px;padding-left:8px;border-left:2px dashed var(--accent)}.branches button{border:0;color:var(--accent);text-align:left;padding:2px 4px}
+.branches{margin:2px 0 4px 6px;padding-left:8px;border-left:2px dashed var(--accent)}.branches>span{color:var(--accent);font-size:12px;font-weight:600}.branches ol.steps{border-left:0;padding-left:12px}
 .center{position:relative;min-width:0}.stage{width:100%}
 .ctl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
 .more{position:absolute;top:8px;right:8px}.more summary{cursor:pointer;list-style:none;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
@@ -99,7 +98,7 @@ export class FlowPlayerElement extends HTMLElement {
   #build(root: ShadowRoot, c: CompiledFlow) {
     const stageEl = h("div", { class: "stage" });
     stageEl.style.aspectRatio = c.meta.aspect.replace(":", "/");
-    const title = h("h2"), body = h("div"), changes = h("ul"), state = h("div");
+    const stateH = h("h3", { textContent: "State" }), title = h("h2"), body = h("div"), changes = h("ul"), state = h("div");
     const narr = h("div", { class: "narr", ariaLive: "polite" } as object, body);
     const playBtn = h("button", { class: "play", textContent: "▶", ariaLabel: "Play" } as object);
     const prev = h("button", { class: "prev", textContent: "◀", ariaLabel: "Previous step" } as object);
@@ -108,13 +107,11 @@ export class FlowPlayerElement extends HTMLElement {
     const speed = h("select", { ariaLabel: "Speed" } as object, ...["0.5", "1", "1.5", "2"].map((v) => h("option", { value: v, textContent: `${v}×`, selected: v === "1" }))) as HTMLSelectElement;
     const mode = h("select", { ariaLabel: "Mode" } as object, h("option", { value: "step", textContent: "Step" }), h("option", { value: "play", textContent: "Play" })) as HTMLSelectElement;
     const more = h("details", { class: "more" }, h("summary", { textContent: "⋯", ariaLabel: "More controls" } as object), h("div", {}, speed, mode, scrub));
-    const tabs = h("div", { class: "tabs", role: "tablist" });
-    tabs.hidden = c.scenarios.length < 2;
     const steps = h("ol", { class: "steps", ariaLabel: "Steps" } as object);
-    const rail = h("details", { class: "rail" }, h("summary", { textContent: "Steps" }), tabs, steps);
+    const rail = h("details", { class: "rail" }, h("summary", { textContent: "Steps" }), steps);
     const narrow = matchMedia("(max-width:720px)");
     rail.open = !narrow.matches; narrow.onchange = () => (rail.open = !narrow.matches);
-    const now = h("div", { class: "now" }, title, narr, h("h3", { textContent: "What changed" }), changes, h("h3", { textContent: "State" }), state);
+    const now = h("div", { class: "now" }, title, narr, h("h3", { textContent: "What changed" }), changes, stateH, state);
     const tables = h("div", { class: "sr" });
     root.append(h("div", { class: "wrap" }, rail, h("div", { class: "center" }, stageEl, h("div", { class: "ctl" }, prev, playBtn, next), more), now), tables);
 
@@ -127,15 +124,19 @@ export class FlowPlayerElement extends HTMLElement {
       title.textContent = `${p.step + 1}/${s.steps.length} · ${st.title}`;
       fmt(body, st.narration);
 
-      tabs.replaceChildren(...c.scenarios.map((x) => { const b = h("button", { textContent: x.title, onclick: () => p.setScenario(x.id) }); b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(x.id === p.scenario)); return b; }));
-      steps.replaceChildren(...s.steps.map((x, i) => {
-        const li = h("li", {}, h("button", { textContent: x.title, onclick: () => p.goToStep(i) }));
-        li.dataset.s = i < p.step ? "done" : i === p.step ? "current" : "upcoming";
-        if (i === p.step) li.setAttribute("aria-current", "step");
-        if (x.branches.length) li.append(h("div", { class: "branches" }, ...x.branches.map((b) => h("button", { textContent: `⑂ ${b.title}`, onclick: () => p.setScenario(b.scenario) }))));
-        return li;
+      // one tree: root scenario's steps, each branch nested under the step it leaves (own steps only)
+      const cur = s.steps, at = new Map(cur.map((x, i) => [x.id, i]));
+      const node = (sid: string): HTMLElement => h("ol", { class: "steps" }, ...c.scenarios.find((x) => x.id === sid)!.steps.flatMap((x, i) => {
+        if (x.inherited) return [];
+        const j = at.get(x.id);
+        const li = h("li", {}, h("button", { textContent: x.title, onclick: () => { p.setScenario(sid); p.goToStep(i); } }));
+        li.dataset.s = j === undefined ? "upcoming" : j < p.step ? "done" : j === p.step ? "current" : "upcoming";
+        if (li.dataset.s === "current") li.setAttribute("aria-current", "step");
+        for (const b of x.branches) li.append(h("div", { class: "branches" }, h("span", { textContent: `⑂ ${b.title}` }), node(b.scenario)));
+        return [li];
       }));
-
+      const root = c.scenarios.find((x) => !c.scenarios.some((y) => y.steps.some((z) => z.branches.some((br) => br.scenario === x.id))))!;
+      steps.replaceChildren(...Array.from(node(root.id).children));
       // "What changed": group identical (prop, from, to) across targets
       const groups = new Map<string, { t: string[]; prop: string; from: string; to: string }>();
       for (const x of st.changes) { const k = `${x.prop}|${x.from}|${x.to}`; (groups.get(k) ?? groups.set(k, { t: [], prop: x.prop, from: String(x.from), to: String(x.to) }).get(k)!).t.push(x.target); }
@@ -162,6 +163,7 @@ export class FlowPlayerElement extends HTMLElement {
         return h("tr", {}, h("th", { textContent: x.label ?? x.id }), d);
       }))] : [];
       state.replaceChildren(...[...c.arrays, ...c.grids].map(cellTable), ...tok);
+      stateH.hidden = !state.children.length;
 
       const fr = p.frame();
       tables.replaceChildren(...[...c.arrays, ...c.grids].map((o) => {
