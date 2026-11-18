@@ -515,7 +515,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   *Done when:* Playwright: deep link opens on the right step; remix adds a local flow.
   *Commit:* `feat(web): F24 embed, deep links, remix`
 
-- [ ] **F25 In-app generation pipeline**
+- [x] **F25 In-app generation pipeline**
   *Depends:* F22 · *PRD:* §5.8
   Load the `claude-api` skill / current Anthropic docs first. `server/src/generate.ts`:
   `generate({prompt}) → stream of events` — guide + 1–2 closest templates (simple keyword
@@ -529,6 +529,11 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   progress → opens in the local library. IP rate-limited (the server pays for the model).
   *Done when:* tests with a stubbed model client: repair loop stops after a valid doc or 3 rounds; AI
   edit returns one op batch. One live run noted in commit body.
+  *Built (deviations):* model writes the DSL (guide + `parseDsl` line-numbered issues), not schema-constrained JSON, so no
+  schema stripping; examples are the closest 2 templates printed as DSL. Model is an injectable `Model` fn (`anthropicModel`:
+  streamed, adaptive thinking, effort medium, server-side refusal fallback). Visual self-check runs only when a renderer exists.
+  `/api/generate` and `/api/ai-edit` share `RATE_LIMIT_AI` (default 5/min/IP); 501 without `ANTHROPIC_API_KEY`. The doc goes to the
+  client and is saved to the local library (not published). *Not done:* live run (no API key here), AI panel (F31).
   *Commit:* `feat(server): F25 in-app generation with repair loop`
 
 - [ ] **F26 Phase 2 hardening**

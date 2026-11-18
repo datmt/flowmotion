@@ -55,9 +55,30 @@ async function share(doc: unknown): Promise<string> {
   return url;
 }
 
+/** POST /api/generate (SSE over fetch): progress lines, then the finished doc. */
+async function generate(prompt: string, onProgress: (m: string) => void): Promise<any> {
+  const r = await fetch("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt }) });
+  if (!r.ok || !r.body) throw new Error((await r.json().catch(() => ({}))).message ?? `HTTP ${r.status}`);
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) throw new Error("Generation ended unexpectedly.");
+    buf += value;
+    for (let i; (i = buf.indexOf("\n\n")) >= 0; buf = buf.slice(i + 2)) {
+      const ev = JSON.parse(buf.slice(0, i).replace(/^data: /, ""));
+      if (ev.type === "progress") onProgress(ev.message);
+      else if (ev.type === "done") return ev.doc;
+      else if (ev.type === "error") throw new Error(ev.message);
+    }
+  }
+}
+
 function Library() {
   const [flows, setFlows] = useState<db.LocalFlow[]>([]);
   const [err, setErr] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState("");
   const refresh = () => db.list().then(setFlows);
   useEffect(() => void refresh(), []);
   const add = async (doc: any) => { location.href = `/local/${await db.save(doc)}`; };
@@ -72,8 +93,20 @@ function Library() {
       await add(r.doc);
     } catch (e) { setErr(`Not a valid flow file: ${e}`); }
   };
+  const onGenerate = async () => {
+    setErr(""); setBusy("Starting…");
+    try { await add(await generate(prompt, setBusy)); } catch (e) { setErr(String((e as Error).message)); setBusy(""); }
+  };
   return (
     <Shell>
+      <section className="mb-6">
+        <h2 className="mb-2 font-semibold">Generate with AI</h2>
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (prompt.trim() && !busy) void onGenerate(); }}>
+          <input aria-label="Describe a flow" className="min-w-0 flex-1 rounded-md border border-stone-400 px-3 py-1 text-sm" placeholder="e.g. How a database deadlock forms and is resolved" value={prompt} maxLength={4000} disabled={!!busy} onChange={(e) => setPrompt(e.target.value)} />
+          <button className={btn} disabled={!!busy || !prompt.trim()}>Generate</button>
+        </form>
+        {busy && <p role="status" className="mt-1 text-sm text-stone-500">{busy}</p>}
+      </section>
       <section className="mb-8">
         <h2 className="mb-2 font-semibold">My flows</h2>
         {err && <p role="alert" className="whitespace-pre-line text-red-600">{err}</p>}

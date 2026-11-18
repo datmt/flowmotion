@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { BlobStore } from "./store.ts";
 import { mcpHandler } from "./mcp.ts";
 import * as tools from "./tools.ts";
+import { anthropicModel, editWithAI, generate, type Model } from "./generate.ts";
 
 export type Env = Record<string, string | undefined>;
 
@@ -20,11 +21,14 @@ function limit(max: number, windowMs = 60_000): RequestHandler {
   };
 }
 
-export function createApp({ store, env, renderer }: { store: BlobStore; env: Env; renderer?: tools.Renderer }) {
+export function createApp({ store, env, renderer, model }: { store: BlobStore; env: Env; renderer?: tools.Renderer; model?: Model }) {
   const app = express();
   app.disable("x-powered-by");
   if (env.TRUST_PROXY) app.set("trust proxy", Number(env.TRUST_PROXY)); // hops, so req.ip is the real client
   app.use(express.json({ limit: "2mb" })); // doc limit is 1 MB; ops/previews fit under 2
+  model ??= env.ANTHROPIC_API_KEY ? anthropicModel(env.ANTHROPIC_API_KEY) : undefined;
+  const ai = limit(Number(env.RATE_LIMIT_AI ?? 5)); // the server pays for the model
+  const needModel = () => model ?? (() => { throw new tools.ToolError(501, { error: "not_available", message: "AI is not enabled on this server (no ANTHROPIC_API_KEY)." }); })();
   const c: tools.Ctx = { store, baseUrl: env.PUBLIC_URL, renderer };
   const read = limit(Number(env.RATE_LIMIT_READ ?? 300)), write = limit(Number(env.RATE_LIMIT_WRITE ?? 20)), render = limit(Number(env.RATE_LIMIT_RENDER ?? 10));
 
@@ -52,6 +56,19 @@ export function createApp({ store, env, renderer }: { store: BlobStore; env: Env
   api.get("/jobs/:id/file", read, async (req, res) => {
     const f = await tools.jobFile(c, String(req.params.id));
     res.type(f.ext).send(Buffer.from(f.bytes));
+  });
+  api.post("/generate", ai, async (req, res) => {
+    const m = needModel(), prompt = req.body?.prompt;
+    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 4000) throw new tools.ToolError(422, { error: "invalid", message: "prompt must be 1-4000 characters." });
+    res.set({ "content-type": "text/event-stream", "cache-control": "no-cache" }).flushHeaders();
+    try { for await (const ev of generate(c, m, { prompt })) res.write(`data: ${JSON.stringify(ev)}\n\n`); }
+    catch (e) { res.write(`data: ${JSON.stringify({ type: "error", message: e instanceof tools.ToolError ? String(e.body.message ?? e.body.error) : "Generation failed." })}\n\n`); if (!(e instanceof tools.ToolError)) console.error(e); }
+    res.end();
+  });
+  api.post("/ai-edit", ai, async (req, res) => {
+    const { doc, instruction, selectedIds } = req.body ?? {};
+    if (typeof instruction !== "string" || !instruction.trim() || instruction.length > 2000) throw new tools.ToolError(422, { error: "invalid", message: "instruction must be 1-2000 characters." });
+    res.json(await editWithAI(needModel(), { doc, instruction, selectedIds: Array.isArray(selectedIds) ? selectedIds.map(String) : [] }));
   });
   app.use("/api", api);
   app.post("/mcp", write, mcpHandler(c));
