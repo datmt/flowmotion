@@ -1,69 +1,680 @@
 {
   "version": "2.1",
-  "meta": { "title": "Backpropagation on a tiny network", "summary": "Forward pass, loss, then gradients flow backward through two layers." },
-  "layout": { "direction": "LR" },
+  "meta": {
+    "title": "Backpropagation on a tiny network",
+    "summary": "One full training step on a 2-2-1 network: forward pass, loss, every gradient via the chain rule, the weight update, and a second forward pass that proves the loss dropped."
+  },
+  "layout": {
+    "direction": "LR",
+    "edges": "straight"
+  },
   "groups": [
-    { "id": "input", "label": "Input" },
-    { "id": "hidden", "label": "Hidden" },
-    { "id": "output", "label": "Output" }
+    {
+      "id": "input",
+      "label": "Input"
+    },
+    {
+      "id": "hidden",
+      "label": "Hidden"
+    },
+    {
+      "id": "output",
+      "label": "Output"
+    }
   ],
   "nodes": [
-    { "id": "x1", "label": "x1 = 1.0", "kind": "value", "group": "input" },
-    { "id": "x2", "label": "x2 = 0.5", "kind": "value", "group": "input" },
-    { "id": "h1", "label": "h1", "kind": "value", "group": "hidden" },
-    { "id": "h2", "label": "h2", "kind": "value", "group": "hidden" },
-    { "id": "y", "label": "y", "kind": "value", "group": "output" }
+    {
+      "id": "x1",
+      "label": "x1 = 1.0",
+      "kind": "value",
+      "group": "input"
+    },
+    {
+      "id": "x2",
+      "label": "x2 = 0.5",
+      "kind": "value",
+      "group": "input"
+    },
+    {
+      "id": "h1",
+      "label": "h1",
+      "kind": "value",
+      "group": "hidden"
+    },
+    {
+      "id": "h2",
+      "label": "h2",
+      "kind": "value",
+      "group": "hidden"
+    },
+    {
+      "id": "y",
+      "label": "y",
+      "kind": "value",
+      "group": "output"
+    },
+    {
+      "id": "loss",
+      "label": "L",
+      "kind": "value"
+    }
   ],
   "edges": [
-    { "from": "x1", "to": "h1", "label": "w=0.4" },
-    { "from": "x1", "to": "h2", "label": "w=0.3" },
-    { "from": "x2", "to": "h1", "label": "w=0.2" },
-    { "from": "x2", "to": "h2", "label": "w=0.6" },
-    { "from": "h1", "to": "y", "label": "w=0.7" },
-    { "from": "h2", "to": "y", "label": "w=0.5" }
+    {
+      "id": "w1",
+      "from": "x1",
+      "to": "h1",
+      "label": "w1"
+    },
+    {
+      "id": "w2",
+      "from": "x2",
+      "to": "h1",
+      "label": "w2"
+    },
+    {
+      "id": "w3",
+      "from": "x1",
+      "to": "h2",
+      "label": "w3"
+    },
+    {
+      "id": "w4",
+      "from": "x2",
+      "to": "h2",
+      "label": "w4"
+    },
+    {
+      "id": "w5",
+      "from": "h1",
+      "to": "y",
+      "label": "w5"
+    },
+    {
+      "id": "w6",
+      "from": "h2",
+      "to": "y",
+      "label": "w6"
+    },
+    {
+      "id": "sq",
+      "from": "y",
+      "to": "loss",
+      "label": "(t−y)²"
+    }
+  ],
+  "arrays": [
+    {
+      "id": "weights",
+      "label": "Weights",
+      "values": [
+        "0.4",
+        "0.2",
+        "0.3",
+        "0.6",
+        "0.7",
+        "0.5"
+      ],
+      "keys": [
+        "w1",
+        "w2",
+        "w3",
+        "w4",
+        "w5",
+        "w6"
+      ],
+      "pos": {
+        "x": 240,
+        "y": 260
+      }
+    },
+    {
+      "id": "grads",
+      "label": "Gradients dL/dw",
+      "values": [
+        "–",
+        "–",
+        "–",
+        "–",
+        "–",
+        "–"
+      ],
+      "keys": [
+        "w1",
+        "w2",
+        "w3",
+        "w4",
+        "w5",
+        "w6"
+      ],
+      "pos": {
+        "x": 240,
+        "y": 390
+      }
+    }
+  ],
+  "code": [
+    {
+      "id": "src",
+      "title": "Training step (pseudo-code)",
+      "language": "python",
+      "code": "# forward\nh1 = w1*x1 + w2*x2\nh2 = w3*x1 + w4*x2\ny  = w5*h1 + w6*h2\nL  = (t - y) ** 2\n# backward (chain rule)\ndy = 2 * (y - t)\ndw5, dw6 = dy*h1, dy*h2\ndh1, dh2 = dy*w5, dy*w6\ndw1, dw2 = dh1*x1, dh1*x2\ndw3, dw4 = dh2*x1, dh2*x2\n# update\nw -= lr * dw   # every weight",
+      "pos": {
+        "x": 690,
+        "y": 260
+      }
+    }
   ],
   "scenarios": [
-    { "id": "train", "title": "One training step", "steps": [
-      { "id": "forward-hidden", "title": "Forward: hidden layer", "narration": "Each hidden neuron sums its weighted inputs: h1 = 1.0*0.4 + 0.5*0.2 = **0.5**, h2 = 1.0*0.3 + 0.5*0.6 = **0.6**.",
-        "actions": [
-          { "do": "send", "from": "x1", "to": "h1" },
-          { "do": "send", "from": "x2", "to": "h2", "start": "with" },
-          { "do": "label", "target": "h1", "text": "h1 = 0.5" },
-          { "do": "label", "target": "h2", "text": "h2 = 0.6", "start": "with" },
-          { "do": "state", "targets": ["h1", "h2"], "state": "active" } ] },
-      { "id": "forward-out", "title": "Forward: output", "narration": "The output combines the hidden values: y = 0.5*0.7 + 0.6*0.5 = **0.65**. The target is 1.0.",
-        "actions": [
-          { "do": "send", "from": "h1", "to": "y" },
-          { "do": "send", "from": "h2", "to": "y", "start": "with" },
-          { "do": "label", "target": "y", "text": "y = 0.65" },
-          { "do": "state", "targets": ["y"], "state": "warning" } ] },
-      { "id": "loss", "title": "Loss", "narration": "Squared error loss L = (1.0 - 0.65)^2 = **0.1225**. The gradient at the output is dL/dy = -0.70, so y should go up.",
-        "actions": [
-          { "do": "state", "targets": ["y"], "state": "error" },
-          { "do": "callout", "target": "y", "text": "L = 0.1225, dL/dy = -0.70" } ] },
-      { "id": "back-out", "title": "Backward: output weights", "narration": "Gradients flow backward. dL/dw(h1->y) = dL/dy * h1 = -0.70 * 0.5 = **-0.35**, and for h2 it is **-0.42**.",
-        "actions": [
-          { "do": "send", "from": "y", "to": "h1", "label": "-0.35" },
-          { "do": "send", "from": "y", "to": "h2", "label": "-0.42", "start": "with" },
-          { "do": "state", "targets": ["h1", "h2"], "state": "warning" } ] },
-      { "id": "back-hidden", "title": "Backward: input weights", "narration": "The chain rule continues: the error reaching h1 is dL/dy * 0.7 = -0.49. Multiply by each input to get the input-weight gradients.",
-        "actions": [
-          { "do": "send", "from": "h1", "to": "x1", "label": "-0.49" },
-          { "do": "send", "from": "h1", "to": "x2", "label": "-0.25", "start": "with" },
-          { "do": "state", "targets": ["x1", "x2"], "state": "warning" } ] },
-      { "id": "update", "title": "Update weights", "narration": "Each weight moves against its gradient: w = w - lr * grad. With lr = 0.1, the weight w(h1->y) goes from 0.7 to **0.735**.",
-        "actions": [
-          { "do": "label", "target": "h1-y", "text": "w=0.735" },
-          { "do": "state", "targets": ["x1", "x2", "h1", "h2", "y"], "state": "success" } ] }
-    ]},
-    { "id": "lr-too-high", "title": "What if the learning rate is too high?",
-      "branchFrom": { "scenario": "train", "afterStep": "back-hidden" },
+    {
+      "id": "train",
+      "title": "One training step",
       "steps": [
-        { "id": "overshoot", "title": "Overshoot", "narration": "With lr = 5 the update is huge: w(h1->y) jumps from 0.7 to 2.45. The next output overshoots the target and the loss gets worse.",
+        {
+          "id": "setup",
+          "title": "The tiny network",
+          "narration": "Two inputs (x1 = 1.0, x2 = 0.5), two hidden neurons, one output, six weights w1–w6. Target t = 1.0, learning rate lr = 0.1. To keep the arithmetic readable there is no activation function, every neuron is just a weighted sum. Goal: nudge the weights so y moves toward 1.0.",
           "actions": [
-            { "do": "label", "target": "h1-y", "text": "w=2.45" },
-            { "do": "state", "targets": ["y"], "state": "error" },
-            { "do": "callout", "target": "y", "text": "Loss grows, training diverges" } ] }
-      ]}
+            {
+              "do": "callout",
+              "target": "y",
+              "text": "Target t = 1.0"
+            }
+          ]
+        },
+        {
+          "id": "fwd-h1",
+          "title": "Forward: h1",
+          "narration": "h1 = w1·x1 + w2·x2 = 0.4·1.0 + 0.2·0.5 = 0.4 + 0.1 = **0.5**. Each weight scales the value on its edge and the neuron adds them up.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "2"
+            },
+            {
+              "do": "send",
+              "from": "x1",
+              "to": "h1",
+              "label": "0.4"
+            },
+            {
+              "do": "send",
+              "from": "x2",
+              "to": "h1",
+              "label": "0.1",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "h1",
+              "text": "h1 = 0.5"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "h1"
+              ],
+              "state": "active"
+            }
+          ]
+        },
+        {
+          "id": "fwd-h2",
+          "title": "Forward: h2",
+          "narration": "h2 = w3·x1 + w4·x2 = 0.3·1.0 + 0.6·0.5 = 0.3 + 0.3 = **0.6**. Same inputs, different weights, so a different value.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "3"
+            },
+            {
+              "do": "send",
+              "from": "x1",
+              "to": "h2",
+              "label": "0.3"
+            },
+            {
+              "do": "send",
+              "from": "x2",
+              "to": "h2",
+              "label": "0.3",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "h2",
+              "text": "h2 = 0.6"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "h2"
+              ],
+              "state": "active"
+            }
+          ]
+        },
+        {
+          "id": "fwd-out",
+          "title": "Forward: output",
+          "narration": "y = w5·h1 + w6·h2 = 0.7·0.5 + 0.5·0.6 = 0.35 + 0.30 = **0.65**. The network predicts 0.65 but the target is 1.0.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "4"
+            },
+            {
+              "do": "send",
+              "from": "h1",
+              "to": "y",
+              "label": "0.35"
+            },
+            {
+              "do": "send",
+              "from": "h2",
+              "to": "y",
+              "label": "0.30",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "y",
+              "text": "y = 0.65"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "y"
+              ],
+              "state": "warning"
+            }
+          ]
+        },
+        {
+          "id": "loss",
+          "title": "Loss and its first gradient",
+          "narration": "Loss L = (t − y)² = (1.0 − 0.65)² = 0.35² = **0.1225**. Backprop starts here: dL/dy = 2(y − t) = 2·(0.65 − 1.0) = **−0.70**. Negative means raising y lowers the loss.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "5,7"
+            },
+            {
+              "do": "send",
+              "from": "y",
+              "to": "loss",
+              "label": "0.1225"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "y",
+                "loss"
+              ],
+              "state": "error"
+            },
+            {
+              "do": "callout",
+              "target": "loss",
+              "text": "L = 0.1225"
+            },
+            {
+              "do": "callout",
+              "target": "y",
+              "text": "dL/dy = −0.70"
+            }
+          ]
+        },
+        {
+          "id": "back-out",
+          "title": "Gradients of the output weights",
+          "narration": "A weight's gradient = (gradient arriving at its output) × (the input it multiplied). dL/dw5 = dy·h1 = −0.70·0.5 = **−0.35**. dL/dw6 = dy·h2 = −0.70·0.6 = **−0.42**.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "8"
+            },
+            {
+              "do": "send",
+              "from": "loss",
+              "to": "y",
+              "label": "−0.70"
+            },
+            {
+              "do": "send",
+              "from": "y",
+              "to": "h1",
+              "label": "−0.35",
+              "start": "with"
+            },
+            {
+              "do": "send",
+              "from": "y",
+              "to": "h2",
+              "label": "−0.42",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "grads#w5",
+              "text": "−0.35"
+            },
+            {
+              "do": "label",
+              "target": "grads#w6",
+              "text": "−0.42",
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "h1",
+                "h2"
+              ],
+              "state": "warning"
+            }
+          ]
+        },
+        {
+          "id": "back-hidden",
+          "title": "Pass the error to the hidden layer",
+          "narration": "To go further back, ask how much each hidden value affected y. dL/dh1 = dy·w5 = −0.70·0.7 = **−0.49**, dL/dh2 = dy·w6 = −0.70·0.5 = **−0.35**. Note: this uses the old w5 and w6, before any update.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "9"
+            },
+            {
+              "do": "callout",
+              "target": "h1",
+              "text": "dL/dh1 = −0.49"
+            },
+            {
+              "do": "callout",
+              "target": "h2",
+              "text": "dL/dh2 = −0.35"
+            }
+          ]
+        },
+        {
+          "id": "back-h1",
+          "title": "Gradients into h1",
+          "narration": "h1 was fed by x1 and x2 through w1 and w2. dL/dw1 = dh1·x1 = −0.49·1.0 = **−0.49**. dL/dw2 = dh1·x2 = −0.49·0.5 = **−0.245**.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "10"
+            },
+            {
+              "do": "send",
+              "from": "h1",
+              "to": "x1",
+              "label": "−0.49"
+            },
+            {
+              "do": "send",
+              "from": "h1",
+              "to": "x2",
+              "label": "−0.245",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "grads#w1",
+              "text": "−0.49"
+            },
+            {
+              "do": "label",
+              "target": "grads#w2",
+              "text": "−0.245",
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "x1",
+                "x2"
+              ],
+              "state": "warning"
+            }
+          ]
+        },
+        {
+          "id": "back-h2",
+          "title": "Gradients into h2",
+          "narration": "Same for h2: dL/dw3 = dh2·x1 = −0.35·1.0 = **−0.35**. dL/dw4 = dh2·x2 = −0.35·0.5 = **−0.175**. Now all six weights have a gradient, and they are all negative: each weight should increase.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "11"
+            },
+            {
+              "do": "send",
+              "from": "h2",
+              "to": "x1",
+              "label": "−0.35"
+            },
+            {
+              "do": "send",
+              "from": "h2",
+              "to": "x2",
+              "label": "−0.175",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "grads#w3",
+              "text": "−0.35"
+            },
+            {
+              "do": "label",
+              "target": "grads#w4",
+              "text": "−0.175",
+              "start": "with"
+            }
+          ]
+        },
+        {
+          "id": "update",
+          "title": "Update every weight",
+          "narration": "Gradient descent: w ← w − lr·grad, with lr = 0.1. w1: 0.4 + 0.049 = **0.449**; w2: 0.2 + 0.0245 = **0.2245**; w3: 0.3 + 0.035 = **0.335**; w4: 0.6 + 0.0175 = **0.6175**; w5: 0.7 + 0.035 = **0.735**; w6: 0.5 + 0.042 = **0.542**.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "13"
+            },
+            {
+              "do": "label",
+              "target": "weights#w1",
+              "text": "0.449"
+            },
+            {
+              "do": "label",
+              "target": "weights#w2",
+              "text": "0.2245",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w3",
+              "text": "0.335",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w4",
+              "text": "0.6175",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w5",
+              "text": "0.735",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w6",
+              "text": "0.542",
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "x1",
+                "x2",
+                "h1",
+                "h2",
+                "y",
+                "loss"
+              ],
+              "state": "success"
+            }
+          ]
+        },
+        {
+          "id": "recheck",
+          "title": "Did it work? Forward again",
+          "narration": "With the new weights: h1 = 0.449·1.0 + 0.2245·0.5 = 0.5613, h2 = 0.335 + 0.6175·0.5 = 0.6438, y = 0.735·0.5613 + 0.542·0.6438 = **0.7614**. Loss = (1 − 0.7614)² = **0.0569**, down from 0.1225. Repeat many times and y converges to 1.0.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "2-5"
+            },
+            {
+              "do": "label",
+              "target": "h1",
+              "text": "h1 = 0.56"
+            },
+            {
+              "do": "label",
+              "target": "h2",
+              "text": "h2 = 0.64",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "y",
+              "text": "y = 0.76",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "loss",
+              "text": "0.1225 → 0.0569"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lr-too-high",
+      "title": "What if the learning rate is too high?",
+      "branchFrom": {
+        "scenario": "train",
+        "afterStep": "back-h2"
+      },
+      "steps": [
+        {
+          "id": "big-update",
+          "title": "Update with lr = 5",
+          "narration": "Same gradients, but lr = 5. w1: 0.4 + 2.45 = **2.85**; w2: 0.2 + 1.225 = **1.425**; w3: 0.3 + 1.75 = **2.05**; w4: 0.6 + 0.875 = **1.475**; w5: 0.7 + 1.75 = **2.45**; w6: 0.5 + 2.1 = **2.6**. Each step is 50× bigger than before.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "13"
+            },
+            {
+              "do": "label",
+              "target": "weights#w1",
+              "text": "2.85"
+            },
+            {
+              "do": "label",
+              "target": "weights#w2",
+              "text": "1.425",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w3",
+              "text": "2.05",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w4",
+              "text": "1.475",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w5",
+              "text": "2.45",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "weights#w6",
+              "text": "2.6",
+              "start": "with"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "y",
+                "loss"
+              ],
+              "state": "error"
+            }
+          ]
+        },
+        {
+          "id": "big-forward",
+          "title": "Overshoot: the loss explodes",
+          "narration": "Forward again: h1 = 2.85 + 1.425·0.5 = 3.5625, h2 = 2.05 + 1.475·0.5 = 2.7875, y = 2.45·3.5625 + 2.6·2.7875 = **15.98**. Loss = (1 − 15.98)² ≈ **224**, about 1800× worse. The gradient only says which way to go, lr decides how far.",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": "src",
+              "lines": "2-5"
+            },
+            {
+              "do": "label",
+              "target": "h1",
+              "text": "h1 = 3.56"
+            },
+            {
+              "do": "label",
+              "target": "h2",
+              "text": "h2 = 2.79",
+              "start": "with"
+            },
+            {
+              "do": "label",
+              "target": "y",
+              "text": "y = 15.98",
+              "start": "with"
+            },
+            {
+              "do": "callout",
+              "target": "loss",
+              "text": "Diverges: 0.1225 → 224"
+            }
+          ]
+        }
+      ]
+    }
   ]
 }
