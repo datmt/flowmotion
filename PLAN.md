@@ -410,7 +410,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   pressing →.
   *Commit:* `feat(web): F14 web shell and viewer page`
 
-- [ ] **F15 Remote MCP server**
+- [~] **F15 Remote MCP server**
   *Depends:* F13 · *PRD:* §5.1–§5.3, §5.6
   `server/src/mcp.ts` mounted at `/mcp`: official MCP TypeScript SDK, Streamable HTTP, **stateless**
   (no session id), **no auth**. Check the installed SDK's docs for the current stateless API first.
