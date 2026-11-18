@@ -1,6 +1,6 @@
 // Usage: node --experimental-strip-types evals/run-claude-code.ts [--format json|dsl|both] [--limit N] [--model M]
 // Starts a local server, runs each prompt through `claude -p` with only the flowmotion MCP tools.
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { parseStream, type Row } from "./report.ts";
@@ -19,8 +19,20 @@ const cfg = `${mkdtempSync(`${tmpdir()}/fm-eval-`)}/mcp.json`;
 writeFileSync(cfg, JSON.stringify({ mcpServers: { flowmotion: { type: "http", url: `http://localhost:${port}/mcp` } } }));
 for (let i = 0; i < 50 && !(await fetch(`http://localhost:${port}/mcp`).then(() => true, () => false)); i++) await new Promise((r) => setTimeout(r, 200));
 
+/** Run claude, stamping each stdout line with ms since start (for prompt → first valid/preview latency). */
+function runClaude(args: string[]) {
+  return new Promise<{ lines: string[]; times: number[]; stdout: string; stderr: string; totalMs: number }>((res) => {
+    const t0 = Date.now(), c = spawn("claude", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const lines: string[] = [], times: number[] = []; let buf = "", stdout = "", stderr = "";
+    const kill = setTimeout(() => c.kill(), 600_000);
+    c.stdout.on("data", (d) => { const t = Date.now() - t0; stdout += d; buf += d; const parts = buf.split("\n"); buf = parts.pop()!; for (const l of parts) { lines.push(l); times.push(t); } });
+    c.stderr.on("data", (d) => (stderr += d));
+    c.on("close", () => { clearTimeout(kill); if (buf) { lines.push(buf); times.push(Date.now() - t0); } res({ lines, times, stdout, stderr, totalMs: Date.now() - t0 }); });
+  });
+}
+
 mkdirSync("evals/results", { recursive: true });
-const out = `evals/results/${new Date().toISOString().slice(0, 10)}-claude-code.jsonl`;
+const out = arg("out") ?? `evals/results/${new Date().toISOString().slice(0, 10)}-claude-code.jsonl`;
 const done = new Set(existsSync(out) ? readFileSync(out, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).map((r) => `${r.id}/${r.format}`) : []); // resume: skip finished runs
 const prompts = (JSON.parse(readFileSync("evals/prompts.json", "utf8")) as { id: string; prompt: string }[]).slice(0, limit);
 try {
@@ -30,13 +42,13 @@ try {
       "--mcp-config", cfg, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__flowmotion", "--no-session-persistence", ...(model ? ["--model", model] : [])];
     let r, row: Row & { id: string }, retries = 0;
     do { // the model sometimes prints pseudo tool calls as text (0 real calls): harness flake, retry up to 2x
-      r = spawnSync("claude", args, { encoding: "utf8", timeout: 600_000, maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] });
-      row = { id: p.id, prompt: p.prompt, client: "claude-code", format, ...parseStream(r.stdout.split("\n")) };
+      r = await runClaude(args);
+      row = { id: p.id, prompt: p.prompt, client: "claude-code", format, totalMs: r.totalMs, ...parseStream(r.lines, r.times) };
     } while (row.toolCalls === 0 && retries++ < 2);
     (row as any).retries = retries;
     if (row.callsToValid === null) { mkdirSync("evals/results/raw", { recursive: true }); writeFileSync(`evals/results/raw/${p.id}-${format}.log`, r.stdout + r.stderr); }
     appendFileSync(out, JSON.stringify(row) + "\n");
-    console.log(p.id, format, `calls=${row.toolCalls} valid@${row.callsToValid} warn=${row.warnings} out=${row.outputTokens}`);
+    console.log(p.id, format, `calls=${row.toolCalls} valid@${row.callsToValid} ms=${row.msToValid} prev=${row.previews} warn=${row.warnings} out=${row.outputTokens}`);
   }
 } finally { server.kill(); }
 console.log("wrote", out);

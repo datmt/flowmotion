@@ -540,10 +540,13 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   client and is saved to the local library (not published). *Not done:* live run (no API key here), AI panel (F31).
   *Commit:* `feat(server): F25 in-app generation with repair loop`
 
-- [ ] **F26 Phase 2 hardening**
+- [x] **F26 Phase 2 hardening**
   *Depends:* F23, F24, F25
   Re-run F19 evals now using `flow_preview` in the workflow; measure prompt → first playable preview
   (target ≤ 30 s median, §10). Fix regressions.
+  *Result:* F19 harness now stamps stream lines (`msToValid`, `msToPreview`, `previews`, `totalMs`; `--out` flag). 8 prompts, DSL,
+  Claude Code, with `flow_preview` in the workflow: 8/8 valid ≤3 calls, median first valid flow 9.9 s, median first preview 11.7 s
+  (max 18 s; ≤30 s target met), median 3 calls, 0 warnings. 7/8 previewed. Clarity not hand-rated, so `pass` stays false.
   *Commit:* `fix: F26 phase 2 hardening`
 
 ### Phase 2b — Presentation, text DSL, icons

@@ -10,7 +10,7 @@ test("parseStream: counts calls to first valid create", () => {
   const res = (id: string, text: string, is_error = false) => L({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content: [{ type: "text", text }], is_error }] } });
   const r = parseStream([use("1", "mcp__flowmotion__flow_guide"), res("1", "guide"), use("2", "mcp__flowmotion__flow_create"), res("2", bad, true),
     use("3", "mcp__flowmotion__flow_create"), res("3", ok), L({ type: "result", usage: { output_tokens: 900 } })]);
-  expect(r).toEqual({ toolCalls: 3, callsToValid: 2, flowId: "abc", url: "/v/abc", warnings: 2, outputTokens: 900 });
+  expect(r).toMatchObject({ toolCalls: 3, callsToValid: 2, flowId: "abc", url: "/v/abc", warnings: 2, outputTokens: 900 });
 });
 
 test("report: pass criteria per client/format", () => {
@@ -19,4 +19,11 @@ test("report: pass criteria per client/format", () => {
   expect(out["cc/dsl"].pass).toBe(true);
   expect(out["cc/json"].validWithin3).toBe(0.9);
   expect(out["cc/json"].pass).toBe(false); // median calls 8 > 6
+});
+
+test("parseStream: latency to first valid + first preview", () => {
+  const use = (id: string, name: string) => L({ type: "assistant", message: { content: [{ type: "tool_use", id, name }] } });
+  const res = (id: string, text: string) => L({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content: [{ type: "text", text }] }] } });
+  const r = parseStream([use("1", "mcp__flowmotion__flow_create"), res("1", ok), use("2", "mcp__flowmotion__flow_preview"), res("2", "png")], [0, 12000, 12500, 18000]);
+  expect(r).toMatchObject({ msToValid: 12000, msToPreview: 18000, previews: 1 });
 });
