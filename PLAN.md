@@ -436,7 +436,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   *Done when:* test spawns the CLI on a valid and an invalid fixture and checks exit codes/output.
   *Commit:* `feat(cli): F17 flowmotion validate`
 
-- [~] **F18 Phase 1 hardening pass**
+- [x] **F18 Phase 1 hardening pass**
   *Depends:* F10, F15, F17
   Run all 7 templates through MCP create via a real client (Claude Code with the remote server
   configured). Fix friction found (error wording, hints, guide gaps). Add a load test script compiling a
