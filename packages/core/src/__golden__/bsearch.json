@@ -187,6 +187,50 @@
      "start": 0,
      "end": 3,
      "inherited": false,
+     "changes": [
+      {
+       "target": "nums@0",
+       "prop": "state",
+       "from": "idle",
+       "to": "disabled"
+      },
+      {
+       "target": "nums@1",
+       "prop": "state",
+       "from": "idle",
+       "to": "disabled"
+      },
+      {
+       "target": "nums@2",
+       "prop": "state",
+       "from": "idle",
+       "to": "disabled"
+      },
+      {
+       "target": "nums@3",
+       "prop": "state",
+       "from": "idle",
+       "to": "disabled"
+      },
+      {
+       "target": "nums@4",
+       "prop": "state",
+       "from": "idle",
+       "to": "disabled"
+      },
+      {
+       "target": "vars#lo",
+       "prop": "label",
+       "from": "0",
+       "to": "5"
+      },
+      {
+       "target": "lo",
+       "prop": "at",
+       "from": "nums@0",
+       "to": "nums@5"
+      }
+     ],
      "branches": []
     }
    ],

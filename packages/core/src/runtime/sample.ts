@@ -132,3 +132,12 @@ export function sample(c: CompiledFlow, scenarioId: string, t: number, opts: { r
   }
   return { t, step, ents, lines, packets, pulses, callouts, camera };
 }
+
+/** Settled value of every track at the end of step `i` (what `sample` shows just before the next step starts). */
+export function stateAt(c: CompiledFlow, scenarioId: string, i: number): Map<string, Partial<Record<Track["prop"], Track["init"]>>> {
+  const sc = c.scenarios.find((s) => s.id === scenarioId) ?? c.scenarios[0]!;
+  const t = (sc.steps[Math.min(i, sc.steps.length - 1)]?.end ?? 0) - 1e-6;
+  const out = new Map<string, Partial<Record<Track["prop"], Track["init"]>>>();
+  for (const tr of sc.tracks) { let m = out.get(tr.target); if (!m) out.set(tr.target, (m = {})); m[tr.prop] = evalTrack(tr, t, false).to; }
+  return out;
+}

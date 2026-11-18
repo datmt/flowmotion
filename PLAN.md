@@ -545,7 +545,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
 
 **Track A — Presentation (three-zone viewer)**
 
-- [~] **F33 Step change-sets**
+- [x] **F33 Step change-sets**
   *Depends:* F09
   Extend §1.1 `CompiledScenario.steps[]` with `changes: {target, prop, from, to}[]` (state, label, at,
   visible; derived from `tracks` keys falling inside the step) and `stateAt(step)` helpers in

@@ -7,7 +7,7 @@ import { lint } from "./lint.ts";
 import { parseRef } from "./ref.ts";
 import { aspects } from "./runtime/index.ts";
 import type { FlowDoc } from "./schema.ts";
-import type { CompiledFlow, CompiledScenario, Ease, Rect, Track, TrackProp } from "./runtime/index.ts";
+import type { CompiledFlow, CompiledScenario, Ease, Rect, StepChange, Track, TrackProp } from "./runtime/index.ts";
 
 const PAD = 40; // camera padding
 const BLINK = 0.15; // transient edge-active ramp
@@ -196,8 +196,22 @@ function compileScenario(doc: FlowDoc, lay: Layout, id: string): CompiledScenari
     return { ...t, keys: ks };
   });
 
+  const edgeIds = new Set(lay.edges.map((e) => e.id));
+  const keysOf = new Map((doc.arrays ?? []).filter((a) => a.keys).map((a) => [a.id, a.keys!]));
+  const name = (tid: string) => { const k = keysOf.get(tid.slice(0, tid.indexOf("@"))); return k ? `${tid.slice(0, tid.indexOf("@"))}#${k[+tid.slice(tid.indexOf("@") + 1)]}` : tid; };
+  const changesIn = (start: number, end: number): StepChange[] =>
+    out.flatMap((tr) => {
+      if (edgeIds.has(tr.target) || tr.prop === "slot" || tr.prop === "lines") return []; // edge blinks / cell moves / code lines are not "changes"
+      const str = (v: Track["init"]) => (typeof v === "object" ? ("target" in v ? v.target : v.edge) : v);
+      return tr.keys.flatMap((k, i) => {
+        if (k.t0 < start || k.t0 >= end) return [];
+        const from = str(i ? tr.keys[i - 1]!.to : tr.init), to = str(k.to);
+        return from === to ? [] : [{ target: name(tr.target), prop: tr.prop as StepChange["prop"], from: from as string | boolean, to: to as string | boolean }];
+      });
+    });
+
   const stepsOut: CompiledScenario["steps"] = sched.map((s) => ({
-    id: s.step.id, title: s.step.title, narration: s.step.narration, start: s.start, end: s.end, inherited: s.inherited,
+    id: s.step.id, title: s.step.title, narration: s.step.narration, start: s.start, end: s.end, inherited: s.inherited, changes: changesIn(s.start, s.end),
     branches: doc.scenarios.filter((b) => b.id !== id && b.branchFrom?.scenario === s.scenario && b.branchFrom.afterStep === s.step.id).map((b) => ({ scenario: b.id, title: b.title })),
   }));
   return { id, title: sc.title, duration, steps: stepsOut, cells, tracks: out, packets, pulses, callouts, camera };

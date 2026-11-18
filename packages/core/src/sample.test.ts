@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { expect, test } from "vitest";
 import { compile } from "./index.ts";
-import { sample } from "./runtime/index.ts";
+import { sample, stateAt } from "./runtime/index.ts";
 import { bsearch, saga } from "./fixtures.ts";
 
 const bs = (await compile(bsearch)).compiled!;
@@ -48,4 +48,17 @@ test("runtime bundle has no zod / elkjs / shiki", async () => {
   const r = await build({ entryPoints: [new URL("./runtime/index.ts", import.meta.url).pathname], bundle: true, write: false, metafile: true, format: "esm", logLevel: "silent" });
   const inputs = Object.keys(r.metafile.inputs).join("\n");
   expect(inputs).not.toMatch(/zod|elkjs|shiki/);
+});
+
+test("F33: step changes and stateAt", async () => {
+  const s = bs.scenarios[0]!;
+  const ch = s.steps[0]!.changes;
+  expect(ch).toContainEqual({ target: "vars#lo", prop: "label", from: "0", to: "5" });
+  expect(ch.filter((c) => c.prop === "state" && c.to === "disabled").map((c) => c.target)).toEqual(["nums@0", "nums@1", "nums@2", "nums@3", "nums@4"]);
+  expect(ch).toContainEqual({ target: "lo", prop: "at", from: "nums@0", to: "nums@5" });
+  const st = stateAt(bs, "main", 0);
+  const f = sample(bs, "main", s.steps[0]!.end);
+  expect(st.get("nums@3")!.state).toBe(f.ents.get("nums@3")!.state);
+  expect(st.get("vars@0")!.label).toBe(f.ents.get("vars@0")!.label);
+  expect(stateAt(bs, "main", 0).get("nums@5")!.state).toBe("idle");
 });

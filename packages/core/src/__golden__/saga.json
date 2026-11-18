@@ -110,6 +110,14 @@
      "start": 0,
      "end": 3,
      "inherited": false,
+     "changes": [
+      {
+       "target": "orch",
+       "prop": "state",
+       "from": "idle",
+       "to": "active"
+      }
+     ],
      "branches": [
       {
        "scenario": "fail",
@@ -275,6 +283,14 @@
      "start": 0,
      "end": 3,
      "inherited": true,
+     "changes": [
+      {
+       "target": "orch",
+       "prop": "state",
+       "from": "idle",
+       "to": "active"
+      }
+     ],
      "branches": []
     },
     {
@@ -284,6 +300,7 @@
      "start": 3,
      "end": 4.8,
      "inherited": false,
+     "changes": [],
      "branches": []
     }
    ],
