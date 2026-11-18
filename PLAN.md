@@ -223,7 +223,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 ### Phase 0 — Foundation
 
-- [ ] **F00 Repo scaffold**
+- [~] **F00 Repo scaffold**
   *Depends:* — · *PRD:* §11
   pnpm workspace, `tsconfig.base.json` (strict, `moduleResolution: bundler`, ESM), root
   `vitest.config.ts` using `projects: ["packages/*"]`, root scripts `typecheck` (`pnpm -r typecheck`),
