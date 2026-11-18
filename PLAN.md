@@ -494,7 +494,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   `done` with a URL.
   *Commit:* `feat(server): F22 preview and export tools`
 
-- [ ] **F23 MCP App inline player**
+- [~] **F23 MCP App inline player**
   *Depends:* F22, F09 · *PRD:* §5.3 MCP App
   Register `ui://flowmotion/player` HTML resource (single self-contained page: player bundle inlined,
   receives the compiled flow from the tool result via the MCP Apps host bridge). `flow_create`,
