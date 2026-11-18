@@ -377,7 +377,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   applying `inverse` restores the original doc; outline snapshot of the saga example.
   *Commit:* `feat(core): F11 ID-addressed edit ops and outline`
 
-- [ ] **F12 DB schema + server skeleton**
+- [~] **F12 DB schema + server skeleton**
   *Depends:* F00 · *PRD:* §9 Storage
   `packages/server`: Express 5 app factory `createApp({ db, env })`, `src/db.ts` (`Db` type, migration
   runner over `migrations/*.sql`), `src/main.ts` (pg Pool). Tables (no `users` yet — F32):
