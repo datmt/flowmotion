@@ -96,3 +96,16 @@ export function actionRefs(a: Action): { ref: string; path: (string | number)[] 
     default: return [];
   }
 }
+
+/** Max length each array reaches in any scenario (slot rects are sized for this; PLAN §1.1). */
+export function maxLengths(doc: FlowDoc, flatten: (id: string) => { step: { actions: Action[] } }[]): Map<string, number> {
+  const max = new Map((doc.arrays ?? []).map((a) => [a.id, a.values.length]));
+  for (const s of doc.scenarios) {
+    const sim = createCellSim(doc);
+    for (const f of flatten(s.id))
+      for (const a of f.step.actions)
+        if (a.do === "values" && applyValues(sim, a.target, a.values))
+          max.set(a.target, Math.max(max.get(a.target) ?? 0, a.values.length));
+  }
+  return max;
+}

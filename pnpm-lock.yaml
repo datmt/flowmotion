@@ -26,6 +26,9 @@ importers:
 
   packages/core:
     dependencies:
+      elkjs:
+        specifier: ^0.12.1
+        version: 0.12.1
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -386,6 +389,9 @@ packages:
 
   dfa@2.0.0:
     resolution: {integrity: sha512-4Z/ig4JY/6CyXaPvkjuJu7q5+6SikugixA/1wf/52A9Z+WOJr8NFKd60pv6KCwsdVdDmCCE3JrGwPFYxNcw8xw==}
+
+  elkjs@0.12.1:
+    resolution: {integrity: sha512-IhMYKHE4S2vtx0QrhBP3lYOIKDeIiJXBrdq9MGYkuB8ZHqhrBnHNfSUndjXFewrX1CPK8chwq+2NA0K0hliYuw==}
 
   es-module-lexer@2.3.2:
     resolution: {integrity: sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw==}
@@ -782,6 +788,8 @@ snapshots:
   chai@6.3.0: {}
 
   dfa@2.0.0: {}
+
+  elkjs@0.12.1: {}
 
   es-module-lexer@2.3.2: {}
 
