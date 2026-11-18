@@ -3,13 +3,14 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 
 /** Immutable blobs: keys are written once and never updated. */
 export interface BlobStore {
-  put(key: string, body: string): Promise<void>;
+  put(key: string, body: string | Uint8Array, contentType?: string): Promise<void>;
   get(key: string): Promise<string | null>;
 }
 
 export const memoryStore = (): BlobStore => {
   const m = new Map<string, string>();
-  return { put: async (k, b) => void m.set(k, b), get: async (k) => m.get(k) ?? null };
+  // ponytail: bytes are kept as latin1 text (get() is string-only); add getBytes when something reads binaries back.
+  return { put: async (k, b) => void m.set(k, typeof b === "string" ? b : Buffer.from(b).toString("latin1")), get: async (k) => m.get(k) ?? null };
 };
 
 // keys are server-generated (`flows/<base32 id>.json`), never user input
@@ -30,8 +31,8 @@ export function r2Store(env: Record<string, string | undefined>): BlobStore {
   });
   const Bucket = env.R2_BUCKET!;
   return {
-    async put(Key, Body) {
-      await s3.send(new PutObjectCommand({ Bucket, Key, Body, ContentType: "application/json", IfNoneMatch: "*" }));
+    async put(Key, Body, ContentType = "application/json") {
+      await s3.send(new PutObjectCommand({ Bucket, Key, Body, ContentType, IfNoneMatch: "*" }));
     },
     async get(Key) {
       try { return await (await s3.send(new GetObjectCommand({ Bucket, Key }))).Body!.transformToString(); }

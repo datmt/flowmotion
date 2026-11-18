@@ -468,7 +468,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   `t`.
   *Commit:* `feat(web): F20 deterministic render page`
 
-- [ ] **F21 Render worker (stills + video)**
+- [x] **F21 Render worker (stills + video)**
   *Depends:* F20 · *PRD:* §8
   `packages/worker`: one long-lived Chromium (Playwright) with fixed DPR=1. `renderStill(id | doc,
   scenario, step?)` → PNG (step end frame, or contact sheet when step omitted). In-process job loop (§0.3 Jobs): `kind:"export"` → seek each frame `i/fps`, read `frame()` RGBA, pipe raw frames to

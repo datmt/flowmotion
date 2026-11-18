@@ -129,6 +129,22 @@ importers:
         specifier: 8.3.8
         version: 8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)
 
+  packages/worker:
+    dependencies:
+      playwright-core:
+        specifier: 1.65.1
+        version: 1.65.1
+    devDependencies:
+      '@flowmotion/server':
+        specifier: workspace:*
+        version: link:../server
+      '@flowmotion/web':
+        specifier: workspace:*
+        version: link:../web
+      vite:
+        specifier: 8.3.8
+        version: 8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)
+
 packages:
 
   '@aws-sdk/checksums@3.1002.5':
