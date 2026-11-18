@@ -43,6 +43,14 @@ table.state th{opacity:.65;font-size:10px}.state .chg{background:var(--chg);font
 button,select{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
 button:hover{border-color:var(--accent)} button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent)}
 input[type=range]{accent-color:var(--accent)}
+:host([fill]){height:100%}:host([fill]) .wrap{height:100%;min-height:0}
+:host([fill]) .rail,:host([fill]) .now{max-height:none}
+.strip{display:flex;gap:2px;padding:8px 10px;border-top:1px solid var(--line);background:var(--bg);overflow-x:auto}
+.strip button{flex:1 0 64px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;font-size:11px;line-height:1.2;text-align:center;opacity:.6}
+.strip b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);font-size:11px}
+.strip [data-s=done]{opacity:1}.strip [data-s=done] b{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.strip [data-s=current]{opacity:1;font-weight:700}.strip [data-s=current] b{border-color:var(--accent);color:var(--accent)}
+:host([fill]) .ctl{bottom:84px}:host([fill]) .stage{margin:auto 0}:host([fill]) .center{display:flex;flex-direction:column;background:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--fg) 12%,transparent) 1px,transparent 0) 0 0/18px 18px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:720px){
   .wrap{grid-template-columns:minmax(0,1fr)}.center{order:1}.now{order:2;border-left:0;border-top:1px solid var(--line);max-height:none}
@@ -109,11 +117,12 @@ export class FlowPlayerElement extends HTMLElement {
     const more = h("details", { class: "more" }, h("summary", { textContent: "⋯", ariaLabel: "More controls" } as object), h("div", {}, speed, mode, scrub));
     const steps = h("ol", { class: "steps", ariaLabel: "Steps" } as object);
     const rail = h("details", { class: "rail" }, h("summary", { textContent: "Steps" }), steps);
+    const strip = h("div", { class: "strip" });
     const narrow = matchMedia("(max-width:720px)");
     rail.open = !narrow.matches; narrow.onchange = () => (rail.open = !narrow.matches);
     const now = h("div", { class: "now" }, title, narr, h("h3", { textContent: "What changed" }), changes, stateH, state);
     const tables = h("div", { class: "sr" });
-    root.append(h("div", { class: "wrap" }, rail, h("div", { class: "center" }, stageEl, h("div", { class: "ctl" }, prev, playBtn, next), more), now), tables);
+    root.append(h("div", { class: "wrap" }, rail, h("div", { class: "center" }, stageEl, h("div", { class: "ctl" }, prev, playBtn, next), more, strip), now), tables);
 
     const keysOf = new Map(c.arrays.filter((a) => a.keys).map((a) => [a.id, a.keys!]));
     const nm = (id: string) => { const i = id.indexOf("@"), k = i > 0 && keysOf.get(id.slice(0, i)); return k ? `${id.slice(0, i)}#${k[+id.slice(i + 1)]}` : id; };
@@ -124,6 +133,11 @@ export class FlowPlayerElement extends HTMLElement {
       title.textContent = `${p.step + 1}/${s.steps.length} · ${st.title}`;
       fmt(body, st.narration);
 
+      strip.replaceChildren(...s.steps.map((x, i) => {
+        const b = h("button", { onclick: () => p.goToStep(i), title: x.title }, h("b", { textContent: String(i + 1) }), x.title);
+        b.dataset.s = i < p.step ? "done" : i === p.step ? "current" : "upcoming";
+        return b;
+      }));
       // one tree: root scenario's steps, each branch nested under the step it leaves (own steps only)
       const cur = s.steps, at = new Map(cur.map((x, i) => [x.id, i]));
       const node = (sid: string): HTMLElement => h("ol", { class: "steps" }, ...c.scenarios.find((x) => x.id === sid)!.steps.flatMap((x, i) => {
