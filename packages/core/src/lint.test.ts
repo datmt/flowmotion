@@ -23,3 +23,12 @@ const cases: [string, (d: any) => void][] = [
 test.each(cases)("warns %s", async (code, f) => {
   expect(await codes(mut(saga, f))).toContain(code);
 });
+
+test("warns edge_label_over_node on a fan of long labels", async () => {
+  const c = await codes(mut(saga, (d) => { d.layout = { edges: "straight" }; const a = d.nodes[0].id; for (let i = 0; i < 8; i++) { d.nodes.push({ id: `f${i}`, label: "f", kind: "state" }); d.edges.push({ from: a, to: `f${i}`, label: "a fairly long edge label" }); } }));
+  expect(c).toContain("edge_label_over_node");
+});
+test("warns diagram_too_small on a very wide diagram", async () => {
+  const c = await codes(mut(saga, (d) => { d.layout = { ...d.layout, direction: "LR" }; for (let i = 0; i < 18; i++) { d.nodes.push({ id: `w${i}`, label: "wide node label", kind: "state" }); d.edges.push({ from: i ? `w${i - 1}` : d.nodes[0].id, to: `w${i}` }); } }));
+  expect(c).toContain("diagram_too_small");
+});

@@ -42,11 +42,11 @@ function buildServer(c: tools.Ctx) {
     (a) => run(() => tools.get(c, a))());
 
   const target = { id: z.string().optional(), doc: doc.optional(), dsl: dsl.optional() }; // an existing id, or a new flow to snapshot first
-  s.registerTool("flow_preview", { description: "Render a PNG: one step's end frame (`step`, 0-based) or a contact sheet of all steps. Pass `id`, or `dsl`/`doc` to snapshot a new flow. Use it to check layout before sharing.", inputSchema: { ...target, scenario: z.string().optional(), step: z.number().int().min(0).optional() }, annotations: hint(false), _meta: ui },
+  s.registerTool("flow_preview", { description: "Render PNGs: one step's end frame (`step`, 0-based), or by default one contact sheet per scenario (max 6) — look at every one, branches included. Pass `id`, or `dsl`/`doc` to snapshot a new flow. Use it to check layout before sharing.", inputSchema: { ...target, scenario: z.string().optional(), step: z.number().int().min(0).optional() }, annotations: hint(false), _meta: ui },
     async (a) => {
       try {
-        const { png, outline, url, id, warnings } = await tools.preview(c, a);
-        return { ...(await uiMeta(id)), content: [{ type: "image" as const, data: Buffer.from(png).toString("base64"), mimeType: "image/png" }, { type: "text" as const, text: wrap({ id, url, outline, warnings }) }] };
+        const { pngs, outline, url, id, warnings } = await tools.preview(c, a);
+        return { ...(await uiMeta(id)), content: [...pngs.map((png) => ({ type: "image" as const, data: Buffer.from(png).toString("base64"), mimeType: "image/png" })), { type: "text" as const, text: wrap({ id, url, outline, warnings }) }] };
       } catch (e) {
         if (!(e instanceof tools.ToolError)) throw e;
         return { isError: true, content: [{ type: "text" as const, text: wrap(e.body) }], structuredContent: e.body };

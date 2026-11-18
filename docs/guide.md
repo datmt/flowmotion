@@ -78,8 +78,10 @@ State persists across steps; `callout`, `pulse` and packets end with their step.
 2. Plan: entities, a happy-path scenario, and the failure or edge case worth showing as a branch.
 3. Up to ~40 entities: `flow_create` with the full `dsl`. Larger: `flow_create` with entities and the first scenario, then one `flow_edit` per remaining scenario (incremental).
 4. Fix **every** reported error in one follow-up call. Syntax issues carry `line`/`col`; all issues have a `where` and a `hint`. `flow_edit` takes `ops` for small changes or a whole new `dsl`.
-5. `flow_preview`; fix layout, clarity and lint warnings with `flow_edit`.
+5. `flow_preview` returns one contact sheet per scenario: **look at every one** (branches too), then fix layout, clarity and every lint warning with `flow_edit`. Don't ship with `edge_label_overlap`, `edge_label_over_node` or `diagram_too_small` unfixed.
 6. Give the user the viewer URL.
+
+Layout tips: keep to ~8 nodes per scenario view and at most one edge between a pair of nodes. Edge labels are static captions, so label only edges that need a name; show messages with `send ... "label"` (a moving packet) instead of labelling every edge. Meshes (cluster peers) read best with `edges=straight`; use `noarrow` for symmetric links.
 
 Tips: 3-8 steps per scenario; one idea per step; narration explains *why*, not what moved. Use `with` to run label updates beside the motion. Add a branch (`branchFrom`) for "what if it fails?".
 

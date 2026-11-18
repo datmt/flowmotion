@@ -32,6 +32,8 @@ test("MCP flow_preview returns an image; flow_export job reaches done with a fet
     expect(img.mimeType).toBe("image/png");
     expect([...Buffer.from(img.data, "base64").subarray(1, 4)]).toEqual([0x50, 0x4e, 0x47]);
     expect(p.content.find((c: any) => c.type === "text").text).toContain("outline");
+    const all = await call("flow_preview", { doc: tpl }); // default: one sheet per scenario
+    expect(all.content.filter((c: any) => c.type === "image")).toHaveLength(tpl.scenarios.length);
 
     expect((await call("flow_export", { doc: tpl, webhookUrl: "http://127.0.0.1/x" })).isError).toBe(true); // private webhook rejected
     const started = (await call("flow_export", { doc: tpl, format: "gif", height: 720, fps: 30 })).structuredContent;

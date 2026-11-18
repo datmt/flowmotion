@@ -3,7 +3,7 @@ import type { Issue } from "./validate.ts";
 import type { Layout } from "./layout.ts";
 import { flattenScenario } from "./timing.ts";
 import { parseRef } from "./ref.ts";
-import { wrap, metrics } from "./runtime/index.ts";
+import { wrap, measure, metrics, aspects } from "./runtime/index.ts";
 
 /** Explainer-quality warnings (PRD §5.6). Never blocks. Assumes a validated doc. */
 export function lint(doc: FlowDoc, lay: Layout): Issue[] {
@@ -66,5 +66,24 @@ export function lint(doc: FlowDoc, lay: Layout): Issue[] {
     const hit = lay.nodes.find((o) => o.id !== p.id && a.x < o.rect.x + o.rect.w && o.rect.x < a.x + a.w && a.y < o.rect.y + o.rect.h && o.rect.y < a.y + a.h);
     if (hit) warn("pin_overlap", `/nodes/${doc.nodes.indexOf(p)}/pos`, `nodes › ${p.id}`, `Pinned node '${p.id}' overlaps '${hit.id}'.`);
   }
+
+  // layout readability: overlapping edge labels, labels over nodes, diagram shrunk below readable size
+  const boxes = doc.edges.flatMap((e, i) => {
+    const l = lay.edges[i];
+    if (!e.label || !l) return [];
+    const w = measure(e.label, "inter", metrics.edgeLabelSize) + 8, h = metrics.edgeLabelSize + 6;
+    return [{ id: l.id, path: `/edges/${i}/label`, r: { x: l.labelAt.x - w / 2, y: l.labelAt.y - h / 2, w, h } }];
+  });
+  const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const hintFix = "Shorten or remove labels, merge parallel edges, drop edges that repeat what a 'send' action shows, or use `layout.edges: straight`.";
+  boxes.forEach((a, i) => {
+    const b = boxes.slice(i + 1).find((o) => hit(a.r, o.r));
+    if (b) warn("edge_label_overlap", a.path, `edges › ${a.id}`, `Label of edge '${a.id}' overlaps the label of '${b.id}'; both are hard to read.`, hintFix);
+    const n = lay.nodes.find((o) => hit(a.r, o.rect));
+    if (n) warn("edge_label_over_node", a.path, `edges › ${a.id}`, `Label of edge '${a.id}' sits on node '${n.id}'.`, hintFix);
+  });
+  const frameW = 1280, frameH = frameW / aspects[doc.meta.aspect ?? "16:9"];
+  const scale = Math.min(frameW / lay.bounds.w, frameH / lay.bounds.h);
+  if (scale < 0.6) warn("diagram_too_small", "/nodes", "layout", `The diagram renders at ${Math.round(scale * 100)}% scale, so text is under ${Math.round(metrics.labelSize * scale)}px.`, "Use fewer nodes or edges, split into scenarios, or put detail in groups/arrays instead of nodes.");
   return out;
 }

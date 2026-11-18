@@ -100,11 +100,14 @@ async function target(c: Ctx, a: { id?: string; doc?: unknown; dsl?: string }) {
   return { id: p.id, outline: p.outline, warnings: p.warnings };
 }
 
-/** PNG of one step's end frame, or a contact sheet of every step when `step` is omitted. */
+/** PNG of one step's end frame, or contact sheets: one per scenario (max 6) when `scenario`/`step` are omitted. `png` is the first sheet. */
 export async function preview(c: Ctx, a: { id?: string; doc?: unknown; dsl?: string; scenario?: string; step?: number }) {
   const r = renderer(c), t = await target(c, a);
-  const png = await r.renderStill(t.id, a.scenario, a.step);
-  return { ...t, url: `${c.baseUrl ?? ""}/v/${t.id}`, png };
+  const all = a.scenario === undefined && a.step === undefined;
+  const ids = all ? (await snapshot(c, t.id)).doc.scenarios.slice(0, 6).map((s) => s.id) : [a.scenario];
+  const pngs: Uint8Array[] = [];
+  for (const s of ids) pngs.push(await r.renderStill(t.id, s, a.step)); // sequential: one shared browser
+  return { ...t, url: `${c.baseUrl ?? ""}/v/${t.id}`, png: pngs[0]!, pngs };
 }
 
 // ponytail: hostname check only (no DNS resolution), so a rebinding host could still reach private ranges; move to an egress proxy if exposed publicly.
