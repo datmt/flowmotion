@@ -316,7 +316,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   300-entity doc < 2 s in the test.
   *Commit:* `feat(core): F06 FlowDoc → CompiledFlow compiler`
 
-- [ ] **F07 Lint warnings**
+- [~] **F07 Lint warnings**
   *Depends:* F06 · *PRD:* §5.6 Warnings
   `core/src/lint.ts`, run by `compile()` (warnings never block). All 8 warning codes in §1.4, using
   layout/timing data (`pin_overlap` from rects, `label_wraps` from `wrap().overflow`,
