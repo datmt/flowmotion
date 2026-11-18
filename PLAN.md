@@ -262,7 +262,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   returns all 3; PRD examples return zero errors.
   *Commit:* `feat(core): F02 structural validation with fix hints`
 
-- [ ] **F03 Timing + cell simulation**
+- [~] **F03 Timing + cell simulation**
   *Depends:* F02 · *PRD:* §3.3, §3.4, §3.5 · *Contract:* §1.2, §1.3
   `core/src/timing.ts`: `flattenScenario(doc, id)`, `scheduleScenario(doc, id) → steps with absolute
   action [t0,t1]`. `core/src/cells.ts`: cell instances, LCS diff for `values`, ref → instance resolution
