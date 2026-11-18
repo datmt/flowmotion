@@ -111,3 +111,16 @@ export function newAction(what: SimpleAction, target: string): any {
   if (what === "label" || what === "callout") return { do: what, target, text: "Text" };
   return { do: what, targets: [target] };
 }
+
+/** Ids of entities, edges, scenarios and steps that differ between two docs (added, removed or changed). */
+export function changedIds(a: FlowDoc, b: FlowDoc): string[] {
+  const index = (d: FlowDoc) => {
+    const m = new Map<string, string>(), put = (id: string, v: unknown) => m.set(id, JSON.stringify(v));
+    for (const [, key] of LISTS) for (const e of (d[key] as any[] | undefined) ?? []) put(e.id, e);
+    for (const e of d.edges) put(edgeId(e), e);
+    for (const s of d.scenarios) { put(s.id, { ...s, steps: s.steps.map((x) => x.id) }); for (const st of s.steps) put(st.id, st); }
+    return m;
+  };
+  const x = index(a), y = index(b);
+  return [...new Set([...x.keys(), ...y.keys()])].filter((k) => x.get(k) !== y.get(k));
+}

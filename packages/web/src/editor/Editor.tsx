@@ -8,13 +8,14 @@ import { addOp, connectOp, deleteOp, moveOp, relayoutOps, usedInSteps, type Adda
 import { createOverlay } from "./overlay.ts";
 import { Inspector } from "./Inspector.tsx";
 import { Steps } from "./Steps.tsx";
+import { AiPanel, type Version } from "./AiPanel.tsx";
 import { createStore, type Store } from "./store.ts";
 
 const KINDS: NodeKind[] = ["service", "state", "decision", "db", "queue", "actor", "external", "value"];
 const EXTRA: Addable[] = ["array", "grid", "code", "token"];
 
 /** The canvas: a player (scene) + interactive overlay, both rebuilt on every recompile; pan/zoom/time survive. */
-function Canvas({ compiled, store, scenario, step }: { compiled: CompiledFlow; store: Store; scenario: string; step: number }) {
+function Canvas({ compiled, store, scenario, step, changed }: { compiled: CompiledFlow; store: Store; scenario: string; step: number; changed: ReadonlySet<string> }) {
   const host = useRef<HTMLDivElement>(null);
   const live = useRef<{ p: Player; ov: ReturnType<typeof createOverlay> }>(undefined);
   const view = useRef<{ x: number; y: number; s: number; t: number }>(undefined);
@@ -37,7 +38,7 @@ function Canvas({ compiled, store, scenario, step }: { compiled: CompiledFlow; s
     const moved = applied.current.scenario !== scenario || applied.current.step !== step;
     if (moved || !v) p.goToStep(Math.min(step, p.compiled.scenarios.find((x) => x.id === p.scenario)!.steps.length - 1)); else p.seek(v.t);
     applied.current = { scenario, step };
-    ov.sync(); ov.setSel(store.get().sel);
+    ov.setChanged(changed); ov.sync(); ov.setSel(store.get().sel);
     live.current = { p, ov };
     (window as any).__EDITOR__ = { store, player: p }; // test hook
     const ro = new ResizeObserver(() => p.resize());
@@ -45,6 +46,7 @@ function Canvas({ compiled, store, scenario, step }: { compiled: CompiledFlow; s
     return () => { view.current = { x: p.stage.x(), y: p.stage.y(), s: p.stage.scaleX(), t: p.t }; ro.disconnect(); ov!.destroy(); p.destroy(); };
   }, [compiled]);
   useEffect(() => live.current?.ov.setSel(sel), [sel]);
+  useEffect(() => live.current?.ov.setChanged(changed), [changed]);
   useEffect(() => { // jump the current scene right away; the rebuild after the recompile repeats it for the new compiled flow
     const p = live.current?.p;
     if (!p) return;
@@ -62,10 +64,12 @@ function Canvas({ compiled, store, scenario, step }: { compiled: CompiledFlow; s
 function Loaded({ id, rec }: { id: string; rec: db.LocalFlow }) {
   const store = useMemo(() => createStore(rec.doc as FlowDoc, rec.hist), []);
   const st = useSyncExternalStore(store.subscribe, store.get);
-  const [versions, setVersions] = useState(rec.versions ?? []);
+  const [versions, setVersions] = useState<Version[]>(rec.versions ?? []);
+  const [changed, setChanged] = useState<ReadonlySet<string>>(new Set()); // entities touched by the last AI edit (orange)
+  const aiDoc = useRef<FlowDoc>(undefined);
   const [compiled, setCompiled] = useState<CompiledFlow>();
   const [bad, setBad] = useState("");
-  const [tab, setTab] = useState<"inspect" | "steps">("inspect");
+  const [tab, setTab] = useState<"inspect" | "steps" | "ai">("inspect");
   const [scn, setScn] = useState(st.doc.scenarios[0]!.id), [stepIx, setStep] = useState(0);
   const scenario = st.doc.scenarios.find((x) => x.id === scn) ?? st.doc.scenarios[0]!, step = Math.min(stepIx, scenario.steps.length - 1);
 
@@ -75,6 +79,7 @@ function Loaded({ id, rec }: { id: string; rec: db.LocalFlow }) {
     compile(st.doc).then((r) => { if (!live) return; if (r.compiled) { setCompiled(r.compiled); setBad(""); } else setBad(r.issues.map((i) => i.message).join("; ")); });
     return () => { live = false; };
   }, [st.doc]);
+  useEffect(() => { if (aiDoc.current !== st.doc) setChanged((c) => (c.size ? new Set() : c)); }, [st.doc]); // any later edit/undo clears the highlight
   // autosave doc + undo history + versions
   useEffect(() => { const t = setTimeout(() => void db.save(st.doc, id, { hist: store.hist(), versions }), 150); return () => clearTimeout(t); }, [st.doc, versions]);
 
@@ -109,7 +114,7 @@ function Loaded({ id, rec }: { id: string; rec: db.LocalFlow }) {
         <button className={`${btn} ${dis}`} disabled={!st.canRedo} onClick={store.redo}>Redo</button>
         <button className={btn} onClick={relayout}>Re-layout</button>
         <button className={btn} onClick={() => setVersions([...versions, { t: Date.now(), label: new Date().toLocaleString(), doc: st.doc }])}>Save version ({versions.length})</button>
-        {versions.length > 0 && <select className={btn} aria-label="Restore version" value="" onChange={(e) => { const v = versions[+e.target.value]; if (v) store.replace(v.doc, `restore ${v.label}`); }}><option value="" disabled>Restore…</option>{versions.map((v, i) => <option key={v.t} value={i}>{v.label}</option>)}</select>}
+        {versions.length > 0 && <select className={btn} aria-label="Restore version" value="" onChange={(e) => { const v = versions[+e.target.value]; if (v) store.replace(v.doc, `restore ${v.label}`); }}><option value="" disabled>Restore…</option>{versions.map((v, i) => <option key={v.t} value={i}>{v.label}{v.prompt ? ` — ${v.prompt}` : ""}</option>)}</select>}
         <button className={btn} onClick={exportDsl}>Export .flow</button>
         <a className={btn} href={`/local/${id}`}>View</a>
       </div>
@@ -121,13 +126,13 @@ function Loaded({ id, rec }: { id: string; rec: db.LocalFlow }) {
       </div>
       {(st.error || bad) && <p role="alert" className="text-sm text-red-600">{st.error || bad}</p>}
       <div className="flex min-h-0 flex-1 gap-3">
-        {compiled ? <Canvas compiled={compiled} store={store} scenario={scenario.id} step={step} /> : <p>Compiling…</p>}
+        {compiled ? <Canvas compiled={compiled} store={store} scenario={scenario.id} step={step} changed={changed} /> : <p>Compiling…</p>}
         <aside className="flex w-80 shrink-0 flex-col rounded border border-stone-300 bg-stone-100">
           <div role="tablist" className="flex border-b border-stone-300 text-sm">
-            {(["inspect", "steps"] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={`flex-1 px-3 py-2 font-semibold capitalize ${tab === t ? "bg-white" : "text-stone-500"}`} onClick={() => setTab(t)}>{t === "inspect" ? "Inspector" : "Steps"}</button>)}
+            {(["inspect", "steps", "ai"] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={`flex-1 px-3 py-2 font-semibold ${tab === t ? "bg-white" : "text-stone-500"}`} onClick={() => setTab(t)}>{t === "inspect" ? "Inspector" : t === "steps" ? "Steps" : "AI"}</button>)}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-3">
-            {tab === "inspect" ? <Inspector store={store} doc={st.doc} sel={st.sel} /> : <Steps store={store} doc={st.doc} scenarioId={scenario.id} setScenario={setScn} step={step} setStep={setStep} sel={st.sel} />}
+            {tab === "inspect" ? <Inspector store={store} doc={st.doc} sel={st.sel} /> : tab === "ai" ? <AiPanel store={store} doc={st.doc} sel={st.sel} versions={versions} addVersion={(v) => setVersions((x) => [...x, v])} onChanged={(ids) => { aiDoc.current = store.get().doc; setChanged(new Set(ids)); }} /> : <Steps store={store} doc={st.doc} scenarioId={scenario.id} setScenario={setScn} step={step} setStep={setStep} sel={st.sel} />}
           </div>
         </aside>
       </div>

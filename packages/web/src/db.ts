@@ -1,5 +1,5 @@
 // Local library: one IndexedDB store of {id, doc, updated}. Flows never leave the browser until shared.
-export interface LocalFlow { id: string; doc: any; updated: number; hist?: { undo: any[]; redo: any[] }; versions?: { t: number; label: string; doc: any }[] }
+export interface LocalFlow { id: string; doc: any; updated: number; hist?: { undo: any[]; redo: any[] }; versions?: { t: number; label: string; doc: any; prompt?: string }[] }
 
 const open = () => new Promise<IDBDatabase>((res, rej) => {
   const r = indexedDB.open("flowmotion", 1);

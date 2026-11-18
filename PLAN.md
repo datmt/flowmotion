@@ -703,11 +703,15 @@ grammar when F39/F42/F43 land.
   `send`/`move`/`swap`/`values`/`highlight` can't be added in the UI yet.
   *Commit:* `feat(web): F30 step and timeline editor`
 
-- [ ] **F31 AI panel + revision history**
+- [x] **F31 AI panel + revision history**
   *Depends:* F25, F27 · *PRD:* §7 AI panel, §5.8 step 4
   Prompt box (generate / edit selection via `ai-edit`), local version list (time, label, AI prompt)
   with one-click restore, changed entities highlighted after an AI batch, AI batch = one undo entry
   labeled with the request.
+  *Built (deviations):* "AI" tab edits the selection (or whole flow) via `/api/ai-edit`; whole-flow generate stays on the
+  dashboard. Each AI edit first saves a "Before AI edit" version (time, prompt); restore is one undo entry. Changed ids
+  (`changedIds`) drawn orange on the canvas until the next edit/undo. Unit-tested (one undo entry, changed ids); the panel UI
+  was not exercised in a browser or against a live model.
   *Commit:* `feat(web): F31 AI panel and revision history`
 
 ---

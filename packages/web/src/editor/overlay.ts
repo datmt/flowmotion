@@ -6,19 +6,19 @@ import type { Player } from "@flowmotion/player";
 import type { CompiledFlow, Rect } from "@flowmotion/core/runtime";
 
 export interface Handlers { select(id?: string): void; move(id: string, x: number, y: number): void; connect(from: string, to: string): void }
-const BLUE = "#2563eb", HOVER = "#93c5fd", GHOST = "#94a3b8", CLEAR = "rgba(0,0,0,0.01)";
+const ORANGE = "#f59e0b", BLUE = "#2563eb", HOVER = "#93c5fd", GHOST = "#94a3b8", CLEAR = "rgba(0,0,0,0.01)";
 
 export function createOverlay(p: Player, c: CompiledFlow, hidden: ReadonlySet<string>, h: Handlers) {
   const layer = new Konva.Layer(), root = new Konva.Group();
   layer.add(root);
   p.stage.add(layer);
   const items = new Map<string, Konva.Shape>(), kinds = new Map<string, "edge" | "box">();
-  let sel: string | undefined, hover: string | undefined, handle: Konva.Circle | undefined;
+  let changed: ReadonlySet<string> = new Set(), sel: string | undefined, hover: string | undefined, handle: Konva.Circle | undefined;
 
   const style = (id: string) => {
     const s = items.get(id)!, on = id === sel, edge = kinds.get(id) === "edge";
-    const col = on ? BLUE : id === hover ? HOVER : hidden.has(id) ? GHOST : undefined;
-    s.setAttrs(edge ? { stroke: col ?? CLEAR, strokeWidth: on ? 4 : 3 } : { stroke: col, dash: !on && hidden.has(id) ? [4, 4] : undefined, strokeWidth: 2 });
+    const col = on ? BLUE : id === hover ? HOVER : changed.has(id) ? ORANGE : hidden.has(id) ? GHOST : undefined;
+    s.setAttrs(edge ? { stroke: col ?? CLEAR, strokeWidth: on || changed.has(id) ? 4 : 3 } : { stroke: col, dash: !on && hidden.has(id) ? [4, 4] : undefined, strokeWidth: 2 });
   };
   const hit = (x: number, y: number) => c.nodes.find((n) => x >= n.rect.x && x <= n.rect.x + n.rect.w && y >= n.rect.y && y <= n.rect.y + n.rect.h)?.id;
   const bind = (id: string, s: Konva.Shape) => {
@@ -65,6 +65,7 @@ export function createOverlay(p: Player, c: CompiledFlow, hidden: ReadonlySet<st
     /** Mirror the scene camera (called on every player render). */
     sync() { root.setAttrs({ x: p.world.x(), y: p.world.y(), scaleX: p.world.scaleX(), scaleY: p.world.scaleY() }); layer.batchDraw(); },
     setSel(id?: string) { const old = sel; sel = id; if (old && items.has(old)) style(old); if (id && items.has(id)) style(id); showHandle(); layer.batchDraw(); },
+    setChanged(ids: ReadonlySet<string>) { changed = ids; for (const id of items.keys()) style(id); layer.batchDraw(); },
     top() { layer.moveToTop(); layer.batchDraw(); },
     destroy() { layer.destroy(); },
   };

@@ -55,3 +55,14 @@ test("history survives a reload (hist round-trips as JSON) and replace() is undo
   r.undo();
   expect(r.get().doc.nodes[0]!.label).toBe("X");
 });
+
+test("AI batch: one undo entry labeled with the request; changedIds names what it touched", async () => {
+  const { changedIds } = await import("../src/editor/edits.ts");
+  const s = createStore(tpl()), before = s.get().doc, id = before.nodes[0]!.id;
+  expect(changedIds(before, before)).toEqual([]);
+  s.dispatch([{ op: "upsert", entity: "node", value: { ...before.nodes[0]!, label: "Via AI" } }, addOp(before, "db")!.op], "AI: rename and add");
+  expect(s.hist().undo.at(-1)!.label).toBe("AI: rename and add");
+  expect(changedIds(before, s.get().doc).sort()).toEqual([id, addOp(before, "db")!.id].sort());
+  s.undo();
+  expect(s.get().doc).toEqual(before); // whole batch reverted at once
+});
