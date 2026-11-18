@@ -428,7 +428,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
 
 - [-] **F16 OAuth 2.1 for MCP connectors** — dropped: `/mcp` is public, so connectors need no authorization.
 
-- [ ] **F17 CLI `validate`**
+- [~] **F17 CLI `validate`**
   *Depends:* F07 · *PRD:* §5.2, §12
   `packages/cli`, bin `flowmotion`: `flowmotion validate <file> [--json]` → compiles locally, prints
   issues as `error unknown_ref happy › charge › action 1: … (hint)` or JSON; exit 1 on errors. Use
