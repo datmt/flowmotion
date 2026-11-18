@@ -1,62 +1,58 @@
-import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { createApp } from "./app.ts";
-import { createKey } from "./auth.ts";
-import { migrate } from "./db.ts";
-import { seedTemplates } from "./tools.ts";
+import { memoryStore } from "./store.ts";
 
 const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
 
-test("create → edit → 409 → revert; invalid → all issues; scopes; public compiled; seeded templates", async () => {
-  const db = new PGlite();
-  await migrate(db);
-  await seedTemplates(db);
-  await seedTemplates(db); // idempotent
-  const rw = await createKey(db, "acme");
-  const ro = await createKey(db, "acme", ["read"]);
-  const server = createApp({ db, env: { PUBLIC_URL: "http://x" } }).listen(0);
-  try {
-    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-    const call = async (path: string, key: string | null, body?: unknown) => {
-      const r = await fetch(base + path, {
-        method: body ? "POST" : "GET",
-        headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() : await r.text() };
-    };
+async function serve(env = {}) {
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x", ...env } }).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const call = async (path: string, body?: unknown) => {
+    const r = await fetch(base + path, { method: body ? "POST" : "GET", headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() : await r.text() };
+  };
+  return { call, close: () => server.close() };
+}
 
-    expect((await call("/api/flows", null)).status).toBe(401);
-    const bad = await call("/api/flows", rw, { doc: { version: "2.1", meta: {}, nodes: [{ id: "a" }, { id: "a" }], edges: [] } });
+test("publish → get; invalid → all issues; edit makes a new id, old intact; stateless ops/validate; static docs", async () => {
+  const { call, close } = await serve();
+  try {
+    const bad = await call("/api/share", { doc: { version: "2.1", meta: {}, nodes: [{ id: "a" }, { id: "a" }], edges: [] } });
     expect(bad.status).toBe(422);
     expect(bad.body.issues.length).toBeGreaterThan(1);
-    expect((await call("/api/flows", ro, { doc: tpl })).status).toBe(403);
 
-    const c = await call("/api/flows", rw, { doc: tpl });
-    expect(c.status).toBe(201);
-    const { id } = c.body;
-    expect(c.body).toMatchObject({ revision: 1, url: `http://x/v/${id}`, errors: [] });
-    expect((await call("/api/flows", rw, { doc: tpl, dryRun: true })).body.dryRun).toBe(true);
+    const p = await call("/api/share", { doc: tpl });
+    expect(p.status).toBe(201);
+    expect(p.body.url).toBe(`http://x/v/${p.body.id}`);
+    const shared = await call(`/api/share/${p.body.id}`);
+    expect(shared.body.doc.meta.title).toBe(tpl.meta.title);
+    expect(shared.body.compiled.scenarios.length).toBeGreaterThan(0);
+    expect((await call("/api/share/aaaaaaaaaaaa")).status).toBe(404);
+    expect((await call("/api/share/..%2Fsecret")).status).toBe(404);
 
-    const ops = (baseRevision: number, title: string) => ({ baseRevision, ops: [{ op: "setMeta", value: { title } }] });
-    const e = await call(`/api/flows/${id}/ops`, rw, ops(1, "Renamed"));
-    expect(e.body.revision).toBe(2);
-    const stale = await call(`/api/flows/${id}/ops`, rw, ops(1, "Stale"));
-    expect(stale.status).toBe(409);
-    expect(stale.body.outline).toContain("Renamed");
-    expect((await call(`/api/flows/${id}/ops`, rw, { baseRevision: 2, ops: [{ op: "remove", id: "nope" }] })).status).toBe(422);
+    const ops = [{ op: "setMeta", value: { title: "Renamed" } }];
+    const e = await call(`/api/share/${p.body.id}/ops`, { ops });
+    expect(e.body).toMatchObject({ from: p.body.id });
+    expect(e.body.id).not.toBe(p.body.id);
+    expect((await call(`/api/share/${e.body.id}`)).body.doc.meta.title).toBe("Renamed");
+    expect((await call(`/api/share/${p.body.id}`)).body.doc.meta.title).toBe(tpl.meta.title);
+    expect((await call(`/api/share/${p.body.id}/ops`, { ops: [{ op: "remove", id: "nope" }] })).status).toBe(422);
 
-    const r = await call(`/api/flows/${id}/revert`, rw, { toRevision: 1 });
-    expect(r.body.revision).toBe(3);
-    expect((await call(`/api/flows/${id}?view=full`, ro)).body.doc.meta.title).toBe(tpl.meta.title);
-    expect((await call(`/api/flows/${id}/compiled?rev=2`, null)).body.compiled.meta.title).toBe("Renamed");
+    expect((await call("/api/ops", { doc: tpl, ops })).body.doc.meta.title).toBe("Renamed");
+    expect((await call("/api/validate", { doc: tpl })).body.ok).toBe(true);
+    expect((await call("/api/validate", { doc: {} })).body.ok).toBe(false);
+    expect((await call("/llms.txt")).body).toContain("FlowDoc");
+    expect((await call("/schema/flow-2.1.json")).body.$schema).toBeTruthy();
+  } finally { close(); }
+}, 60_000);
 
-    // templates: listed + readable by anyone, not editable
-    const list = (await call("/api/flows?query=binary", ro)).body;
-    expect(list.map((f: any) => f.id)).toContain("tpl-binary-search");
-    expect((await call("/api/flows/tpl-binary-search/ops", rw, ops(1, "x"))).status).toBe(404);
-    expect((await call("/llms.txt", null)).body).toContain("FlowDoc");
-    expect((await call("/schema/flow-2.1.json", null)).body.$schema).toBeTruthy();
-  } finally { server.close(); }
+test("writes are rate limited per IP; reads are separate", async () => {
+  const { call, close } = await serve({ RATE_LIMIT_WRITE: "2" });
+  try {
+    expect((await call("/api/validate", { doc: tpl })).status).toBe(200);
+    expect((await call("/api/validate", { doc: tpl })).status).toBe(200);
+    expect((await call("/api/validate", { doc: tpl })).status).toBe(429);
+    expect((await call("/api/share/aaaaaaaaaaaa")).status).toBe(404);
+  } finally { close(); }
 }, 60_000);

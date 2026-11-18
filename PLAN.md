@@ -43,23 +43,21 @@ independently committable features for implementing agents. When this plan and t
 | Topic | Decision |
 |---|---|
 | Repo | pnpm workspace monorepo, TypeScript strict, ESM only, Vitest. No ESLint/Prettier config beyond defaults. |
-| HTTP server | Express 5 (matches official MCP TS SDK examples incl. its auth router). One process serves REST, `/mcp`, and the built web app. |
-| DB access | `pg` against PostgreSQL. All DB code takes a `Db = { query(sql, params?) → Promise<{ rows }> }`, which both `pg.Pool` and `@electric-sql/pglite` satisfy, so tests run on PGlite in-process (no Docker needed). Plain `.sql` migration files applied in order by a ~20-line runner. |
-| Human login | **Deferred to Phase 4 (F32).** Until then identity = API key: workspaces and keys are minted by `pnpm --filter server key:create`; the web app has a "Paste API key" field (stored in `localStorage`, sent as bearer — `ponytail:` XSS-exposed, replaced by session cookies in F32); OAuth consent (F16) authenticates by pasting a key. F32 adds GitHub OAuth (one provider, no email infra) with one personal workspace per user. |
-| Flow IDs | One ID per flow: 10-char random lowercase base32 (`crypto.randomBytes`). Same value used for `flow_get({id})` and `/v/:id`. Link = capability (unlisted); `public=true` additionally lists it in `flow_list` and allows remix. |
-| Revisions | Integer per flow, starting at 1. `baseRevision` is that integer. Render route is `/render/:flowId/:rev`. |
-| Jobs | Postgres `jobs` table polled with `SELECT … FOR UPDATE SKIP LOCKED`. No Redis. |
-| Blob storage | S3-compatible via `@aws-sdk/client-s3` when `S3_BUCKET` is set; otherwise local `./data/blobs` served at `/blobs/*` (dev). |
+| HTTP server | Express 5 (matches official MCP TS SDK examples). One process serves REST, `/mcp`, and the built web app. |
+| Storage | **No database, no accounts, no auth (decided after F13 v1).** The server is stateless. Users' flows live **locally** in the browser (IndexedDB; undo history and revision snapshots too). Sharing = `POST /api/share` (public, IP rate-limited): validate + compile, write one immutable JSON `{doc, compiled}` to a `BlobStore` under a random id. Prod = Cloudflare R2 through the S3 API (`@aws-sdk/client-s3`); dev/tests = local dir / in-memory. Nothing is ever edited in place: every publish is a new id. |
+| Flow IDs | Shared snapshots get a 12-char random lowercase base32 id (`crypto.randomBytes`), used by `flow_get({id})`, `/api/share/:id` and `/v/:id`. The link is the capability (unlisted, immutable). Local flows have their own client-side ids. |
+| Revisions | Client-side only (IndexedDB snapshots + op-batch undo). The server has no revision counter. Render route is `/render/:id` (shared id; local previews post the doc). |
+| Jobs | In-process queue + in-memory job map, output written to the `BlobStore`. `ponytail:` jobs are lost on restart; add a durable queue only if exports must survive deploys. |
+| Blob storage | `BlobStore { put(key, body), get(key) }` with R2 (S3 API) when `R2_BUCKET` is set, else `./data/blobs` (dev), in-memory (tests). |
 | Web routing | Vite + React 19 + Tailwind. ≤ 6 routes → a `switch` on `location.pathname`, no router library. |
 | Player architecture | **Framework-free** Konva player (`createPlayer(el, compiled)`) + `<flow-player>` custom element. React app wraps it. Keeps embed ≤ 150 KB gz (React not in the embed). Editor (Phase 3) reuses the player's `drawEntity` functions under react-konva. |
 | Code highlighting | Done by the **compiler** (shiki `codeToTokens`), so compiled code blocks carry colored tokens and the viewer never ships shiki. |
-| CLI `preview`/`render` | Call the REST API (`FLOWMOTION_API_URL`, `FLOWMOTION_API_KEY`); `validate` is fully local. |
-| Rate limiting | In-memory token bucket per API key/user (`ponytail:` per-process; move to Postgres/Redis when >1 API instance). |
+| CLI `preview`/`render` | Call the public REST API (`FLOWMOTION_API_URL`); `validate` is fully local. Local files, no keys. |
+| Rate limiting | In-memory fixed window per client IP (`ponytail:` per-process; move to the edge/Cloudflare rules when >1 instance). Tight on `POST /api/share`, `/ai`, export. |
 | Schema migrations | Only `"2.1"` exists. `migrate(doc)` is a pass-through that rejects other versions with a clear error. Real migrators ship with the first breaking change. |
 
-Env vars (documented in `.env.example`): `DATABASE_URL`, `PUBLIC_URL`, `SESSION_SECRET`,
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `S3_BUCKET`, `S3_ENDPOINT`,
-`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL`.
+Env vars (documented in `.env.example`): `PUBLIC_URL`, `ANTHROPIC_API_KEY`, `R2_BUCKET`, `R2_ENDPOINT`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RATE_LIMIT`.
 
 ### 0.4 Repo layout (target)
 
@@ -75,7 +73,7 @@ flowmotion/
     core/     schema, validate, cells, timing, measure, theme, layout, compile, lint, ops, outline
               exports: "."  (compiler, Node + browser)   "./runtime" (types, theme, sample, ease)
     player/   Konva player, <flow-player> element
-    server/   Express: REST, MCP, auth, db, jobs, generation
+    server/   Express (stateless): REST, MCP, share/blob store, jobs, generation
     worker/   Playwright + FFmpeg render worker (stills, contact sheets, video)
     cli/      `flowmotion` binary
     web/      Vite React app: dashboard, viewer, embed, render page, editor
@@ -219,7 +217,7 @@ scenario inventory-fails "What if inventory fails?" ⑂ happy@charge (14.0s)
 
 ## 2. Features
 
-Status: `[ ]` todo · `[~]` claimed · `[x]` done.
+Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
 
 ### Phase 0 — Foundation
 
@@ -379,7 +377,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 - [x] **F12 DB schema + server skeleton**
   *Depends:* F00 · *PRD:* §9 Storage
-  `packages/server`: Express 5 app factory `createApp({ db, env })`, `src/db.ts` (`Db` type, migration
+  *(Superseded by F13: DB, migrations and auth removed.)* `packages/server`: Express 5 app factory `createApp({ db, env })`, `src/db.ts` (`Db` type, migration
   runner over `migrations/*.sql`), `src/main.ts` (pg Pool). Tables (no `users` yet — F32):
   `workspaces`, `api_keys` (workspace_id, sha256 hash, prefix, scopes text[] ⊂ {read,write,export}),
   `flows` (id, workspace_id, title, doc jsonb, revision int, public bool, created_at, updated_at),
@@ -390,63 +388,45 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Done when:* test runs migrations on PGlite and round-trips a flow row.
   *Commit:* `feat(server): F12 Postgres schema and app skeleton`
 
-- [x] **F13 Tool layer + REST API + API keys**
-  *Depends:* F07, F11, F12 · *PRD:* §5.3 (read/write tools), §9 auth
-  `server/src/tools.ts` — one implementation per tool used by REST, MCP and (later) the co-pilot:
-  `guide()`, `list({query})`, `get({id, view, ids})`, `create({doc, dryRun})`, `edit({id, baseRevision,
-  ops})`, `revert({id, toRevision})`. Each write: validate/compile via core, store revision (forward +
-  inverse ops; `create` stores the doc with empty ops), cache compiled, return `{ id, revision, url,
-  errors, warnings, outline }`. `baseRevision` mismatch → conflict carrying the current outline. Revert
-  = new revision whose doc equals the old one. REST: `POST /api/flows`, `GET /api/flows`, `GET
-  /api/flows/:id?view=&ids=`, `POST /api/flows/:id/ops`, `POST /api/flows/:id/revert`, `GET
-  /api/flows/:id/compiled?rev=` (public by id), `GET /schema/flow-2.1.json`, `GET /llms.txt` (guide).
-  Status codes: 422 for validation errors (body = issues), 409 conflict, 404, 401/403. Bearer API keys
-  (`fm_` + 32 random bytes base32; store sha256), scope checks, in-memory rate limit. Script
-  `pnpm --filter server key:create --workspace <name> [--scopes read,write,export]` creates the workspace
-  if missing and prints the key once (the only way to get a key until F32). Templates seeded as
-  public flows owned by a system workspace on migrate.
-  *Done when:* supertest-style tests (use `fetch` against `app.listen(0)`) on PGlite: create → edit →
-  409 on stale base → revert; invalid doc returns all issues; key without `write` gets 403.
-  *Commit:* `feat(server): F13 tool layer, REST API and API keys`
+- [x] **F13 Stateless tool layer + share API**
+  *Depends:* F07, F11 · *PRD:* §5.3, §6. **Supersedes F12's DB/auth** (F12 code is deleted here; see §0.3 Storage).
+  `server/src/tools.ts` — one implementation per tool for REST, MCP and the co-pilot: `guide()`,
+  `validate({doc})`, `publish({doc})` → `{id, url, outline, warnings}` (validate + compile, write
+  `{doc, compiled}` to the `BlobStore`, immutable), `get({id, view, ids})` (outline | full | picked
+  entities/steps), `edit({id, ops})` (load snapshot, `applyOps`, publish as a **new id**; `from` = old id),
+  `applyOps({doc, ops})` (pure, for local callers). Errors → `ToolError` (422 body = all issues, 404, 413,
+  429). REST (public, no auth): `POST /api/validate`, `POST /api/share`, `GET /api/share/:id` (`{doc,
+  compiled}`), `POST /api/share/:id/ops`, `POST /api/ops` (`{doc, ops}` stateless), `GET
+  /schema/flow-2.1.json`, `GET /llms.txt`. `BlobStore` in `store.ts` (memory, local dir, R2/S3). IP rate
+  limit (tight on writes). Templates are static repo files (web bundles them); no seeding.
+  *Done when:* tests (`fetch` against `app.listen(0)`, in-memory store): publish → get; invalid doc returns
+  all issues (422); edit by id yields a new id and leaves the old one intact; 429 after the limit.
+  *Commit:* `refactor(server): F13 stateless tool layer and share API (drop DB/auth)`
 
 - [ ] **F14 Web app shell + viewer page**
   *Depends:* F09, F13 · *PRD:* §6 (share link; full sharing is F24)
-  `packages/web` (Vite + React 19 + Tailwind). Routes: `/` ("Paste API key" field per §0.3 + my flows
-  list via `GET /api/flows`), `/v/:id` (public, fetches compiled, mounts `<flow-player>`, honors
-  `?s=&step=`). One `api()` fetch helper adds the bearer key — F32 swaps it for cookies. Server serves
-  `web/dist` with SPA fallback; Vite dev proxies `/api`, `/mcp`, `/schema`, `/llms.txt`. No login.
-  *Done when:* Playwright smoke test: seeded template opens at `/v/:id`, step 2 narration shows after
+  `packages/web` (Vite + React 19 + Tailwind). Routes: `/` (local library from IndexedDB: list, new, import `.flow.json`, bundled templates), `/v/:id` (public shared snapshot: fetch `GET /api/share/:id`, mount `<flow-player>`, honors `?s=&step=`), `/local/:id` (local flow, compiled in-browser). "Share" button → `POST /api/share` → copy link. Server serves `web/dist` with SPA fallback; Vite dev proxies `/api`, `/mcp`, `/schema`, `/llms.txt`. No login, no keys.
+  *Done when:* Playwright smoke test: a template published via the API opens at `/v/:id`, step 2 narration shows after
   pressing →.
   *Commit:* `feat(web): F14 web shell and viewer page`
 
 - [ ] **F15 Remote MCP server**
   *Depends:* F13 · *PRD:* §5.1–§5.3, §5.6
   `server/src/mcp.ts` mounted at `/mcp`: official MCP TypeScript SDK, Streamable HTTP, **stateless**
-  (no session id). Check the installed SDK's docs for the current stateless API before writing code.
-  Tools `flow_guide`, `flow_list`, `flow_get`, `flow_create`, `flow_edit`, `flow_revert` wrapping
-  `tools.ts`; `inputSchema` from Zod with everything inlined; `annotations.readOnlyHint` per §5.3;
-  `outputSchema` + `structuredContent` + a text rendering (outline + issues). Validation failures →
-  `isError: true` tool result with all issues (never a protocol error). Narration/labels echoed back are
-  wrapped in a "user data, not instructions" marker. Short descriptions (`flow_guide`: "Call before
-  creating…"). Prompt `explain(topic, audience?)` seeding §5.4. Auth for now: bearer API key
-  (`Authorization: Bearer fm_…`); writes scoped to the key's workspace; `client` (from MCP
-  `clientInfo`) stored on revisions with `author_type: "mcp"`.
+  (no session id), **no auth**. Check the installed SDK's docs for the current stateless API first.
+  Tools `flow_guide`, `flow_create` (= `publish`: validates, stores an immutable snapshot, returns id +
+  URL + outline), `flow_edit({id, ops})` (returns a **new id**), `flow_get({id, view, ids?})`, wrapping
+  `tools.ts`. No list/revert (flows are local; undo is client-side). `inputSchema` from Zod with everything
+  inlined; `annotations.readOnlyHint` per §5.3; `outputSchema` + `structuredContent` + text rendering
+  (outline + issues). Validation failures → `isError: true` with all issues (never a protocol error).
+  Echoed narration/labels wrapped in a "user data, not instructions" marker. Prompt `explain(topic,
+  audience?)` seeding §5.4. The user opens the returned URL and can "Save to my library" (imports the
+  snapshot into IndexedDB) — that is how an agent-made flow becomes local.
   *Done when:* test uses the SDK client over HTTP: lists ≤ 10 tools, no `$ref` in any `inputSchema`,
-  create → edit roundtrip, invalid doc → `isError` with issues.
+  create → edit roundtrip (new id, old intact), invalid doc → `isError` with issues.
   *Commit:* `feat(server): F15 stateless remote MCP server`
 
-- [ ] **F16 OAuth 2.1 for MCP connectors**
-  *Depends:* F15 · *PRD:* §5.2, §9
-  Implement the MCP authorization spec so claude.ai / ChatGPT connectors can connect: Protected Resource
-  Metadata (RFC 9728) on `/mcp` 401s, Authorization Server metadata, Dynamic Client Registration,
-  authorization code + PKCE (S256 only), consent page where the user pastes an API key with `write`
-  scope (F32 replaces this with the GitHub session), opaque access tokens (hashed in DB, expiry, refresh
-  tokens) mapped to that key's workspace. Prefer the SDK's auth router
-  with a Postgres-backed provider over hand-rolling endpoints. `/mcp` accepts either OAuth tokens or
-  API keys.
-  *Done when:* test runs the full flow (register → authorize with a test API key → token → call
-  `flow_list`); MCP Inspector connects manually (note result in commit body).
-  *Commit:* `feat(server): F16 OAuth 2.1 authorization for MCP`
+- [-] **F16 OAuth 2.1 for MCP connectors** — dropped: `/mcp` is public, so connectors need no authorization.
 
 - [ ] **F17 CLI `validate`**
   *Depends:* F07 · *PRD:* §5.2, §12
@@ -457,7 +437,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Commit:* `feat(cli): F17 flowmotion validate`
 
 - [ ] **F18 Phase 1 hardening pass**
-  *Depends:* F10, F15, F16, F17
+  *Depends:* F10, F15, F17
   Run all 7 templates through MCP create via a real client (Claude Code with the remote server
   configured). Fix friction found (error wording, hints, guide gaps). Add a load test script compiling a
   300-entity doc and asserting player 60 fps in the dev page (manual check recorded in commit body).
@@ -489,21 +469,20 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Commit:* `feat(web): F20 deterministic render page`
 
 - [ ] **F21 Render worker (stills + video)**
-  *Depends:* F20, F12 · *PRD:* §8
-  `packages/worker`: one long-lived Chromium (Playwright) with fixed DPR=1. `renderStill(flowId, rev,
-  scenario, step?)` → PNG (step end frame, or contact sheet when step omitted). Job loop over `jobs`
-  (`SKIP LOCKED`): `kind:"export"` → seek each frame `i/fps`, read `frame()` RGBA, pipe raw frames to
+  *Depends:* F20 · *PRD:* §8
+  `packages/worker`: one long-lived Chromium (Playwright) with fixed DPR=1. `renderStill(id | doc,
+  scenario, step?)` → PNG (step end frame, or contact sheet when step omitted). In-process job loop (§0.3 Jobs): `kind:"export"` → seek each frame `i/fps`, read `frame()` RGBA, pipe raw frames to
   `ffmpeg -f rawvideo -pix_fmt rgba -s WxH -r fps -i -` → `libx264 yuv420p` mp4 / `libvpx-vp9` webm /
   two-pass `palettegen`+`paletteuse` gif; 720p/1080p, 30/60 fps, captions default on; progress written
-  to the job row; output to blob storage (S3 or local, §0.3). Branch export includes inherited steps
+  to the in-memory job; output to the `BlobStore`. Branch export includes inherited steps
   (already in compiled scenario).
   *Done when:* test exports a 2-step template to mp4 at 720p/30 and `ffprobe` reports the expected
   duration ±1 frame.
   *Commit:* `feat(worker): F21 Playwright + FFmpeg render worker`
 
-- [ ] **F22 `flow_preview`, `flow_export`, `flow_job` + CLI preview/render**
+- [ ] **F22 `flow_preview`, `flow_export`, `flow_job` + CLI preview/render** (IP rate-limited; exports capped in length/size)
   *Depends:* F21, F15 · *PRD:* §5.3, §5.1 (Tasks), §8
-  Tools + REST (`POST /api/flows/:id/preview`, `POST /api/flows/:id/export`, `GET /api/jobs/:id`,
+  Tools + REST (`POST /api/share/:id/preview`, `POST /api/share/:id/export`, `GET /api/jobs/:id`,
   `GET /api/jobs/:id/events` SSE, optional `webhookUrl` on export, POSTed on completion). `flow_preview`
   returns image content (PNG) + text (outline, lint) + viewer URL, computed synchronously by calling the
   worker's still renderer (worker exposes a tiny internal HTTP endpoint, or server imports it in-process —
@@ -526,32 +505,30 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   noted in commit body.
   *Commit:* `feat(server): F23 MCP App inline player`
 
-- [ ] **F24 Sharing, embed, deep links, remix**
+- [ ] **F24 Embed, deep links, remix**
   *Depends:* F14, F20 · *PRD:* §6
   `/embed/:id` (chrome-less, step mode default), copy-embed dialog (iframe + `<flow-player>` snippets),
   `<flow-player>` published as a standalone script at `/flow-player.js`, deep links `?s=&step=` kept in
   sync with navigation (`history.replaceState`), share card meta (`og:title`, `og:description` from
-  summary, `og:image` = cached still of the first scenario's last step). `POST /api/flows/:id/remix`
-  (public flows only) clones into the caller's workspace; "Remix" button in viewer. Toggle public in "my
-  flows".
-  *Done when:* Playwright: deep link opens on the right step; remix creates a new flow id owned by the
-  caller.
-  *Commit:* `feat(web): F24 share links, embed, deep links, remix`
+  summary, `og:image` = cached still of the first scenario's last step, stored next to the snapshot). "Remix" button in the viewer
+  imports the snapshot into the local library (client-only). Publish already exists (F13/F14).
+  *Done when:* Playwright: deep link opens on the right step; remix adds a local flow.
+  *Commit:* `feat(web): F24 embed, deep links, remix`
 
 - [ ] **F25 In-app generation pipeline**
   *Depends:* F22 · *PRD:* §5.8
   Load the `claude-api` skill / current Anthropic docs first. `server/src/generate.ts`:
-  `generate({prompt, workspace}) → stream of events` — guide + 1–2 closest templates (simple keyword
+  `generate({prompt}) → stream of events` — guide + 1–2 closest templates (simple keyword
   overlap on title/summary; `ponytail:` embeddings if retrieval quality matters) as examples; model
   `claude-opus-5-5`, streamed, structured outputs with the FlowDoc JSON Schema (strip any keywords the
   API rejects, keep server validation as truth); no forced tool choice. Repair loop ≤ 3 rounds feeding
   issues verbatim; visual self-check (contact sheet image + lint) → at most one edit-op batch.
-  `editWithAI({flowId, baseRevision, instruction, selectedIds})` → outline + selected entities' JSON →
-  edit ops → applied as one revision with `author_type:"agent"`, `prompt` stored. REST:
-  `POST /api/generate` (SSE progress), `POST /api/flows/:id/ai-edit`. Dashboard gets a prompt box →
-  progress → redirect to viewer. Rate-limited.
+  `editWithAI({doc, instruction, selectedIds})` → outline + selected entities' JSON →
+  edit ops returned to the client (applied as one local undo entry labeled with the request). REST:
+  `POST /api/generate` (SSE progress), `POST /api/ai-edit`. Dashboard gets a prompt box →
+  progress → opens in the local library. IP rate-limited (the server pays for the model).
   *Done when:* tests with a stubbed model client: repair loop stops after a valid doc or 3 rounds; AI
-  edit lands as one revision. One live run noted in commit body.
+  edit returns one op batch. One live run noted in commit body.
   *Commit:* `feat(server): F25 in-app generation with repair loop`
 
 - [ ] **F26 Phase 2 hardening**
@@ -562,15 +539,14 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 ### Phase 3 — Visual editor
 
-- [ ] **F27 Editor shell, store, live revisions**
-  *Depends:* F24 · *PRD:* §7, §5.7 (undo), §5.1 (SSE)
-  `/edit/:id` in `web`. zustand + immer store holding the doc, revision, selection, and an undo/redo stack
-  of op batches (forward/inverse from `applyOps`; every edit is a batch posted to `/api/flows/:id/ops`).
-  react-konva stage with pan/zoom, entities drawn via the player's `drawEntity`, selection. Live preview
-  = compile in a Web Worker on change (core is browser-safe). `GET /api/flows/:id/events` SSE pushes new
-  revisions; editor applies them (agent edits appear live; local unsaved conflicts → reload prompt).
+- [ ] **F27 Editor shell, store, local persistence**
+  *Depends:* F24 · *PRD:* §7, §5.7 (undo)
+  `/edit/:id` (local flow) in `web`. zustand + immer store holding the doc, selection, and an undo/redo
+  stack of op batches (forward/inverse from `applyOps`, run in the browser — core is browser-safe).
+  Autosave to IndexedDB; revision snapshots on explicit "Save version". react-konva stage with pan/zoom,
+  entities drawn via the player's `drawEntity`, selection. Live preview = compile in a Web Worker on change.
   *Done when:* Playwright: open editor, select node, undo/redo a label change across reload.
-  *Commit:* `feat(web): F27 editor shell with undo and live revisions`
+  *Commit:* `feat(web): F27 editor shell with undo and local persistence`
 
 - [ ] **F28 Canvas editing: drag-to-pin, re-layout, palette, connect**
   *Depends:* F27 · *PRD:* §7 Canvas
@@ -594,26 +570,14 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 - [ ] **F31 AI panel + revision history**
   *Depends:* F25, F27 · *PRD:* §7 AI panel, §5.8 step 4
-  Prompt box (generate / edit selection via `ai-edit`), revision list (author type, client, prompt, time)
-  with one-click revert, changed entities highlighted after an AI batch, AI batch = one undo entry
+  Prompt box (generate / edit selection via `ai-edit`), local version list (time, label, AI prompt)
+  with one-click restore, changed entities highlighted after an AI batch, AI batch = one undo entry
   labeled with the request.
   *Commit:* `feat(web): F31 AI panel and revision history`
 
 ---
 
-### Phase 4 — Human login
-
-- [ ] **F32 GitHub login + sessions**
-  *Depends:* F31 · *PRD:* §9 auth
-  Migration adds `users` (github_id, login, workspace_id). `/auth/github` + callback → signed httpOnly
-  `SameSite=Lax` session cookie (`SESSION_SECRET`); first login creates user + personal workspace.
-  `api()` helper switches to cookies (CSRF: require `Origin` match on non-GET); delete the pasted-key
-  field and its `localStorage` use. "API keys" panel to create/revoke keys (shown once) — `key:create`
-  script stays for ops. F16 consent page uses the session instead of a pasted key (keep paste-key
-  only behind an env flag for headless setups, or delete it). Sign-in/sign-out in the header.
-  *Done when:* test with a stubbed GitHub token exchange: login creates user + workspace, session reaches
-  `GET /api/flows`, cross-origin POST is rejected; no `localStorage` key code remains (grep test).
-  *Commit:* `feat: F32 GitHub login and session auth`
+- [-] **F32 GitHub login + sessions** — dropped: no accounts; flows are local, sharing is anonymous.
 
 ---
 
@@ -624,12 +588,12 @@ F00 ─ F01 ─ F02 ─ F03 ─┐
   │                    F05 ─ F06 ─ F07 ─ F10 ─┐
   ├─ F04 ──────────────┘     │      ├─ F17 │
   │                          └ F08 ─ F09 ──┤
-  └─ F12 ─────────┐   F02 ─ F11 ─┐         │
+  └─ F12 (superseded by F13) F02 ─ F11 ─┐         │
                   └──────────────┴─ F13 ─ F14
-                                    └─ F15 ─ F16
-F18 (F10,F15,F16,F17) ─ F19 ══ Phase 1 gate
+                                    └─ F15
+F18 (F10,F15,F17) ─ F19 ══ Phase 1 gate
 F14 ─ F20 ─ F21 ─ F22 ─ F23 ; F22 ─ F25 ; F14,F20 ─ F24 ; F26 (F23,F24,F25)
-F24 ─ F27 ─ F28 / F29 / F30 ; F25,F27 ─ F31 ─ F32 (login, last)
+F24 ─ F27 ─ F28 / F29 / F30 ; F25,F27 ─ F31
 ```
 
 Good parallel lanes after F00: **core** (F01→F03 ∥ F04, then F05), **server** (F12), then

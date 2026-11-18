@@ -1,46 +1,48 @@
-import express, { type ErrorRequestHandler } from "express";
+import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import { readFileSync } from "node:fs";
-import { authenticate, need } from "./auth.ts";
-import type { Db } from "./db.ts";
+import type { BlobStore } from "./store.ts";
 import * as tools from "./tools.ts";
 
 export type Env = Record<string, string | undefined>;
 
-export function createApp({ db, env }: { db: Db; env: Env }) {
+// ponytail: fixed window per IP, per process. Move to edge/Cloudflare rules when >1 instance.
+function limit(max: number, windowMs = 60_000): RequestHandler {
+  const hits = new Map<string, { n: number; reset: number }>();
+  return (req, res, next) => {
+    const now = Date.now();
+    if (hits.size > 10_000) for (const [k, v] of hits) if (v.reset < now) hits.delete(k);
+    let w = hits.get(req.ip ?? "");
+    if (!w || w.reset < now) hits.set(req.ip ?? "", (w = { n: 0, reset: now + windowMs }));
+    if (++w.n > max) return void res.status(429).set("retry-after", String(Math.ceil((w.reset - now) / 1000))).json({ error: "rate_limited" });
+    next();
+  };
+}
+
+export function createApp({ store, env }: { store: BlobStore; env: Env }) {
   const app = express();
   app.disable("x-powered-by");
+  if (env.TRUST_PROXY) app.set("trust proxy", Number(env.TRUST_PROXY)); // hops, so req.ip is the real client
   app.use(express.json({ limit: "2mb" })); // doc limit is 1 MB; ops/previews fit under 2
-  app.get("/healthz", async (_req, res) => {
-    await db.query("SELECT 1");
-    res.json({ ok: true });
-  });
+  const c: tools.Ctx = { store, baseUrl: env.PUBLIC_URL };
+  const read = limit(Number(env.RATE_LIMIT_READ ?? 300)), write = limit(Number(env.RATE_LIMIT_WRITE ?? 20));
 
-  // public
+  app.get("/healthz", (_req, res) => void res.json({ ok: true }));
   app.get("/schema/flow-2.1.json", (_req, res) => void res.type("json").send(readFileSync(new URL("../../../schema/flow-2.1.json", import.meta.url))));
   app.get("/llms.txt", (_req, res) => void res.type("text/plain").send(tools.guide()));
-  app.get("/api/flows/:id/compiled", async (req, res) => {
-    const rev = req.query.rev ? Number(req.query.rev) : undefined;
-    res.json(await tools.compiledFor(db, String(req.params.id), rev));
-  });
 
-  // authenticated
   const api = express.Router();
-  api.use(authenticate(db, Number(env.RATE_LIMIT ?? 120)));
-  const ctx = (req: express.Request, res: express.Response): tools.Ctx => ({ db, workspace: res.locals.auth.workspace, baseUrl: env.PUBLIC_URL, author: "agent", client: req.header("user-agent") });
-  api.get("/flows", need("read"), async (req, res) => void res.json(await tools.list(ctx(req, res), { query: req.query.query as string | undefined })));
-  api.get("/flows/:id", need("read"), async (req, res) => {
-    const ids = req.query.ids ? String(req.query.ids).split(",") : undefined;
-    res.json(await tools.get(ctx(req, res), { id: String(req.params.id), view: req.query.view === "full" ? "full" : "outline", ids }));
-  });
-  api.post("/flows", need("write"), async (req, res) => void res.status(req.body?.dryRun ? 200 : 201).json(await tools.create(ctx(req, res), req.body ?? {})));
-  api.post("/flows/:id/ops", need("write"), async (req, res) => void res.json(await tools.edit(ctx(req, res), { id: String(req.params.id), baseRevision: req.body?.baseRevision, ops: req.body?.ops })));
-  api.post("/flows/:id/revert", need("write"), async (req, res) => void res.json(await tools.revert(ctx(req, res), { id: String(req.params.id), toRevision: req.body?.toRevision })));
+  api.get("/share/:id", read, async (req, res) => void res.json(await tools.snapshot(c, String(req.params.id))));
+  api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body?.doc)));
+  api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
+  api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, req.body?.doc)));
+  api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops })));
   app.use("/api", api);
 
   app.use(((err, _req, res, _next) => {
     if (err instanceof tools.ToolError) return void res.status(err.status).json(err.body);
+    if (err.status) return void res.status(err.status).json({ error: "bad_request", message: err.message });
     console.error(err);
-    res.status(err.status ?? 500).json({ error: err.status ? "bad_request" : "internal" });
+    res.status(500).json({ error: "internal" });
   }) as ErrorRequestHandler);
   return app;
 }
