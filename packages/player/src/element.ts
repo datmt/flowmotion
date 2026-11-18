@@ -66,6 +66,7 @@ export class FlowPlayerElement extends HTMLElement {
 
   async #load(src: string): Promise<CompiledFlow> {
     const json = await (await fetch(src)).json();
+    if (json.compiled) return json.compiled; // shared snapshot {doc, compiled}
     if (json.scenarios?.[0]?.tracks) return json; // already compiled
     const { compile } = await import("@flowmotion/core"); // lazy: keeps zod/elk/shiki out of the embed bundle
     const r = await compile(json);
@@ -110,6 +111,7 @@ export class FlowPlayerElement extends HTMLElement {
       }));
     };
     p = createPlayer(stageEl, c, {
+      scenario: this.getAttribute("scenario") ?? undefined, step: Number(this.getAttribute("step")) || undefined,
       onStep: () => showStep(),
       onTime: (t, playing) => { if (!p) return; scrub.value = String(Math.round((t / p.duration) * 1000)); playBtn.textContent = playing ? "⏸" : "▶"; playBtn.ariaLabel = playing ? "Pause" : "Play"; },
     });

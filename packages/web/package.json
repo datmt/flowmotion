@@ -1,0 +1,27 @@
+{
+  "name": "@flowmotion/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@flowmotion/core": "workspace:*",
+    "@flowmotion/player": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@flowmotion/server": "workspace:*",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "playwright-core": "1.65.1",
+    "tailwindcss": "^4.3.5",
+    "vite": "8.3.8"
+  }
+}

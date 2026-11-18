@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { BlobStore } from "./store.ts";
 import { mcpHandler } from "./mcp.ts";
 import * as tools from "./tools.ts";
@@ -40,6 +41,13 @@ export function createApp({ store, env }: { store: BlobStore; env: Env }) {
   app.use("/api", api);
   app.post("/mcp", write, mcpHandler(c));
   app.all("/mcp", (_req, res) => void res.status(405).set("allow", "POST").json({ error: "method_not_allowed" })); // stateless: no SSE/session
+
+  // Built web app + SPA fallback (client routes: /, /v/:id, /local/:id). Skipped when not built.
+  const dist = env.WEB_DIST ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
+  if (existsSync(dist)) {
+    app.use(express.static(dist));
+    app.get(/^\/(?!api\/|mcp|schema\/|llms\.txt).*/, (_req, res) => void res.sendFile(`${dist}/index.html`));
+  }
 
   app.use(((err, _req, res, _next) => {
     if (err instanceof tools.ToolError) return void res.status(err.status).json(err.body);

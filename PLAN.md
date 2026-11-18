@@ -403,7 +403,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   all issues (422); edit by id yields a new id and leaves the old one intact; 429 after the limit.
   *Commit:* `refactor(server): F13 stateless tool layer and share API (drop DB/auth)`
 
-- [~] **F14 Web app shell + viewer page**
+- [x] **F14 Web app shell + viewer page**
   *Depends:* F09, F13 · *PRD:* §6 (share link; full sharing is F24)
   `packages/web` (Vite + React 19 + Tailwind). Routes: `/` (local library from IndexedDB: list, new, import `.flow.json`, bundled templates), `/v/:id` (public shared snapshot: fetch `GET /api/share/:id`, mount `<flow-player>`, honors `?s=&step=`), `/local/:id` (local flow, compiled in-browser). "Share" button → `POST /api/share` → copy link. Server serves `web/dist` with SPA fallback; Vite dev proxies `/api`, `/mcp`, `/schema`, `/llms.txt`. No login, no keys.
   *Done when:* Playwright smoke test: a template published via the API opens at `/v/:id`, step 2 narration shows after
