@@ -369,7 +369,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   `do` value (test greps).
   *Commit:* `feat: F10 seven templates and authoring guide`
 
-- [~] **F11 Ops engine + outline**
+- [x] **F11 Ops engine + outline**
   *Depends:* F02 · *PRD:* §5.7 · *Contract:* §1.5, §1.6
   `core/src/ops.ts` (Zod `Op` schema + `applyOps`), `core/src/outline.ts` (`outline(doc, rev?)`).
   *Done when:* tests: upsert insert/replace, `upsertStep` with/without `after`, `remove` without cascade

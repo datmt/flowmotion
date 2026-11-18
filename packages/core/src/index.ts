@@ -6,3 +6,5 @@ export * from "./cells.ts";
 export * from "./layout.ts";
 export * from "./compile.ts";
 export * from "./lint.ts";
+export * from "./ops.ts";
+export * from "./outline.ts";

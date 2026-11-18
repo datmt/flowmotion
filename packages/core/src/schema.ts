@@ -15,9 +15,9 @@ const Pos = z.strictObject({ x: z.number(), y: z.number() });
 const Cell = z.string().max(40);
 const Targets = z.array(Ref).max(64);
 
-const Group = z.strictObject({ id: Id, label: z.string().min(1).max(40) });
+export const Group = z.strictObject({ id: Id, label: z.string().min(1).max(40) });
 
-const Node = z.strictObject({
+export const Node = z.strictObject({
   id: Id,
   label: z.string().min(1).max(40),
   kind: NodeKind,
@@ -27,7 +27,7 @@ const Node = z.strictObject({
   pos: Pos.optional(),
 });
 
-const Edge = z.strictObject({
+export const Edge = z.strictObject({
   id: Id.optional(),
   from: Id,
   to: Id,
@@ -37,7 +37,7 @@ const Edge = z.strictObject({
   hidden: z.boolean().optional(),
 });
 
-const ArrayEntity = z.strictObject({
+export const ArrayEntity = z.strictObject({
   id: Id,
   label: z.string().max(40).optional(),
   values: z.array(Cell).max(64),
@@ -48,7 +48,7 @@ const ArrayEntity = z.strictObject({
   pos: Pos.optional(),
 });
 
-const GridEntity = z.strictObject({
+export const GridEntity = z.strictObject({
   id: Id,
   label: z.string().max(40).optional(),
   rows: z.array(z.array(Cell).min(1).max(16)).min(1).max(16),
@@ -59,14 +59,14 @@ const GridEntity = z.strictObject({
   pos: Pos.optional(),
 });
 
-const Token = z.strictObject({
+export const Token = z.strictObject({
   id: Id,
   label: z.string().max(20).optional(),
   at: Ref,
   hidden: z.boolean().optional(),
 });
 
-const CodeBlock = z.strictObject({
+export const CodeBlock = z.strictObject({
   id: Id,
   title: z.string().max(60).optional(),
   language: z.string().min(1).max(30),
@@ -99,7 +99,7 @@ export const Action = z.discriminatedUnion("do", [
   z.strictObject({ do: z.literal("highlight"), target: Id, lines: z.string().max(60).regex(LINES_RE), ...timing }),
 ]);
 
-const Step = z.strictObject({
+export const Step = z.strictObject({
   id: Id,
   title: z.string().min(1).max(60),
   narration: z.string().min(1).max(400),
@@ -107,7 +107,7 @@ const Step = z.strictObject({
   hold: z.number().min(0).max(30).optional(),
 });
 
-const Scenario = z.strictObject({
+export const Scenario = z.strictObject({
   id: Id,
   title: z.string().min(1).max(80),
   branchFrom: z.strictObject({ scenario: Id, afterStep: Id }).optional(),
