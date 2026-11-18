@@ -75,3 +75,29 @@ test("saga: compiles in browser from .flow.json, branch button switches scenario
   expect(await page.evaluate(() => (window as any).__el.player.scenario)).toBe("inventory-fails");
   expect(errors).toEqual([]);
 }, 90_000);
+
+test("F34: Now panel shows changes + highlights lo; branch tab switches; mobile has no h-scroll", async () => {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}?src=binary-search.flow.json`);
+  await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 30_000 });
+  const q = (sel: string) => page.evaluate((sel) => [...(window as any).__el.shadowRoot.querySelectorAll(sel)].map((e: any) => e.textContent), sel);
+  expect((await q(".now li")).join("|")).toContain("vars#lo: 0 → 5");
+  expect((await q(".now li")).join("|")).toContain("state → disabled");
+  expect(await q("table.state td.chg")).toContain("lo 5");
+  expect(await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll("ol.steps li[data-s]").length)).toBe(3);
+  await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll("ol.steps li button")[1].click());
+  expect(await page.evaluate(() => (window as any).__el.player.step)).toBe(1);
+  expect(await q("ol.steps li[data-s=done]")).toHaveLength(1);
+
+  await page.goto(`${base}?src=saga-compensation.flow.json`);
+  await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 60_000 });
+  await page.evaluate(() => (window as any).__el.shadowRoot.querySelectorAll(".tabs button")[1].click());
+  expect(await page.evaluate(() => (window as any).__el.player.scenario)).not.toBe("happy");
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+}, 90_000);

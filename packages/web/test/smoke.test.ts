@@ -42,7 +42,7 @@ test("template published via API opens at /v/:id; → shows step 2 narration; li
   await page.keyboard.press("ArrowRight");
   await page.waitForFunction(() => !(document.querySelector("flow-player") as any).player.playing, null, { timeout: 15_000 });
   expect(await narr()).not.toBe(first);
-  expect(await page.locator("flow-player .narr b.t").textContent()).toMatch(/^2\//);
+  expect(await page.locator("flow-player .now h2").textContent()).toMatch(/^2\//);
 
   await page.goto(`${base}/`);
   await expect.poll(() => page.getByText("Binary Search", { exact: false }).count()).toBeGreaterThan(0);
