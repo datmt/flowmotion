@@ -273,7 +273,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   ids.
   *Commit:* `feat(core): F03 timing resolution and cell simulation`
 
-- [~] **F04 Text measurement + theme**
+- [x] **F04 Text measurement + theme**
   *Depends:* F00 · *PRD:* §3.1 rule 1, §4.1 (glyph table)
   `scripts/gen-glyphs.ts` (dev dep `opentype.js`) reads the bundled `.ttf`s and writes
   `core/src/runtime/glyphs.json` (advance widths for printable ASCII + Latin-1, fallback width for the

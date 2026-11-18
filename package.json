@@ -8,10 +8,13 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "gen:schema": "pnpm --filter @flowmotion/core gen:schema"
+    "gen:schema": "pnpm --filter @flowmotion/core gen:schema",
+    "gen:glyphs": "node --experimental-strip-types scripts/gen-glyphs.ts"
   },
   "devDependencies": {
+    "@types/fontkit": "^2.0.9",
     "@types/node": "^22.20.5",
+    "fontkit": "^3.0.0",
     "typescript": "5.9.3",
     "vitest": "5.1.0"
   }
