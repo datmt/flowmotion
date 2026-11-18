@@ -58,6 +58,13 @@
             "LR",
             "TB"
           ]
+        },
+        "edges": {
+          "type": "string",
+          "enum": [
+            "orthogonal",
+            "straight"
+          ]
         }
       },
       "additionalProperties": false
@@ -387,6 +394,22 @@
           },
           "hidden": {
             "type": "boolean"
+          },
+          "pos": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

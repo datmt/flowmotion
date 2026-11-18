@@ -7,7 +7,7 @@ You write a **flow** in a small line-based text format (the DSL): entities plus 
 ```
 flow "Saga: order checkout"
 summary "How a saga commits and compensates."
-# optional header lines: theme dark | aspect 16:9 | layout algorithm=layered direction=LR
+# optional header lines: theme dark | aspect 16:9 | layout algorithm=layered direction=LR edges=straight
 theme dark
 
 group services "Services"
@@ -42,7 +42,7 @@ Rules: 2-space indent; a line starting with `#` is a comment (no trailing commen
 ## Entities and ids
 
 * `node` kinds: service, state, decision, db, queue, actor, external, value (tree/graph vertex, neuron). Edge id defaults to `from-to`; set `id=` if duplicates exist.
-* `keys=` on an array makes named cells (a variables panel). Layout: `layered` (default), `tree` (BSTs, use `direction=TB`), `stress` (general graphs).
+* `keys=` on an array makes named cells (a variables panel). Layout: `layered` (default), `tree` (BSTs, use `direction=TB`), `stress` (general graphs). `edges=straight` draws diagonal lines instead of orthogonal routes, best for fully connected graphs like neural nets.
 * States: idle, active, success, error, warning, pending, disabled.
 * IDs: kebab-case `^[a-z][a-z0-9-]{0,39}$`, unique across the whole document. Reference by id, never by position.
 * Refs: entity id, or cell `nums#3`, range `nums#2..5` (in target lists only), keyed `vars#lo`, grid `dp#1.2`.
@@ -109,12 +109,12 @@ Tips: 3-8 steps per scenario; one idea per step; narration explains *why*, not w
 `doc` is the same model as JSON, version `"2.1"`:
 
 ```
-{ "version":"2.1", "meta":{title,summary?,theme?,aspect?}, "layout"?:{algorithm?,direction?},
+{ "version":"2.1", "meta":{title,summary?,theme?,aspect?}, "layout"?:{algorithm?,direction?,edges?},
   "groups"?, "nodes", "edges", "arrays"?, "grids"?, "tokens"?, "code"?, "scenarios" }
 ```
 
 * `nodes[]`: `{id,label,kind,group?,state?,hidden?,pos?}`; `edges[]`: `{id?,from,to,label?,arrow?,dashed?,hidden?}`.
-* `arrays[]`: `{id,label?,values,keys?,orientation?}`; `grids[]`: `{id,rows,rowLabels?,colLabels?}`; `tokens[]`: `{id,label?,at}`; `code[]`: `{id,title?,language,code}`.
+* `arrays[]`: `{id,label?,values,keys?,orientation?}`; `grids[]`: `{id,rows,rowLabels?,colLabels?}`; `tokens[]`: `{id,label?,at}`; `code[]`: `{id,title?,language,code,pos?}`.
 * `scenarios[]`: `{id,title,branchFrom?:{scenario,afterStep},steps:[{id,title,narration,actions,hold?}]}`.
 * Actions are `{"do":"send","from":"orch","to":"payment","label":"Charge"}`; the DSL verbs above map 1:1 (`"do":"state"`, `"do":"show"`, `"do":"hide"`, `"do":"label"`, `"do":"pulse"`, `"do":"focus"`, `"do":"callout"`, `"do":"send"`, `"do":"move"`, `"do":"swap"`, `"do":"values"`, `"do":"highlight"`) (`targets` arrays, `start:"with"`, `delay`, `dur`, `ease`).
 * Closed objects only: extra keys are errors. The JSON Schema is served at `/schema/flow-2.1.json`.

@@ -72,6 +72,7 @@ export const CodeBlock = z.strictObject({
   language: z.string().min(1).max(30),
   code: z.string().max(8000), // line count (≤ 80) checked in F02
   hidden: z.boolean().optional(),
+  pos: Pos.optional(),
 });
 
 const timing = {
@@ -125,6 +126,7 @@ export const FlowDoc = z.strictObject({
   layout: z.strictObject({
     algorithm: z.enum(["layered", "tree", "stress", "sequence"]).optional(),
     direction: z.enum(["LR", "TB"]).optional(),
+    edges: z.enum(["orthogonal", "straight"]).optional(), // straight = diagonal lines, best for fully connected graphs (neural nets)
   }).optional(),
   groups: z.array(Group).optional(),
   nodes: z.array(Node),

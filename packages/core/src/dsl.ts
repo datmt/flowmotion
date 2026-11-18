@@ -91,7 +91,7 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
           case "summary": doc.meta.summary = need(1, "text").s; break;
           case "theme": doc.meta.theme = need(1, "theme").s; break;
           case "aspect": doc.meta.aspect = need(1, "aspect").s; break;
-          case "layout": { const { o } = opts(rest, ["algorithm", "direction"], []); doc.layout = o; at.set("/layout", n); break; }
+          case "layout": { const { o } = opts(rest, ["algorithm", "direction", "edges"], []); doc.layout = o; at.set("/layout", n); break; }
           case "group": push("groups", { id: need(1, "id").s, label: need(2, "label").s }); break;
           case "node": {
             const { o, f } = opts(toks.slice(4), ["in", "state", "pos"], ["hidden"]);
@@ -127,8 +127,8 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
           }
           case "code": {
             const title = toks[3]?.q ? toks[3] : undefined;
-            const { f } = opts(toks.slice(title ? 4 : 3), [], ["hidden"]);
-            const c = { id: need(1, "id").s, ...(title && { title: title.s }), language: need(2, "language").s, code: undefined as unknown as string, ...(f.has("hidden") && { hidden: true }) };
+            const { o, f } = opts(toks.slice(title ? 4 : 3), ["pos"], ["hidden"]);
+            const c = { id: need(1, "id").s, ...(title && { title: title.s }), language: need(2, "language").s, code: undefined as unknown as string, ...(o.pos && { pos: pos(o.pos, verb.col) }), ...(f.has("hidden") && { hidden: true }) };
             ctx = { kind: "code", o: c, p: push("code", c) };
             break;
           }
@@ -210,7 +210,7 @@ export function printDsl(doc: FlowDoc): string {
   if (doc.meta.summary) L.push(`summary ${q(doc.meta.summary)}`);
   if (doc.meta.theme) L.push(`theme ${doc.meta.theme}`);
   if (doc.meta.aspect) L.push(`aspect ${doc.meta.aspect}`);
-  if (doc.layout) L.push(`layout${doc.layout.algorithm ? ` algorithm=${doc.layout.algorithm}` : ""}${doc.layout.direction ? ` direction=${doc.layout.direction}` : ""}`);
+  if (doc.layout) L.push(`layout${doc.layout.algorithm ? ` algorithm=${doc.layout.algorithm}` : ""}${doc.layout.direction ? ` direction=${doc.layout.direction}` : ""}${doc.layout.edges ? ` edges=${doc.layout.edges}` : ""}`);
   const px = (p?: { x: number; y: number }) => (p ? ` pos=${p.x},${p.y}` : "");
   const join = (...p: (string | false | undefined)[]) => p.filter(Boolean).join(" ");
   L.push("");
@@ -226,7 +226,7 @@ export function printDsl(doc: FlowDoc): string {
   }
   for (const t of doc.tokens ?? []) L.push(join("token", t.id, t.label !== undefined && q(t.label), `at=${t.at}`, t.hidden && "hidden"));
   for (const c of doc.code ?? []) {
-    L.push(join("code", c.id, c.language, c.title !== undefined && q(c.title), c.hidden && "hidden"));
+    L.push(join("code", c.id, c.language, c.title !== undefined && q(c.title), c.pos && px(c.pos).trim(), c.hidden && "hidden"));
     for (const l of c.code.split("\n")) L.push(l ? `  | ${l}` : "  |");
   }
   for (const s of doc.scenarios) {

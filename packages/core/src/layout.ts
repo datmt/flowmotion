@@ -73,6 +73,15 @@ function route(a: Rect, b: Rect): number[] {
   return [ac.x, ay, ac.x, my, bc.x, my, bc.x, by];
 }
 
+/** Straight segment between two rects, clipped to their borders. */
+function straight(a: Rect, b: Rect): number[] {
+  const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 }, bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const dx = bc.x - ac.x, dy = bc.y - ac.y;
+  const t = (r: Rect) => Math.min(dx ? r.w / 2 / Math.abs(dx) : Infinity, dy ? r.h / 2 / Math.abs(dy) : Infinity);
+  const ta = t(a), tb = t(b);
+  return [ac.x + dx * ta, ac.y + dy * ta, bc.x - dx * tb, bc.y - dy * tb];
+}
+
 const union = (rs: Rect[]): Rect => {
   const x0 = Math.min(...rs.map((r) => r.x)), y0 = Math.min(...rs.map((r) => r.y));
   return { x: x0, y: y0, w: Math.max(...rs.map((r) => r.x + r.w)) - x0, h: Math.max(...rs.map((r) => r.y + r.h)) - y0 };
@@ -99,7 +108,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
   doc.code?.forEach((c) => {
     const lines = c.code.split("\n");
     const tw = Math.max(...lines.map((l) => measure(l, "mono", metrics.codeSize)));
-    put({ id: c.id, w: Math.ceil(Math.min(Math.max(tw + 2 * metrics.codePad + 28, 160), 640)), h: (c.title ? TITLE_H : 0) + lines.length * metrics.codeLineHeight + 2 * metrics.codePad });
+    put({ id: c.id, w: Math.ceil(Math.min(Math.max(tw + 2 * metrics.codePad + 28, 160), 640)), h: (c.title ? TITLE_H : 0) + lines.length * metrics.codeLineHeight + 2 * metrics.codePad, pos: c.pos });
   });
 
   // — ELK graph —
@@ -128,9 +137,9 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.edgeRouting": "ORTHOGONAL",
       "elk.randomSeed": "1",
-      "elk.spacing.nodeNode": "40",
+      "elk.spacing.nodeNode": doc.layout?.edges === "straight" ? "70" : "40", // diagonals need room so their labels stay apart
       "elk.spacing.componentComponent": "48",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "64",
+      "elk.layered.spacing.nodeNodeBetweenLayers": doc.layout?.edges === "straight" ? "100" : "64",
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       "elk.stress.desiredEdgeLength": "160",
     },
@@ -182,9 +191,12 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     const id = e.id ?? `${e.from}-${e.to}`;
     const sec = out.edges?.find((x) => x.id === id)?.sections?.[0];
     let points = sec ? [sec.startPoint.x, sec.startPoint.y, ...(sec.bendPoints ?? []).flatMap((b) => [b.x, b.y]), sec.endPoint.x, sec.endPoint.y] : [];
-    if (!points.length || pinned.has(e.from) || pinned.has(e.to)) points = route(rect.get(e.from)!, rect.get(e.to)!);
+    const diag = doc.layout?.edges === "straight" && e.from !== e.to;
+    if (diag) points = straight(rect.get(e.from)!, rect.get(e.to)!);
+    else if (!points.length || pinned.has(e.from) || pinned.has(e.to)) points = route(rect.get(e.from)!, rect.get(e.to)!);
     const length = polyLength(points);
-    return { id, from: e.from, to: e.to, arrow: e.arrow ?? true, dashed: e.dashed ?? false, points, length, labelAt: pointAt(points, length / 2) };
+    // diagonals cross near their midpoints, so label closer to the source to keep labels apart
+    return { id, from: e.from, to: e.to, arrow: e.arrow ?? true, dashed: e.dashed ?? false, points, length, labelAt: pointAt(points, diag ? length * 0.3 : length / 2) };
   });
 
   // — normalise so bounds start at (24,24) —
