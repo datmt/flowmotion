@@ -588,7 +588,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   typical mistakes yields line-numbered errors.
   *Commit:* `feat(core): F36 flow text DSL parser and printer`
 
-- [~] **F37 DSL in MCP, API, CLI, web**
+- [x] **F37 DSL in MCP, API, CLI, web**
   *Depends:* F36, F15, F17
   `flow_create`/`flow_edit` accept `dsl` (string) beside `doc`/`ops`; `flow_get view:"dsl"`; the API
   mirrors it; CLI `validate` reads `.flow` text files; web import/export of `.flow`. Rewrite

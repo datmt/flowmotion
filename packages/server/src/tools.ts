@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyOps, compile, outline, validate, type FlowDoc, type Issue } from "@flowmotion/core";
+import { applyOps, compile, outline, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
 import type { BlobStore } from "./store.ts";
 
 export class ToolError extends Error {
@@ -32,8 +32,19 @@ export async function snapshot(c: Ctx, id: string): Promise<{ doc: FlowDoc; comp
 
 export const guide = () => readFileSync(new URL("docs/guide.md", ROOT), "utf8");
 
+/** A FlowDoc from either an object or DSL text; invalid DSL throws 422 with line-numbered issues. */
+export function docOf({ doc, dsl }: { doc?: unknown; dsl?: string }): unknown {
+  if (dsl === undefined) return doc;
+  if (doc !== undefined) throw new ToolError(422, { error: "invalid", message: "Pass either doc or dsl, not both." });
+  const r = parseDsl(dsl);
+  if (!r.doc) throw new ToolError(422, { error: "invalid", issues: r.issues });
+  return r.doc;
+}
+
 /** Dry run: every error and warning, nothing stored. */
-export async function check(doc: unknown) {
+export async function check(input: { doc?: unknown; dsl?: string }) {
+  let doc: unknown;
+  try { doc = docOf(input); } catch (e) { if (e instanceof ToolError && e.body.issues) return { ok: false, errors: e.body.issues, warnings: [] }; throw e; }
   const v = validate(doc);
   const { issues } = await compile(v.doc ?? doc);
   const errors = issues.filter((i) => i.severity === "error");
@@ -47,7 +58,7 @@ export async function publish(c: Ctx, doc: unknown, from?: string) {
   return { id, url: `${c.baseUrl ?? ""}/v/${id}`, warnings: b.warnings, outline: outline(b.doc) };
 }
 
-export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; view?: "outline" | "full"; ids?: string[] }) {
+export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; view?: "outline" | "full" | "dsl"; ids?: string[] }) {
   const { doc } = await snapshot(c, id);
   if (ids?.length) {
     const d: any = doc, items: Record<string, unknown> = {};
@@ -55,7 +66,7 @@ export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; v
     for (const e of all) { const k = e.id ?? `${e.from}-${e.to}`; if (ids.includes(k)) items[k] = e; }
     return { id, items };
   }
-  return view === "full" ? { id, doc } : { id, outline: outline(doc) };
+  return view === "full" ? { id, doc } : view === "dsl" ? { id, dsl: printDsl(doc) } : { id, outline: outline(doc) };
 }
 
 /** Pure: apply ops to a doc the caller holds (local flows). */
@@ -68,7 +79,8 @@ export function applyToDoc(doc: unknown, ops: unknown) {
 }
 
 /** Snapshots are immutable: editing publishes a new id and leaves the old one intact. */
-export async function edit(c: Ctx, { id, ops }: { id: string; ops: unknown }) {
+export async function edit(c: Ctx, { id, ops, dsl }: { id: string; ops?: unknown; dsl?: string }) {
   const { doc } = await snapshot(c, id);
-  return { ...(await publish(c, applyToDoc(doc, ops).doc, id)), from: id };
+  if ((ops === undefined) === (dsl === undefined)) throw new ToolError(422, { error: "invalid", message: "Pass exactly one of ops or dsl (dsl replaces the whole flow)." });
+  return { ...(await publish(c, dsl !== undefined ? docOf({ dsl }) : applyToDoc(doc, ops).doc, id)), from: id };
 }

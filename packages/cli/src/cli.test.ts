@@ -13,6 +13,20 @@ const first = doc.scenarios[0].steps[0];
 (first.actions ??= []).push({ type: "highlight", targets: ["nope"] });
 writeFileSync(bad, JSON.stringify(doc));
 
+describe("flowmotion validate (.flow text)", () => {
+  it("valid → 0; typo → exit 1 with line number", async () => {
+    const { printDsl } = await import("@flowmotion/core");
+    const text = printDsl(JSON.parse(readFileSync(good, "utf8")));
+    const ok = join(dir, "ok.flow"), ko = join(dir, "ko.flow");
+    writeFileSync(ok, text);
+    writeFileSync(ko, text.replace("\nnode ", "\nnod "));
+    expect(run("validate", ok).status).toBe(0);
+    const r = run("validate", ko);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/^error syntax line \d+: Unknown keyword 'nod'/m);
+  });
+});
+
 describe("flowmotion validate", () => {
   it("valid → exit 0", () => expect(run("validate", good).status).toBe(0));
   it("invalid → exit 1 with issue line", () => {

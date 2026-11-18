@@ -34,10 +34,11 @@ export function createApp({ store, env }: { store: BlobStore; env: Env }) {
 
   const api = express.Router();
   api.get("/share/:id", read, async (req, res) => void res.json(await tools.snapshot(c, String(req.params.id))));
-  api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body?.doc)));
+  api.get("/share/:id/dsl", read, async (req, res) => void res.type("text/plain").send((await tools.get(c, { id: String(req.params.id), view: "dsl" }) as { dsl: string }).dsl));
+  api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body ?? {})));
   api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
-  api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, req.body?.doc)));
-  api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops })));
+  api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, tools.docOf(req.body ?? {}))));
+  api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops, dsl: req.body?.dsl })));
   app.use("/api", api);
   app.post("/mcp", write, mcpHandler(c));
   app.all("/mcp", (_req, res) => void res.status(405).set("allow", "POST").json({ error: "method_not_allowed" })); // stateless: no SSE/session

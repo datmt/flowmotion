@@ -65,3 +65,11 @@ test("schema and reference issues map back to source lines", () => {
   expect(m).toContainEqual([4, "unknown_ref"]);
   expect(m).toContainEqual([8, "unknown_ref"]);
 });
+
+test("docs/guide.md DSL example parses cleanly", () => {
+  const guide = readFileSync(new URL("../../../docs/guide.md", import.meta.url), "utf8");
+  const ex = /## DSL at a glance\n\n```\n([\s\S]*?)```/.exec(guide)![1]!;
+  const r = parseDsl(ex);
+  expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
+  expect(guide.length).toBeLessThan(24_000); // ~6000 tokens
+});

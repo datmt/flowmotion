@@ -1,60 +1,83 @@
 # FlowMotion authoring guide
 
-You write a **FlowDoc** (JSON, version `"2.1"`): entities plus scenarios made of steps. Layout, colors, timing and camera are automatic. Never give coordinates or absolute times.
+You write a **flow** in a small line-based text format (the DSL): entities plus scenarios made of steps. Layout, colors, timing and camera are automatic. Never give coordinates or absolute times. Pass it as `dsl` to `flow_create` / `flow_edit`. (A JSON FlowDoc, `doc`, is also accepted; see the appendix.)
 
-## Schema essentials
+## DSL at a glance
 
 ```
-{ "version":"2.1", "meta":{title,summary?,theme?,aspect?}, "layout"?:{algorithm?,direction?},
-  "groups"?, "nodes", "edges", "arrays"?, "grids"?, "tokens"?, "code"?, "scenarios" }
+flow "Saga: order checkout"
+summary "How a saga commits and compensates."
+# optional header lines: theme dark | aspect 16:9 | layout algorithm=layered direction=LR
+theme dark
+
+group services "Services"
+node client "Client" actor
+# node options: in= state= pos= hidden
+node payment "Payment" service in=services state=idle
+# edge options: id= hidden dashed noarrow
+edge client > payment "Charge" dashed
+array nums "Numbers" keys=lo,mid,hi orientation=column = 2 5 "a b"
+grid dp "DP table"
+  rowlabels r0 r1
+  collabels c0 c1
+  row 0 1
+  row 1 2
+token lo "lo" at=nums#0
+code src ts "Title"
+  | let x = 1;
+  | x++
+
+scenario happy "Happy path"
+  step checkout "Checkout" hold=1
+    "Narration, required: plain text, `code`, **bold**."
+    send client > payment "Charge" with
+    state payment success dur=0.5 ease=spring
+scenario fail "What if it fails?" from=happy/checkout
+  step boom "Boom"
+    "..."
 ```
 
-* `nodes[]`: `{id,label,kind,group?,state?,hidden?}`. `kind`: service, state, decision, db, queue, actor, external, value (tree/graph vertex, neuron).
-* `edges[]`: `{from,to,label?,arrow?,dashed?,hidden?}`. Edge id defaults to `from-to`; set `id` if duplicates exist.
-* `arrays[]`: `{id,label?,values:string[],keys?,orientation?}`. `keys` makes named cells (a variables panel).
-* `grids[]`: `{id,rows:string[][],rowLabels?,colLabels?}`. `tokens[]`: `{id,label?,at}` persistent pointers. `code[]`: `{id,language,code}`.
-* `scenarios[]` (1-8): `{id,title,branchFrom?:{scenario,afterStep},steps}`. `steps[]` (1-40): `{id,title,narration,actions (0-12),hold?}`. Narration is required (≤ 400 chars, plain text, `code`, **bold**).
-* States: idle, active, success, error, warning, pending, disabled. Layout: `layered` (default), `tree` (BSTs, use `TB`), `stress` (general graphs).
-* IDs: kebab-case `^[a-z][a-z0-9-]{0,39}$`, unique across the whole document.
-* Refs: entity id, or cell `nums#3`, range `nums#2..5` (in `targets` only), keyed `vars#lo`, grid `dp#1.2`.
-* Limits: 300 entities, 64 cells per array, 16x16 per grid, 180 s per scenario.
+Rules: 2-space indent; a line starting with `#` is a comment (no trailing comments); strings are double-quoted (`\"`, `\n`); a bare word is a string, so cell values are always strings (`1` is "1"). Lists are comma-joined without spaces (`a,b#2..4`). Options are `key=value` or bare flags. Values of `array` and `values` go after a bare `=`. Each step has one quoted narration line, then one action per line. Errors come back with line and column and a hint.
 
-## The six design rules
+## Entities and ids
 
-1. Semantic, not geometric: pick a `kind` and a `state`, never a shape or color.
-2. No coordinates: ELK lays it out. `pos` is for human pins only.
-3. No absolute time: actions run in sequence; steps in order.
-4. Stable string IDs, by name (`inventory`), referenced by ID, never by array index.
-5. Closed objects only, no extra keys.
-6. One way to do each thing: one action per effect.
+* `node` kinds: service, state, decision, db, queue, actor, external, value (tree/graph vertex, neuron). Edge id defaults to `from-to`; set `id=` if duplicates exist.
+* `keys=` on an array makes named cells (a variables panel). Layout: `layered` (default), `tree` (BSTs, use `direction=TB`), `stress` (general graphs).
+* States: idle, active, success, error, warning, pending, disabled.
+* IDs: kebab-case `^[a-z][a-z0-9-]{0,39}$`, unique across the whole document. Reference by id, never by position.
+* Refs: entity id, or cell `nums#3`, range `nums#2..5` (in target lists only), keyed `vars#lo`, grid `dp#1.2`.
+* Limits: 300 entities, 64 cells per array, 16x16 per grid, 180 s per scenario, 1-8 scenarios, 1-40 steps each, 0-12 actions per step, narration <= 400 chars.
 
-## Actions (`do`)
+## Design rules
 
-Common timing keys on any action: `start` (`"after"` default, or `"with"`), `delay`, `dur`, `ease`.
+1. Semantic, not geometric: pick a `kind` and a `state`, never a shape or color. No coordinates (`pos=` is for human pins only).
+2. No absolute time: actions run in sequence, steps in order. `with` runs an action beside the previous one; `delay=`, `dur=`, `ease=linear|inOut|spring` tune it.
+3. One way to do each thing: one action per effect.
 
-| Action | Example |
+## Actions
+
+| Action | DSL line |
 |---|---|
-| `state` | `{"do":"state","targets":["payment","nums#0..2"],"state":"error"}` |
-| `show` | `{"do":"show","targets":["attacker"]}` (reveals hidden entities, edges by id) |
-| `hide` | `{"do":"hide","targets":["tmp"]}` |
-| `label` | `{"do":"label","target":"vars#lo","text":"5"}` (node, edge or cell text) |
-| `pulse` | `{"do":"pulse","targets":["nums#4"]}` (attention bump; use for comparisons) |
-| `focus` | `{"do":"focus","targets":["orch","payment"],"dim":true}`; `[]` = full view |
-| `callout` | `{"do":"callout","target":"orch","text":"Owns the transaction"}` (≤ 120 chars, ends with its step) |
-| `send` | `{"do":"send","from":"orch","to":"payment","label":"Charge"}` (needs an edge either way; `via` if several; `token` moves a token) |
-| `move` | `{"do":"move","token":"lo","to":"nums#5"}` (pointer jump, no edge needed) |
-| `swap` | `{"do":"swap","a":"nums#0","b":"nums#1"}` (same array or grid) |
-| `values` | `{"do":"values","target":"stack","values":["a","b"]}` (push, pop, enqueue; unchanged values stay put) |
-| `highlight` | `{"do":"highlight","target":"code","lines":"3-5,9"}`; `""` clears |
+| state | `state payment,nums#0..2 error` |
+| show / hide | `show attacker` (reveals hidden entities; edges by id) |
+| label | `label vars#lo "5" with` (node, edge or cell text) |
+| pulse | `pulse nums#4` (attention bump, for comparisons) |
+| focus | `focus orch,payment dim`; bare `focus` = full view |
+| callout | `callout orch "Owns the transaction"` (<= 120 chars, ends with its step) |
+| send | `send orch > payment "Charge"` (needs an edge either way; `via=id` if several; `token=id` moves a token) |
+| move | `move lo to nums#5` (pointer jump, no edge needed) |
+| swap | `swap nums#0 nums#1` (same array or grid) |
+| values | `values stack dur=1 = a b` (push, pop, enqueue; unchanged values stay put) |
+| highlight | `highlight src "3-5,9"`; `""` clears |
 
 State persists across steps; `callout`, `pulse` and packets end with their step. Cell refs are checked against the array length at that moment.
 
 ## Workflow
 
-1. Call `flow_guide` once. Optionally `flow_get` the closest template.
+1. Call `flow_guide` once. Optionally `flow_get` (`view:"dsl"`) the closest template.
 2. Plan: entities, a happy-path scenario, and the failure or edge case worth showing as a branch.
-3. Up to ~40 entities: `flow_create` with the full doc. Larger: `flow_create` with entities and the first scenario, then one `flow_edit` per remaining scenario (incremental).
-4. Fix **every** reported error in one follow-up call. Each issue has a JSON Pointer `path`, a `where` and a `hint`.
+3. Up to ~40 entities: `flow_create` with the full `dsl`. Larger: `flow_create` with entities and the first scenario, then one `flow_edit` per remaining scenario (incremental).
+4. Fix **every** reported error in one follow-up call. Syntax issues carry `line`/`col`; all issues have a `where` and a `hint`. `flow_edit` takes `ops` for small changes or a whole new `dsl`.
 5. `flow_preview`; fix layout, clarity and lint warnings with `flow_edit`.
 6. Give the user the viewer URL.
 
@@ -79,3 +102,18 @@ Tips: 3-8 steps per scenario; one idea per step; narration explains *why*, not w
 * `oauth-pkce`: authorization code + PKCE, and a stolen-code branch.
 * `binary-search`: pointers, a variables panel and code highlight.
 * `backprop`: forward pass, loss, gradients, and a high-learning-rate branch.
+
+## Appendix: JSON FlowDoc
+
+`doc` is the same model as JSON, version `"2.1"`:
+
+```
+{ "version":"2.1", "meta":{title,summary?,theme?,aspect?}, "layout"?:{algorithm?,direction?},
+  "groups"?, "nodes", "edges", "arrays"?, "grids"?, "tokens"?, "code"?, "scenarios" }
+```
+
+* `nodes[]`: `{id,label,kind,group?,state?,hidden?,pos?}`; `edges[]`: `{id?,from,to,label?,arrow?,dashed?,hidden?}`.
+* `arrays[]`: `{id,label?,values,keys?,orientation?}`; `grids[]`: `{id,rows,rowLabels?,colLabels?}`; `tokens[]`: `{id,label?,at}`; `code[]`: `{id,title?,language,code}`.
+* `scenarios[]`: `{id,title,branchFrom?:{scenario,afterStep},steps:[{id,title,narration,actions,hold?}]}`.
+* Actions are `{"do":"send","from":"orch","to":"payment","label":"Charge"}`; the DSL verbs above map 1:1 (`"do":"state"`, `"do":"show"`, `"do":"hide"`, `"do":"label"`, `"do":"pulse"`, `"do":"focus"`, `"do":"callout"`, `"do":"send"`, `"do":"move"`, `"do":"swap"`, `"do":"values"`, `"do":"highlight"`) (`targets` arrays, `start:"with"`, `delay`, `dur`, `ease`).
+* Closed objects only: extra keys are errors. The JSON Schema is served at `/schema/flow-2.1.json`.

@@ -34,13 +34,20 @@ function Library() {
   const add = async (doc: any) => { location.href = `/local/${await db.save(doc)}`; };
   const onImport = async (f?: File) => {
     if (!f) return;
-    try { await add(JSON.parse(await f.text())); } catch (e) { setErr(`Not a valid .flow.json: ${e}`); }
+    try {
+      const text = await f.text();
+      if (f.name.endsWith(".json")) return await add(JSON.parse(text));
+      const { parseDsl } = await import("@flowmotion/core"); // lazy: keeps zod/elk out of the first paint
+      const r = parseDsl(text);
+      if (!r.doc) return setErr(r.issues.map((i) => `${i.line ? `line ${i.line}: ` : ""}${i.message}`).join("\n"));
+      await add(r.doc);
+    } catch (e) { setErr(`Not a valid flow file: ${e}`); }
   };
   return (
     <Shell>
       <section className="mb-8">
         <h2 className="mb-2 font-semibold">My flows</h2>
-        {err && <p role="alert" className="text-red-600">{err}</p>}
+        {err && <p role="alert" className="whitespace-pre-line text-red-600">{err}</p>}
         {flows.length === 0 && <p className="text-slate-500">Nothing here yet. Start from a template or import a file.</p>}
         <ul className="divide-y rounded border bg-white">
           {flows.map((f) => (
@@ -50,8 +57,8 @@ function Library() {
             </li>
           ))}
         </ul>
-        <label className={`${btn} mt-3 inline-block cursor-pointer`}>Import .flow.json
-          <input type="file" accept=".json,.flow.json" className="hidden" onChange={(e) => onImport(e.target.files?.[0])} />
+        <label className={`${btn} mt-3 inline-block cursor-pointer`}>Import .flow / .json
+          <input type="file" accept=".flow,.json" className="hidden" onChange={(e) => onImport(e.target.files?.[0])} />
         </label>
       </section>
       <section>
@@ -88,8 +95,13 @@ function Local({ id }: { id: string }) {
   if (flow === null) return <Shell><p>Flow not found in this browser. <a className={link} href="/">Back</a></p></Shell>;
   return (
     <Shell>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">{flow.doc.meta?.title}</h1>
+        <button className={btn} onClick={async () => {
+          const { printDsl } = await import("@flowmotion/core");
+          const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([printDsl(flow.doc)], { type: "text/plain" })), download: `${flow.id}.flow` });
+          a.click(); URL.revokeObjectURL(a.href);
+        }}>Export .flow</button>
         <button className={btn} onClick={() => share(flow.doc).then((u) => setMsg(`Link copied: ${u}`), (e) => setMsg(`Share failed: ${e.message}`))}>Share</button>
       </div>
       {msg && <p role="status" className="mb-2 text-sm">{msg}</p>}

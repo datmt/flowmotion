@@ -27,6 +27,17 @@ test("mcp: tools list, create → edit roundtrip, invalid → isError", async ()
     const bad = await call("flow_create", { doc: { version: "2.1", meta: {}, nodes: [{ id: "a" }, { id: "a" }], edges: [] } });
     expect(bad.isError).toBe(true);
     expect(bad.structuredContent.issues.length).toBeGreaterThan(1);
+    // DSL: create from text, read back as text, line-numbered errors with isError
+    const dsl = (await call("flow_get", { id: a.id, view: "dsl" })).structuredContent.dsl as string;
+    expect(dsl).toContain(`flow ${JSON.stringify(tpl.meta.title)}`);
+    const d = (await call("flow_create", { dsl })).structuredContent;
+    expect((await call("flow_get", { id: d.id, view: "dsl" })).structuredContent.dsl).toBe(dsl);
+    const badDsl = await call("flow_create", { dsl: dsl.replace("scenario ", "scenaro ") });
+    expect(badDsl.isError).toBe(true);
+    expect(badDsl.structuredContent.issues[0]).toMatchObject({ code: "syntax", line: expect.any(Number) });
+    expect((await call("flow_create", { dsl, doc: tpl })).isError).toBe(true);
+    expect((await call("flow_edit", { id: a.id, dsl })).structuredContent.id).not.toBe(a.id);
+    expect((await call("flow_guide")).content[0].text).toContain("DSL");
     expect((await call("flow_guide")).content[0].text).toContain("FlowDoc");
     expect((await client.getPrompt({ name: "explain", arguments: { topic: "sagas" } })).messages[0]).toBeTruthy();
   } finally { await client.close(); server.close(); }
