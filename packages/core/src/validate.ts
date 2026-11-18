@@ -1,5 +1,7 @@
 import { FlowDoc, type Action } from "./schema.ts";
 import { parseRef, type ParsedRef } from "./ref.ts";
+import { applySwap, applyValues, actionRefs, createCellSim, resolveCells } from "./cells.ts";
+import { flattenScenario, scheduleScenario } from "./timing.ts";
 
 export type IssueCode =
   | "schema" | "duplicate_id" | "unknown_ref" | "bad_ref" | "wrong_target_type" | "range_not_allowed"
@@ -20,6 +22,7 @@ export type ValidateResult = { ok: true; issues: Issue[]; doc: FlowDoc } | { ok:
 const MAX_ENTITIES = 300;
 const MAX_BYTES = 1_000_000;
 const MAX_CODE_LINES = 80;
+const MAX_DURATION = 180;
 
 type EType = "group" | "node" | "edge" | "array" | "grid" | "token" | "code";
 const ANY: EType[] = ["group", "node", "edge", "array", "grid", "token", "code"];
@@ -239,6 +242,43 @@ export function validate(input: unknown): ValidateResult {
       case "highlight": expectId(a.target, ["code"], [...p, "target"]); return;
     }
   })));
+
+  // — time-dependent checks: cell bounds per scenario, scenario duration —
+  doc.scenarios.forEach((s, si) => {
+    const dur = scheduleScenario(doc, s.id).duration;
+    if (dur > MAX_DURATION) err(["scenarios", si], "limit_exceeded", `Scenario '${s.id}' runs ${dur.toFixed(1)}s; the limit is ${MAX_DURATION}s.`, "Trim steps, 'hold' or 'dur'.");
+  });
+  if (!issues.some((i) => i.severity === "error")) {
+    const init = createCellSim(doc);
+    doc.tokens?.forEach((t, i) => {
+      const pr = parseRef(t.at)!;
+      if ((pr.kind === "index" || pr.kind === "range") && !resolveCells(init, t.at))
+        err(["tokens", i, "at"], "cell_out_of_bounds", `'${t.at}' is out of bounds: '${pr.entity}' has ${init.get(pr.entity)!.order.length} cells.`);
+    });
+    // ponytail: runs only on otherwise-valid docs, so refs are known to exist; re-simulates inherited steps per branch
+    doc.scenarios.forEach((s) => {
+      const sim = createCellSim(doc);
+      for (const f of flattenScenario(doc, s.id)) {
+        const si2 = doc.scenarios.findIndex((x) => x.id === f.scenario);
+        f.step.actions.forEach((a, k) => {
+          const p: (string | number)[] = ["scenarios", si2, "steps", f.index, "actions", k];
+          let oob = false;
+          for (const r of actionRefs(a)) {
+            const pr = parseRef(r.ref)!;
+            if (pr.kind === "entity" || pr.kind === "grid" || pr.kind === "key" || resolveCells(sim, r.ref)) continue;
+            oob = true;
+            if (!f.inherited) {
+              const len = sim.get(pr.entity)!.order.length;
+              err([...p, ...r.path], "cell_out_of_bounds", `'${r.ref}' is out of bounds: '${pr.entity}' has ${len} cell${len === 1 ? "" : "s"} at this point.`, "A 'values' action earlier in the scenario may have changed its length.");
+            }
+          }
+          if (oob) return;
+          if (a.do === "swap") applySwap(sim, a.a, a.b);
+          else if (a.do === "values") applyValues(sim, a.target, a.values);
+        });
+      }
+    });
+  }
 
   const ok = !issues.some((i) => i.severity === "error");
   return ok ? { ok, issues, doc } : { ok, issues };
