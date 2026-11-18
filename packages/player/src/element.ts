@@ -10,7 +10,7 @@ let fontsReady: Promise<unknown> | undefined;
 export const loadFonts = () => (fontsReady ??= Promise.all(fonts.map(async ([family, weight, url]) => {
   const f = new FontFace(family, `url(${url})`, { weight });
   (document.fonts as unknown as Set<FontFace>).add(await f.load());
-})));
+}))).catch(() => {}); // fonts unreachable (e.g. sandboxed MCP App): fall back to system fonts
 
 const CSS = `
 :host{display:block;font:14px/1.45 Inter,system-ui,sans-serif;color:var(--fg);--fg:#1f2937;--bg:#fff;--line:#d1d5db;--accent:#2563eb;--chg:#fef3c7}
@@ -79,6 +79,8 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEle
 export class FlowPlayerElement extends HTMLElement {
   player?: Player;
   ready: Promise<Player>;
+  /** Set before connecting to skip `src` fetching (MCP App view). */
+  compiled?: CompiledFlow;
   #resolve!: (p: Player) => void;
   #ro?: ResizeObserver;
   constructor() { super(); this.ready = new Promise((r) => (this.#resolve = r)); }
@@ -88,10 +90,10 @@ export class FlowPlayerElement extends HTMLElement {
 
   async #boot() {
     const src = this.getAttribute("src");
-    if (!src) return;
+    if (!src && !this.compiled) return;
     const root = this.attachShadow({ mode: "open" });
     root.append(h("style", { textContent: CSS }));
-    const [compiled] = await Promise.all([this.#load(src), loadFonts()]);
+    const [compiled] = await Promise.all([this.compiled ?? this.#load(src!), loadFonts()]);
     this.setAttribute("theme", compiled.meta.theme);
     this.#build(root, compiled);
   }

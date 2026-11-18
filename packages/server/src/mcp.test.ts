@@ -42,3 +42,23 @@ test("mcp: tools list, create → edit roundtrip, invalid → isError", async ()
     expect((await client.getPrompt({ name: "explain", arguments: { topic: "sagas" } })).messages[0]).toBeTruthy();
   } finally { await client.close(); server.close(); }
 }, 60_000);
+
+test("mcp app: player resource + tool results carry compiled flow in _meta", async () => {
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" } }).listen(0);
+  const client = new Client({ name: "t", version: "0" });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`)));
+    const uri = "ui://flowmotion/player";
+    expect((await client.listResources()).resources.find((r) => r.uri === uri)?.mimeType).toBe("text/html;profile=mcp-app");
+    const c = (await client.readResource({ uri })).contents[0] as { mimeType: string; text: string };
+    expect(c.mimeType).toBe("text/html;profile=mcp-app");
+    expect(c.text).toContain("ui/initialize");
+    expect(c.text).not.toContain("elkjs");
+    const { tools } = await client.listTools();
+    for (const n of ["flow_create", "flow_edit", "flow_preview"]) expect((tools.find((t) => t.name === n)?._meta as any)?.ui?.resourceUri).toBe(uri);
+    const r = (await client.callTool({ name: "flow_create", arguments: { doc: tpl } })) as any;
+    expect(r._meta.compiled.scenarios.length).toBeGreaterThan(0);
+    expect(r._meta.url).toBe(`${r.structuredContent.url}`);
+    expect(JSON.stringify(r.content)).not.toContain("tracks"); // model never sees the compiled flow
+  } finally { server.close(); }
+});
