@@ -45,7 +45,7 @@ independently committable features for implementing agents. When this plan and t
 | Repo | pnpm workspace monorepo, TypeScript strict, ESM only, Vitest. No ESLint/Prettier config beyond defaults. |
 | HTTP server | Express 5 (matches official MCP TS SDK examples incl. its auth router). One process serves REST, `/mcp`, and the built web app. |
 | DB access | `pg` against PostgreSQL. All DB code takes a `Db = { query(sql, params?) → Promise<{ rows }> }`, which both `pg.Pool` and `@electric-sql/pglite` satisfy, so tests run on PGlite in-process (no Docker needed). Plain `.sql` migration files applied in order by a ~20-line runner. |
-| Human login | GitHub OAuth (one provider, no email infra). One personal workspace per user, created on first login. |
+| Human login | **Deferred to Phase 4 (F32).** Until then identity = API key: workspaces and keys are minted by `pnpm --filter server key:create`; the web app has a "Paste API key" field (stored in `localStorage`, sent as bearer — `ponytail:` XSS-exposed, replaced by session cookies in F32); OAuth consent (F16) authenticates by pasting a key. F32 adds GitHub OAuth (one provider, no email infra) with one personal workspace per user. |
 | Flow IDs | One ID per flow: 10-char random lowercase base32 (`crypto.randomBytes`). Same value used for `flow_get({id})` and `/v/:id`. Link = capability (unlisted); `public=true` additionally lists it in `flow_list` and allows remix. |
 | Revisions | Integer per flow, starting at 1. `baseRevision` is that integer. Render route is `/render/:flowId/:rev`. |
 | Jobs | Postgres `jobs` table polled with `SELECT … FOR UPDATE SKIP LOCKED`. No Redis. |
@@ -380,7 +380,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 - [ ] **F12 DB schema + server skeleton**
   *Depends:* F00 · *PRD:* §9 Storage
   `packages/server`: Express 5 app factory `createApp({ db, env })`, `src/db.ts` (`Db` type, migration
-  runner over `migrations/*.sql`), `src/main.ts` (pg Pool). Tables: `users` (github_id, login),
+  runner over `migrations/*.sql`), `src/main.ts` (pg Pool). Tables (no `users` yet — F32):
   `workspaces`, `api_keys` (workspace_id, sha256 hash, prefix, scopes text[] ⊂ {read,write,export}),
   `flows` (id, workspace_id, title, doc jsonb, revision int, public bool, created_at, updated_at),
   `flow_revisions` (flow_id, revision, doc jsonb, forward jsonb, inverse jsonb, author_type
@@ -401,22 +401,23 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   /api/flows/:id?view=&ids=`, `POST /api/flows/:id/ops`, `POST /api/flows/:id/revert`, `GET
   /api/flows/:id/compiled?rev=` (public by id), `GET /schema/flow-2.1.json`, `GET /llms.txt` (guide).
   Status codes: 422 for validation errors (body = issues), 409 conflict, 404, 401/403. Bearer API keys
-  (`fm_` + 32 random bytes base32; store sha256), scope checks, in-memory rate limit. Templates seeded as
+  (`fm_` + 32 random bytes base32; store sha256), scope checks, in-memory rate limit. Script
+  `pnpm --filter server key:create --workspace <name> [--scopes read,write,export]` creates the workspace
+  if missing and prints the key once (the only way to get a key until F32). Templates seeded as
   public flows owned by a system workspace on migrate.
   *Done when:* supertest-style tests (use `fetch` against `app.listen(0)`) on PGlite: create → edit →
   409 on stale base → revert; invalid doc returns all issues; key without `write` gets 403.
   *Commit:* `feat(server): F13 tool layer, REST API and API keys`
 
 - [ ] **F14 Web app shell + viewer page**
-  *Depends:* F09, F13 · *PRD:* §6 (share link; full sharing is F25)
-  `packages/web` (Vite + React 19 + Tailwind). Routes: `/` (sign-in / my flows list), `/v/:id` (fetches
-  compiled, mounts `<flow-player>`, honors `?s=&step=`). Server serves `web/dist` with SPA fallback; Vite
-  dev proxies `/api`, `/mcp`, `/schema`, `/llms.txt`. GitHub OAuth login (`/auth/github`, signed
-  httpOnly session cookie with `SESSION_SECRET`), creates user + workspace; "API keys" panel to create and
-  revoke keys (shown once).
+  *Depends:* F09, F13 · *PRD:* §6 (share link; full sharing is F24)
+  `packages/web` (Vite + React 19 + Tailwind). Routes: `/` ("Paste API key" field per §0.3 + my flows
+  list via `GET /api/flows`), `/v/:id` (public, fetches compiled, mounts `<flow-player>`, honors
+  `?s=&step=`). One `api()` fetch helper adds the bearer key — F32 swaps it for cookies. Server serves
+  `web/dist` with SPA fallback; Vite dev proxies `/api`, `/mcp`, `/schema`, `/llms.txt`. No login.
   *Done when:* Playwright smoke test: seeded template opens at `/v/:id`, step 2 narration shows after
   pressing →.
-  *Commit:* `feat(web): F14 web shell, GitHub login and viewer page`
+  *Commit:* `feat(web): F14 web shell and viewer page`
 
 - [ ] **F15 Remote MCP server**
   *Depends:* F13 · *PRD:* §5.1–§5.3, §5.6
@@ -435,14 +436,15 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   *Commit:* `feat(server): F15 stateless remote MCP server`
 
 - [ ] **F16 OAuth 2.1 for MCP connectors**
-  *Depends:* F14, F15 · *PRD:* §5.2, §9
+  *Depends:* F15 · *PRD:* §5.2, §9
   Implement the MCP authorization spec so claude.ai / ChatGPT connectors can connect: Protected Resource
   Metadata (RFC 9728) on `/mcp` 401s, Authorization Server metadata, Dynamic Client Registration,
-  authorization code + PKCE (S256 only), consent page reusing the GitHub session, opaque access tokens
-  (hashed in DB, expiry, refresh tokens) mapped to the user's workspace. Prefer the SDK's auth router
+  authorization code + PKCE (S256 only), consent page where the user pastes an API key with `write`
+  scope (F32 replaces this with the GitHub session), opaque access tokens (hashed in DB, expiry, refresh
+  tokens) mapped to that key's workspace. Prefer the SDK's auth router
   with a Postgres-backed provider over hand-rolling endpoints. `/mcp` accepts either OAuth tokens or
   API keys.
-  *Done when:* test runs the full flow (register → authorize with a test session → token → call
+  *Done when:* test runs the full flow (register → authorize with a test API key → token → call
   `flow_list`); MCP Inspector connects manually (note result in commit body).
   *Commit:* `feat(server): F16 OAuth 2.1 authorization for MCP`
 
@@ -599,6 +601,22 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
 
 ---
 
+### Phase 4 — Human login
+
+- [ ] **F32 GitHub login + sessions**
+  *Depends:* F31 · *PRD:* §9 auth
+  Migration adds `users` (github_id, login, workspace_id). `/auth/github` + callback → signed httpOnly
+  `SameSite=Lax` session cookie (`SESSION_SECRET`); first login creates user + personal workspace.
+  `api()` helper switches to cookies (CSRF: require `Origin` match on non-GET); delete the pasted-key
+  field and its `localStorage` use. "API keys" panel to create/revoke keys (shown once) — `key:create`
+  script stays for ops. F16 consent page uses the session instead of a pasted key (keep paste-key
+  only behind an env flag for headless setups, or delete it). Sign-in/sign-out in the header.
+  *Done when:* test with a stubbed GitHub token exchange: login creates user + workspace, session reaches
+  `GET /api/flows`, cross-origin POST is rejected; no `localStorage` key code remains (grep test).
+  *Commit:* `feat: F32 GitHub login and session auth`
+
+---
+
 ## 3. Dependency graph (quick view)
 
 ```
@@ -607,11 +625,11 @@ F00 ─ F01 ─ F02 ─ F03 ─┐
   ├─ F04 ──────────────┘     │      ├─ F17 │
   │                          └ F08 ─ F09 ──┤
   └─ F12 ─────────┐   F02 ─ F11 ─┐         │
-                  └──────────────┴─ F13 ─ F14 ─ F16
-                                    └─ F15 ─┘
+                  └──────────────┴─ F13 ─ F14
+                                    └─ F15 ─ F16
 F18 (F10,F15,F16,F17) ─ F19 ══ Phase 1 gate
 F14 ─ F20 ─ F21 ─ F22 ─ F23 ; F22 ─ F25 ; F14,F20 ─ F24 ; F26 (F23,F24,F25)
-F24 ─ F27 ─ F28 / F29 / F30 ; F25,F27 ─ F31
+F24 ─ F27 ─ F28 / F29 / F30 ; F25,F27 ─ F31 ─ F32 (login, last)
 ```
 
 Good parallel lanes after F00: **core** (F01→F03 ∥ F04, then F05), **server** (F12), then
