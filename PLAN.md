@@ -443,7 +443,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   300-entity doc and asserting player 60 fps in the dev page (manual check recorded in commit body).
   *Commit:* `fix: F18 phase 1 hardening`
 
-- [ ] **F19 Viability-gate eval harness**
+- [x] **F19 Viability-gate eval harness**
   *Depends:* F18 · *PRD:* §5.5
   `evals/prompts.json` (20 prompts: 10 flows, 10 algorithms/DS, not overlapping templates).
   `evals/run-claude-code.ts`: for each prompt runs `claude -p --output-format stream-json
@@ -597,7 +597,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   line-numbered issues with `isError`.
   *Commit:* `feat(server): F37 DSL authoring over MCP/API/CLI`
 
-- [ ] **F38 Authoring eval: JSON vs DSL**
+- [x] **F38 Authoring eval: JSON vs DSL**
   *Depends:* F37, F19
   Reuse the F19 prompts. Fresh agent runs per format. Metrics: first-try validity, rounds to valid,
   tokens, lint warnings. Results in `evals/results/`.

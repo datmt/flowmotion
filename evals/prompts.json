@@ -1,0 +1,22 @@
+[
+  {"id":"f01","kind":"flow","prompt":"Explain how a TCP three-way handshake and graceful close work."},
+  {"id":"f02","kind":"flow","prompt":"Explain how a CDN serves a cache hit versus a cache miss."},
+  {"id":"f03","kind":"flow","prompt":"Explain the Raft leader election, including a split vote."},
+  {"id":"f04","kind":"flow","prompt":"Explain how a JWT login and refresh-token rotation flow works."},
+  {"id":"f05","kind":"flow","prompt":"Explain the two-phase commit protocol, including a participant voting no."},
+  {"id":"f06","kind":"flow","prompt":"Explain how DNS resolution works from browser to authoritative server."},
+  {"id":"f07","kind":"flow","prompt":"Explain a CI/CD pipeline that builds, tests, and canary-deploys a service, with rollback."},
+  {"id":"f08","kind":"flow","prompt":"Explain how a message broker fans out an event to several consumers, with one slow consumer."},
+  {"id":"f09","kind":"flow","prompt":"Explain the cache-aside pattern and a cache stampede."},
+  {"id":"f10","kind":"flow","prompt":"Explain how a rate limiter using the token bucket algorithm admits and rejects requests."},
+  {"id":"a01","kind":"algorithm","prompt":"Show how bubble sort sorts [5, 2, 9, 1, 7]."},
+  {"id":"a02","kind":"algorithm","prompt":"Show how a stack evaluates the postfix expression 3 4 + 2 *."},
+  {"id":"a03","kind":"algorithm","prompt":"Show how a queue is used in breadth-first search on a small graph."},
+  {"id":"a04","kind":"algorithm","prompt":"Show how quicksort partitions [8, 3, 6, 2, 9, 4] around a pivot."},
+  {"id":"a05","kind":"algorithm","prompt":"Show how a hash table with chaining handles a collision."},
+  {"id":"a06","kind":"algorithm","prompt":"Show how Dijkstra's algorithm finds shortest paths on a 5-node graph."},
+  {"id":"a07","kind":"algorithm","prompt":"Show how a binary min-heap inserts a value and bubbles it up."},
+  {"id":"a08","kind":"algorithm","prompt":"Show how the sliding window technique finds the max sum of 3 consecutive elements."},
+  {"id":"a09","kind":"algorithm","prompt":"Show how merge sort splits and merges [38, 27, 43, 3, 9, 82]."},
+  {"id":"a10","kind":"algorithm","prompt":"Show how dynamic programming computes Fibonacci(6) with memoization."}
+]
