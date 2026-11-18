@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,5 +38,30 @@ describe("flowmotion validate", () => {
     const r = run("validate", bad, "--json");
     expect(r.status).toBe(1);
     expect(JSON.parse(r.stdout).some((i: { severity: string }) => i.severity === "error")).toBe(true);
+  });
+});
+
+describe("flowmotion preview/render", () => {
+  it("publishes a file, writes PNG and exported file via the API", async () => {
+    const { createApp } = await import("../../server/src/app.ts");
+    const { memoryStore } = await import("../../server/src/store.ts");
+    const store = memoryStore();
+    const job = { id: "j1", status: "done" as const, progress: 1, key: "exports/j1.mp4" };
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    await store.put(job.key, Buffer.from("MP4DATA"));
+    const server = createApp({ store, env: { PUBLIC_URL: "" }, renderer: { renderStill: async () => png, startExport: () => job, job: () => job } }).listen(0);
+    try {
+      const env = { ...process.env, FLOWMOTION_API_URL: `http://127.0.0.1:${(server.address() as { port: number }).port}` };
+      const go = (...a: string[]) => new Promise<{ status: number | null; stdout: string; stderr: string }>((res) => {
+        const p = spawn("node", ["--experimental-strip-types", join(import.meta.dirname, "main.ts"), ...a], { env });
+        let stdout = "", stderr = ""; p.stdout.on("data", (d) => (stdout += d)); p.stderr.on("data", (d) => (stderr += d));
+        p.on("close", (status) => res({ status, stdout, stderr }));
+      });
+      const o1 = join(dir, "p.png"), o2 = join(dir, "r.mp4");
+      expect((await go("preview", good, "-o", o1)).status).toBe(0);
+      expect(readFileSync(o1)).toEqual(png);
+      expect((await go("render", good, "-o", o2)).status).toBe(0);
+      expect(readFileSync(o2, "utf8")).toBe("MP4DATA");
+    } finally { server.close(); }
   });
 });

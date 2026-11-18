@@ -34,6 +34,22 @@ function buildServer(c: tools.Ctx) {
   s.registerTool("flow_get", { description: "Read a flow: outline (compact), full doc, `dsl` text, or only the entities/steps in `ids`.", inputSchema: { id: z.string(), view: z.enum(["outline", "full", "dsl"]).optional(), ids: z.array(z.string()).optional() }, outputSchema: out, annotations: hint(true) },
     (a) => run(() => tools.get(c, a))());
 
+  const target = { id: z.string().optional(), doc: doc.optional(), dsl: dsl.optional() }; // an existing id, or a new flow to snapshot first
+  s.registerTool("flow_preview", { description: "Render a PNG: one step's end frame (`step`, 0-based) or a contact sheet of all steps. Pass `id`, or `dsl`/`doc` to snapshot a new flow. Use it to check layout before sharing.", inputSchema: { ...target, scenario: z.string().optional(), step: z.number().int().min(0).optional() }, annotations: hint(false) },
+    async (a) => {
+      try {
+        const { png, outline, url, id, warnings } = await tools.preview(c, a);
+        return { content: [{ type: "image" as const, data: Buffer.from(png).toString("base64"), mimeType: "image/png" }, { type: "text" as const, text: wrap({ id, url, outline, warnings }) }] };
+      } catch (e) {
+        if (!(e instanceof tools.ToolError)) throw e;
+        return { isError: true, content: [{ type: "text" as const, text: wrap(e.body) }], structuredContent: e.body };
+      }
+    });
+  s.registerTool("flow_export", { description: "Start a video export (mp4/webm/gif) job; returns a job id. Poll with flow_job until status is done (then `url` is the file).", inputSchema: { ...target, scenario: z.string().optional(), format: z.enum(["mp4", "webm", "gif"]).optional(), height: z.union([z.literal(720), z.literal(1080)]).optional(), fps: z.union([z.literal(30), z.literal(60)]).optional(), captions: z.boolean().optional(), webhookUrl: z.string().optional().describe("POSTed the final job JSON on completion") }, outputSchema: out, annotations: hint(false) },
+    (a) => run(() => tools.startExport(c, a))());
+  s.registerTool("flow_job", { description: "Status of an export job: queued|running|done|error, progress 0-1, and `url` when done.", inputSchema: { id: z.string() }, outputSchema: out, annotations: hint(true) },
+    (a) => run(() => tools.job(c, a.id))());
+
   s.registerPrompt("explain", { description: "Explain a topic as a Flowmotion animation.", argsSchema: { topic: z.string(), audience: z.string().optional() } }, ({ topic, audience }) => ({
     messages: [{ role: "user", content: { type: "text", text:
       `Make a Flowmotion explainer about: ${topic}${audience ? ` (audience: ${audience})` : ""}.\n` +

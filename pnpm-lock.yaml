@@ -32,6 +32,10 @@ importers:
       '@flowmotion/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@flowmotion/server':
+        specifier: workspace:*
+        version: link:../server
 
   packages/core:
     dependencies:
@@ -72,6 +76,9 @@ importers:
       '@flowmotion/core':
         specifier: workspace:*
         version: link:../core
+      '@flowmotion/worker':
+        specifier: workspace:*
+        version: link:../worker
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -141,6 +148,9 @@ importers:
       '@flowmotion/web':
         specifier: workspace:*
         version: link:../web
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.2
+        version: 1.32.2(zod@4.6.7)
       vite:
         specifier: 8.3.8
         version: 8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)

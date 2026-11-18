@@ -480,7 +480,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done · `[-]` dropped.
   duration ±1 frame.
   *Commit:* `feat(worker): F21 Playwright + FFmpeg render worker`
 
-- [ ] **F22 `flow_preview`, `flow_export`, `flow_job` + CLI preview/render** (IP rate-limited; exports capped in length/size)
+- [x] **F22 `flow_preview`, `flow_export`, `flow_job` + CLI preview/render** (IP rate-limited; exports capped in length/size)
   *Depends:* F21, F15 · *PRD:* §5.3, §5.1 (Tasks), §8
   Tools + REST (`POST /api/share/:id/preview`, `POST /api/share/:id/export`, `GET /api/jobs/:id`,
   `GET /api/jobs/:id/events` SSE, optional `webhookUrl` on export, POSTed on completion). `flow_preview`

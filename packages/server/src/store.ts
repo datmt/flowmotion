@@ -5,12 +5,17 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 export interface BlobStore {
   put(key: string, body: string | Uint8Array, contentType?: string): Promise<void>;
   get(key: string): Promise<string | null>;
+  getBytes(key: string): Promise<Uint8Array | null>;
 }
 
 export const memoryStore = (): BlobStore => {
-  const m = new Map<string, string>();
-  // ponytail: bytes are kept as latin1 text (get() is string-only); add getBytes when something reads binaries back.
-  return { put: async (k, b) => void m.set(k, typeof b === "string" ? b : Buffer.from(b).toString("latin1")), get: async (k) => m.get(k) ?? null };
+  const m = new Map<string, string | Uint8Array>();
+  const bytes = (v?: string | Uint8Array) => (v === undefined ? null : typeof v === "string" ? Buffer.from(v) : v);
+  return {
+    put: async (k, b) => void m.set(k, b),
+    get: async (k) => { const v = m.get(k); return v === undefined ? null : typeof v === "string" ? v : Buffer.from(v).toString(); },
+    getBytes: async (k) => bytes(m.get(k)),
+  };
 };
 
 // keys are server-generated (`flows/<base32 id>.json`), never user input
@@ -21,6 +26,7 @@ export const dirStore = (dir: string): BlobStore => ({
     await writeFile(f, body);
   },
   get: async (key) => readFile(new URL(key, `file://${dir}/`), "utf8").catch(() => null),
+  getBytes: async (key) => readFile(new URL(key, `file://${dir}/`)).catch(() => null),
 });
 
 export function r2Store(env: Record<string, string | undefined>): BlobStore {
@@ -34,8 +40,9 @@ export function r2Store(env: Record<string, string | undefined>): BlobStore {
     async put(Key, Body, ContentType = "application/json") {
       await s3.send(new PutObjectCommand({ Bucket, Key, Body, ContentType, IfNoneMatch: "*" }));
     },
-    async get(Key) {
-      try { return await (await s3.send(new GetObjectCommand({ Bucket, Key }))).Body!.transformToString(); }
+    async get(Key) { const b = await this.getBytes(Key); return b && Buffer.from(b).toString(); },
+    async getBytes(Key) {
+      try { return await (await s3.send(new GetObjectCommand({ Bucket, Key }))).Body!.transformToByteArray(); }
       catch (e: any) { if (e.name === "NoSuchKey") return null; throw e; }
     },
   };

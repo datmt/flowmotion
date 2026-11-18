@@ -20,13 +20,13 @@ function limit(max: number, windowMs = 60_000): RequestHandler {
   };
 }
 
-export function createApp({ store, env }: { store: BlobStore; env: Env }) {
+export function createApp({ store, env, renderer }: { store: BlobStore; env: Env; renderer?: tools.Renderer }) {
   const app = express();
   app.disable("x-powered-by");
   if (env.TRUST_PROXY) app.set("trust proxy", Number(env.TRUST_PROXY)); // hops, so req.ip is the real client
   app.use(express.json({ limit: "2mb" })); // doc limit is 1 MB; ops/previews fit under 2
-  const c: tools.Ctx = { store, baseUrl: env.PUBLIC_URL };
-  const read = limit(Number(env.RATE_LIMIT_READ ?? 300)), write = limit(Number(env.RATE_LIMIT_WRITE ?? 20));
+  const c: tools.Ctx = { store, baseUrl: env.PUBLIC_URL, renderer };
+  const read = limit(Number(env.RATE_LIMIT_READ ?? 300)), write = limit(Number(env.RATE_LIMIT_WRITE ?? 20)), render = limit(Number(env.RATE_LIMIT_RENDER ?? 10));
 
   app.get("/healthz", (_req, res) => void res.json({ ok: true }));
   app.get("/schema/flow-2.1.json", (_req, res) => void res.type("json").send(readFileSync(new URL("../../../schema/flow-2.1.json", import.meta.url))));
@@ -39,6 +39,20 @@ export function createApp({ store, env }: { store: BlobStore; env: Env }) {
   api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
   api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, tools.docOf(req.body ?? {}))));
   api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops, dsl: req.body?.dsl })));
+  api.post("/share/:id/preview", render, async (req, res) => void res.type("png").send(Buffer.from((await tools.preview(c, { ...req.body, id: String(req.params.id) })).png)));
+  api.post("/share/:id/export", render, async (req, res) => void res.status(202).json(await tools.startExport(c, { ...req.body, id: String(req.params.id) })));
+  api.get("/jobs/:id", read, (req, res) => void res.json(tools.job(c, String(req.params.id))));
+  api.get("/jobs/:id/events", read, async (req, res) => {
+    res.set({ "content-type": "text/event-stream", "cache-control": "no-cache" }).flushHeaders();
+    const ctl = new AbortController();
+    res.on("close", () => ctl.abort());
+    try { await tools.watch(c, String(req.params.id), (j) => { if (!ctl.signal.aborted) res.write(`data: ${JSON.stringify(j)}\n\n`); }, ctl.signal); } catch { /* unknown job: just end */ }
+    res.end();
+  });
+  api.get("/jobs/:id/file", read, async (req, res) => {
+    const f = await tools.jobFile(c, String(req.params.id));
+    res.type(f.ext).send(Buffer.from(f.bytes));
+  });
   app.use("/api", api);
   app.post("/mcp", write, mcpHandler(c));
   app.all("/mcp", (_req, res) => void res.status(405).set("allow", "POST").json({ error: "method_not_allowed" })); // stateless: no SSE/session

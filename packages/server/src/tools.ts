@@ -8,7 +8,14 @@ export class ToolError extends Error {
   body: Record<string, unknown>;
   constructor(status: number, body: Record<string, unknown>) { super(String(body.error)); this.status = status; this.body = body; }
 }
-export interface Ctx { store: BlobStore; baseUrl?: string }
+/** Render worker (packages/worker), injected so the server has no hard dependency on Chromium/ffmpeg. */
+export interface Renderer {
+  renderStill(src: string, scenario?: string, step?: number): Promise<Uint8Array>;
+  startExport(src: string, o: { scenario?: string; format?: "mp4" | "webm" | "gif"; height?: 720 | 1080; fps?: 30 | 60; captions?: boolean }): Job;
+  job(id: string): Job | undefined;
+}
+export interface Job { id: string; status: "queued" | "running" | "done" | "error"; progress: number; key?: string; error?: string }
+export interface Ctx { store: BlobStore; baseUrl?: string; renderer?: Renderer }
 
 const ROOT = new URL("../../../", import.meta.url);
 const A = "abcdefghijklmnopqrstuvwxyz234567";
@@ -83,4 +90,64 @@ export async function edit(c: Ctx, { id, ops, dsl }: { id: string; ops?: unknown
   const { doc } = await snapshot(c, id);
   if ((ops === undefined) === (dsl === undefined)) throw new ToolError(422, { error: "invalid", message: "Pass exactly one of ops or dsl (dsl replaces the whole flow)." });
   return { ...(await publish(c, dsl !== undefined ? docOf({ dsl }) : applyToDoc(doc, ops).doc, id)), from: id };
+}
+
+const renderer = (c: Ctx) => c.renderer ?? (() => { throw new ToolError(501, { error: "not_available", message: "Rendering is not enabled on this server." }); })();
+/** Existing id, or a fresh immutable snapshot of `doc`/`dsl`. */
+async function target(c: Ctx, a: { id?: string; doc?: unknown; dsl?: string }) {
+  if (a.id) { await snapshot(c, a.id); return { id: a.id, outline: (await get(c, { id: a.id })).outline }; }
+  const p = await publish(c, docOf(a));
+  return { id: p.id, outline: p.outline, warnings: p.warnings };
+}
+
+/** PNG of one step's end frame, or a contact sheet of every step when `step` is omitted. */
+export async function preview(c: Ctx, a: { id?: string; doc?: unknown; dsl?: string; scenario?: string; step?: number }) {
+  const r = renderer(c), t = await target(c, a);
+  const png = await r.renderStill(t.id, a.scenario, a.step);
+  return { ...t, url: `${c.baseUrl ?? ""}/v/${t.id}`, png };
+}
+
+// ponytail: hostname check only (no DNS resolution), so a rebinding host could still reach private ranges; move to an egress proxy if exposed publicly.
+function webhookOk(u: string) {
+  try {
+    const { protocol, hostname } = new URL(u);
+    return /^https?:$/.test(protocol) && !/^(localhost|.*\.local|.*\.internal|\[.*|127\..*|10\..*|192\.168\..*|169\.254\..*|172\.(1[6-9]|2\d|3[01])\..*|0\..*)$/i.test(hostname);
+  } catch { return false; }
+}
+const MAX_SECONDS = 180;
+
+export async function startExport(c: Ctx, a: { id?: string; doc?: unknown; dsl?: string; scenario?: string; format?: "mp4" | "webm" | "gif"; height?: 720 | 1080; fps?: 30 | 60; captions?: boolean; webhookUrl?: string }) {
+  const r = renderer(c);
+  if (a.webhookUrl !== undefined && !webhookOk(a.webhookUrl)) throw new ToolError(422, { error: "invalid", message: "webhookUrl must be a public http(s) URL." });
+  const t = await target(c, a);
+  const snap = await snapshot(c, t.id) as { compiled: { scenarios: { id: string; steps: { end: number }[] }[] } };
+  const sc = snap.compiled.scenarios.find((s) => !a.scenario || s.id === a.scenario);
+  if (!sc) throw new ToolError(422, { error: "invalid", message: `No scenario '${a.scenario}'.` });
+  if ((sc.steps.at(-1)?.end ?? 0) > MAX_SECONDS) throw new ToolError(422, { error: "too_long", message: `Exports are capped at ${MAX_SECONDS}s.` });
+  const job = r.startExport(t.id, a);
+  if (a.webhookUrl) void watch(c, job.id).then((j) => fetch(a.webhookUrl!, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(j), signal: AbortSignal.timeout(10_000) }).catch(() => {}));
+  return jobView(c, job);
+}
+
+const jobView = (c: Ctx, j: Job) => ({ id: j.id, status: j.status, progress: j.progress, ...(j.error ? { error: j.error } : {}), ...(j.status === "done" ? { url: `${c.baseUrl ?? ""}/api/jobs/${j.id}/file` } : {}) });
+export function job(c: Ctx, id: string) {
+  const j = renderer(c).job(id);
+  if (!j) throw new ToolError(404, { error: "not_found", message: `Job '${id}' not found.` });
+  return jobView(c, j);
+}
+/** Polls until the job finishes (ponytail: 500 ms poll instead of an event emitter). */
+export async function watch(c: Ctx, id: string, onTick?: (j: ReturnType<typeof job>) => void, signal?: AbortSignal) {
+  while (!signal?.aborted) {
+    const j = job(c, id);
+    onTick?.(j);
+    if (j.status === "done" || j.status === "error") return j;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return job(c, id);
+}
+export async function jobFile(c: Ctx, id: string) {
+  const j = renderer(c).job(id);
+  const bytes = j?.status === "done" && j.key ? await c.store.getBytes(j.key) : null;
+  if (!j || !bytes) throw new ToolError(404, { error: "not_found", message: "No finished output for this job." });
+  return { bytes, ext: j.key!.split(".").pop()! };
 }
