@@ -248,7 +248,7 @@ Status: `[ ]` todo · `[~]` claimed · `[x]` done.
   fail.
   *Commit:* `feat(core): F01 FlowDoc schema and JSON Schema export`
 
-- [ ] **F02 Structural validator**
+- [~] **F02 Structural validator**
   *Depends:* F01 · *PRD:* §3.3, §5.6
   `core/src/validate.ts`: `validate(doc: unknown) → { ok, issues, doc? }`. Converts Zod issues to the
   §1.4 shape (`code:"schema"`, JSON Pointer path, `where`). Then semantic checks that don't need time:
