@@ -1,0 +1,8 @@
+{
+  "name": "@flowmotion/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./runtime": "./src/runtime/index.ts" },
+  "scripts": { "typecheck": "tsc -p .", "gen:schema": "echo 'F01'" }
+}
