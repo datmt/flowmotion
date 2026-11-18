@@ -545,7 +545,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
 
 **Track A — Presentation (three-zone viewer)**
 
-- [ ] **F33 Step change-sets**
+- [~] **F33 Step change-sets**
   *Depends:* F09
   Extend §1.1 `CompiledScenario.steps[]` with `changes: {target, prop, from, to}[]` (state, label, at,
   visible; derived from `tracks` keys falling inside the step) and `stateAt(step)` helpers in
@@ -555,7 +555,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   state at step N equals sampling the tracks at that step's end time.
   *Commit:* `feat(core): F33 per-step change sets`
 
-- [ ] **F34 Three-zone player UI**
+- [~] **F34 Three-zone player UI**
   *Depends:* F33, F14
   Rework `player/src/element.ts` layout. **Left rail:** scenario tabs; main line as a step timeline
   (done / current / upcoming), branches drawn as a fork off the step they leave; clicking jumps.
