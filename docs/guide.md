@@ -85,6 +85,39 @@ Layout tips: keep to ~8 nodes per scenario view and at most one edge between a p
 
 Tips: 3-8 steps per scenario; one idea per step; narration explains *why*, not what moved. Use `with` to run label updates beside the motion. Add a branch (`branchFrom`) for "what if it fails?".
 
+## Tools
+
+Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide is at `GET <base>/llms.txt`). Tool failures return `isError` with every issue in one list.
+
+| Tool | Use |
+|---|---|
+| `flow_guide` | This guide. Call once. |
+| `flow_create` | `dsl` (or `doc`) -> immutable snapshot: `id`, `url`, `outline`, `warnings`. |
+| `flow_edit` | `id` + `ops` (small change) or `id` + `dsl` (rewrite). Publishes a NEW id; the old one stays. Always continue from the newest id. |
+| `flow_get` | `id`, `view` = `outline` (default) / `dsl` / `full`; `ids` = only those entities or steps. Use `dsl` to read a template before copying its style. |
+| `flow_preview` | PNGs: contact sheet per scenario, or `scenario` + `step` (0-based) for one frame. Accepts `id`, or `dsl`/`doc` to snapshot and preview in one call. |
+| `flow_export` / `flow_job` | Video (`mp4`/`webm`/`gif`, `height` 720/1080, `fps` 30/60, `captions`). Poll `flow_job` until `done`, then give the user `url`. Only on request; max 180 s. |
+
+## Editing with `ops`
+
+`ops` is a list (1-100) of ID-addressed edits, applied atomically; any error rejects all of them.
+
+```
+{"op":"upsert","entity":"node","value":{"id":"cache","label":"Cache","kind":"db"}}   // add or replace by id
+{"op":"remove","id":"cache","cascade":true}              // cascade also drops its edges, tokens, actions' refs
+{"op":"upsertStep","scenario":"happy","after":"checkout","value":{"id":"s2","title":"..","narration":"..","actions":[]}}
+{"op":"removeStep","scenario":"happy","step":"s2"}
+{"op":"upsertScenario","value":{"id":"fail","title":"..","branchFrom":{"scenario":"happy","afterStep":"checkout"},"steps":[..]}}
+{"op":"removeScenario","id":"fail"}
+{"op":"setMeta","value":{"title":"..","theme":"dark","layout":{"direction":"LR"}}}
+```
+
+`entity` is one of node, edge, group, array, grid, token, code. For many or structural changes, a whole new `dsl` is simpler.
+
+## Lint warnings (`warnings`, from create/edit/preview)
+
+`edge_label_overlap`, `edge_label_over_node`, `diagram_too_small` must be fixed: fewer nodes per view, shorter or no edge labels, `direction=LR/TB`, `edges=straight`, or split into scenarios. `never_visible`: hidden but never `show`n; add `show` or drop `hidden`. `unreferenced`: declared but unused; connect, use or remove it.
+
 ## Common errors
 
 * `unknown_ref`: id not defined; check spelling and that it's an entity id.
