@@ -3,6 +3,7 @@ import { validate, type Issue } from "./validate.ts";
 import { layout, type Layout } from "./layout.ts";
 import { scheduleScenario } from "./timing.ts";
 import { applySwap, applyValues, createCellSim, resolveCells, type CellSim } from "./cells.ts";
+import { lint } from "./lint.ts";
 import { parseRef } from "./ref.ts";
 import { aspects } from "./runtime/index.ts";
 import type { FlowDoc } from "./schema.ts";
@@ -45,6 +46,7 @@ export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow
     tokens: (doc.tokens ?? []).map((t) => ({ id: t.id, ...(t.label ? { label: t.label } : {}) })),
     scenarios: doc.scenarios.map((s) => compileScenario(doc, lay, s.id)),
   };
+  issues.push(...lint(doc, lay));
   return { compiled, issues };
 }
 

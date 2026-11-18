@@ -36,7 +36,7 @@ test("values + swap produce cell tracks", async () => {
     { do: "values", target: "nums", values: ["5", "2", "8", "NEW"] },
   ];
   const { compiled, issues } = await compile(d);
-  expect(issues).toEqual([]);
+  expect(issues.filter((i) => i.severity === "error")).toEqual([]);
   const s = compiled!.scenarios[0]!;
   expect(s.tracks.find((t) => t.target === "nums@0" && t.prop === "slot")!.keys.length).toBeGreaterThan(0);
   expect(s.cells.some((x) => x.id === "nums@6")).toBe(true); // 6 initial cells → new instance @6
