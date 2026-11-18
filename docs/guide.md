@@ -102,6 +102,7 @@ Tips: 3-8 steps per scenario; one idea per step; narration explains *why*, not w
 * `oauth-pkce`: authorization code + PKCE, and a stolen-code branch.
 * `binary-search`: pointers, a variables panel and code highlight.
 * `backprop`: forward pass, loss, gradients, and a high-learning-rate branch.
+* `raft-consensus`: leader election, quorum log replication, then a leader-crash branch and a network-partition branch (5 servers, role/term panels, per-node logs).
 
 ## Appendix: JSON FlowDoc
 

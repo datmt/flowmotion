@@ -6,7 +6,7 @@ import { Action } from "./schema.ts";
 const root = new URL("../../../", import.meta.url);
 const files = readdirSync(new URL("templates/", root)).filter((f) => f.endsWith(".flow.json"));
 
-test("seven templates", () => expect(files.length).toBe(7));
+test("eight templates", () => expect(files.length).toBe(8));
 
 test.each(files)("%s compiles with 0 errors and <=1 warning", async (f) => {
   const { issues } = await compile(JSON.parse(readFileSync(new URL(`templates/${f}`, root), "utf8")));
