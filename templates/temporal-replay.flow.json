@@ -1,0 +1,54 @@
+{
+  "version": "2.1",
+  "meta": { "title": "Temporal workflow replay", "summary": "A worker crashes mid-workflow and another resumes by replaying event history." },
+  "groups": [{ "id": "temporal", "label": "Temporal cluster" }],
+  "nodes": [
+    { "id": "starter", "label": "Client", "kind": "actor" },
+    { "id": "server", "label": "Temporal Server", "kind": "service", "group": "temporal" },
+    { "id": "history", "label": "Event History", "kind": "db", "group": "temporal" },
+    { "id": "worker-a", "label": "Worker A", "kind": "service" },
+    { "id": "worker-b", "label": "Worker B", "kind": "service", "hidden": true }
+  ],
+  "edges": [
+    { "from": "starter", "to": "server" },
+    { "from": "server", "to": "history" },
+    { "from": "server", "to": "worker-a" },
+    { "from": "server", "to": "worker-b", "hidden": true },
+    { "from": "history", "to": "worker-b", "hidden": true, "dashed": true }
+  ],
+  "arrays": [
+    { "id": "events", "label": "History", "values": ["Started"], "orientation": "column" }
+  ],
+  "scenarios": [
+    { "id": "crash", "title": "Worker crashes, workflow resumes", "steps": [
+      { "id": "start", "title": "Start workflow", "narration": "The client starts a workflow. The server records a `WorkflowStarted` event and hands a task to Worker A.",
+        "actions": [
+          { "do": "send", "from": "starter", "to": "server", "label": "start" },
+          { "do": "send", "from": "server", "to": "history", "label": "Started" },
+          { "do": "send", "from": "server", "to": "worker-a", "label": "task" } ] },
+      { "id": "activity", "title": "Activity completes", "narration": "Worker A runs the workflow code, which schedules an activity. The result is **appended** to history before the workflow moves on.",
+        "actions": [
+          { "do": "state", "targets": ["worker-a"], "state": "active" },
+          { "do": "send", "from": "worker-a", "to": "server", "label": "ChargeCard done" },
+          { "do": "values", "target": "events", "values": ["Started", "ChargeCard done"] } ] },
+      { "id": "crash-a", "title": "Worker A crashes", "narration": "Worker A dies mid-workflow. It held local variables, but they do not matter: history is the source of truth, not worker memory.",
+        "actions": [
+          { "do": "state", "targets": ["worker-a"], "state": "error" },
+          { "do": "callout", "target": "worker-a", "text": "Local state lost" } ] },
+      { "id": "takeover", "title": "Worker B takes over", "narration": "The server times out Worker A's task and schedules it on Worker B, which has never seen this workflow.",
+        "actions": [
+          { "do": "show", "targets": ["worker-b", "server-worker-b"] },
+          { "do": "send", "from": "server", "to": "worker-b", "label": "task" } ] },
+      { "id": "replay", "title": "Replay history", "narration": "Worker B **replays** the workflow code against the recorded events. `ChargeCard` is not run again; its recorded result is returned instead.",
+        "actions": [
+          { "do": "show", "targets": ["history-worker-b"] },
+          { "do": "send", "from": "history", "to": "worker-b", "label": "events" },
+          { "do": "state", "targets": ["events#0..1"], "state": "success" },
+          { "do": "state", "targets": ["worker-b"], "state": "active" } ] },
+      { "id": "resume", "title": "Continue where it stopped", "narration": "Replay catches Worker B up to the crash point, and then it executes new work, appending to the same history.",
+        "actions": [
+          { "do": "values", "target": "events", "values": ["Started", "ChargeCard done", "ShipOrder done"] },
+          { "do": "state", "targets": ["worker-b"], "state": "success" } ] }
+    ]}
+  ]
+}

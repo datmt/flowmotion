@@ -1,0 +1,69 @@
+{
+  "version": "2.1",
+  "meta": { "title": "Backpropagation on a tiny network", "summary": "Forward pass, loss, then gradients flow backward through two layers." },
+  "layout": { "direction": "LR" },
+  "groups": [
+    { "id": "input", "label": "Input" },
+    { "id": "hidden", "label": "Hidden" },
+    { "id": "output", "label": "Output" }
+  ],
+  "nodes": [
+    { "id": "x1", "label": "x1 = 1.0", "kind": "value", "group": "input" },
+    { "id": "x2", "label": "x2 = 0.5", "kind": "value", "group": "input" },
+    { "id": "h1", "label": "h1", "kind": "value", "group": "hidden" },
+    { "id": "h2", "label": "h2", "kind": "value", "group": "hidden" },
+    { "id": "y", "label": "y", "kind": "value", "group": "output" }
+  ],
+  "edges": [
+    { "from": "x1", "to": "h1", "label": "w=0.4" },
+    { "from": "x1", "to": "h2", "label": "w=0.3" },
+    { "from": "x2", "to": "h1", "label": "w=0.2" },
+    { "from": "x2", "to": "h2", "label": "w=0.6" },
+    { "from": "h1", "to": "y", "label": "w=0.7" },
+    { "from": "h2", "to": "y", "label": "w=0.5" }
+  ],
+  "scenarios": [
+    { "id": "train", "title": "One training step", "steps": [
+      { "id": "forward-hidden", "title": "Forward: hidden layer", "narration": "Each hidden neuron sums its weighted inputs: h1 = 1.0*0.4 + 0.5*0.2 = **0.5**, h2 = 1.0*0.3 + 0.5*0.6 = **0.6**.",
+        "actions": [
+          { "do": "send", "from": "x1", "to": "h1" },
+          { "do": "send", "from": "x2", "to": "h2", "start": "with" },
+          { "do": "label", "target": "h1", "text": "h1 = 0.5" },
+          { "do": "label", "target": "h2", "text": "h2 = 0.6", "start": "with" },
+          { "do": "state", "targets": ["h1", "h2"], "state": "active" } ] },
+      { "id": "forward-out", "title": "Forward: output", "narration": "The output combines the hidden values: y = 0.5*0.7 + 0.6*0.5 = **0.65**. The target is 1.0.",
+        "actions": [
+          { "do": "send", "from": "h1", "to": "y" },
+          { "do": "send", "from": "h2", "to": "y", "start": "with" },
+          { "do": "label", "target": "y", "text": "y = 0.65" },
+          { "do": "state", "targets": ["y"], "state": "warning" } ] },
+      { "id": "loss", "title": "Loss", "narration": "Squared error loss L = (1.0 - 0.65)^2 = **0.1225**. The gradient at the output is dL/dy = -0.70, so y should go up.",
+        "actions": [
+          { "do": "state", "targets": ["y"], "state": "error" },
+          { "do": "callout", "target": "y", "text": "L = 0.1225, dL/dy = -0.70" } ] },
+      { "id": "back-out", "title": "Backward: output weights", "narration": "Gradients flow backward. dL/dw(h1->y) = dL/dy * h1 = -0.70 * 0.5 = **-0.35**, and for h2 it is **-0.42**.",
+        "actions": [
+          { "do": "send", "from": "y", "to": "h1", "label": "-0.35" },
+          { "do": "send", "from": "y", "to": "h2", "label": "-0.42", "start": "with" },
+          { "do": "state", "targets": ["h1", "h2"], "state": "warning" } ] },
+      { "id": "back-hidden", "title": "Backward: input weights", "narration": "The chain rule continues: the error reaching h1 is dL/dy * 0.7 = -0.49. Multiply by each input to get the input-weight gradients.",
+        "actions": [
+          { "do": "send", "from": "h1", "to": "x1", "label": "-0.49" },
+          { "do": "send", "from": "h1", "to": "x2", "label": "-0.25", "start": "with" },
+          { "do": "state", "targets": ["x1", "x2"], "state": "warning" } ] },
+      { "id": "update", "title": "Update weights", "narration": "Each weight moves against its gradient: w = w - lr * grad. With lr = 0.1, the weight w(h1->y) goes from 0.7 to **0.735**.",
+        "actions": [
+          { "do": "label", "target": "h1-y", "text": "w=0.735" },
+          { "do": "state", "targets": ["x1", "x2", "h1", "h2", "y"], "state": "success" } ] }
+    ]},
+    { "id": "lr-too-high", "title": "What if the learning rate is too high?",
+      "branchFrom": { "scenario": "train", "afterStep": "back-hidden" },
+      "steps": [
+        { "id": "overshoot", "title": "Overshoot", "narration": "With lr = 5 the update is huge: w(h1->y) jumps from 0.7 to 2.45. The next output overshoots the target and the loss gets worse.",
+          "actions": [
+            { "do": "label", "target": "h1-y", "text": "w=2.45" },
+            { "do": "state", "targets": ["y"], "state": "error" },
+            { "do": "callout", "target": "y", "text": "Loss grows, training diverges" } ] }
+      ]}
+  ]
+}

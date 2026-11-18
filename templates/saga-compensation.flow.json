@@ -1,0 +1,182 @@
+{
+  "version": "2.1",
+  "meta": {
+    "title": "Saga: order checkout",
+    "summary": "How an orchestrated saga commits, and how it compensates when a step fails."
+  },
+  "groups": [
+    {
+      "id": "services",
+      "label": "Services"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "client",
+      "label": "Client",
+      "kind": "actor"
+    },
+    {
+      "id": "orch",
+      "label": "Order Saga",
+      "kind": "service"
+    },
+    {
+      "id": "payment",
+      "label": "Payment",
+      "kind": "service",
+      "group": "services"
+    },
+    {
+      "id": "inventory",
+      "label": "Inventory",
+      "kind": "service",
+      "group": "services"
+    }
+  ],
+  "edges": [
+    {
+      "from": "client",
+      "to": "orch"
+    },
+    {
+      "from": "orch",
+      "to": "payment"
+    },
+    {
+      "from": "orch",
+      "to": "inventory"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "happy",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "checkout",
+          "title": "Checkout",
+          "narration": "The client places an order. The saga orchestrator now owns the transaction.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "client",
+              "to": "orch",
+              "label": "PlaceOrder"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "orch"
+              ],
+              "state": "active"
+            }
+          ]
+        },
+        {
+          "id": "charge",
+          "title": "Charge card",
+          "narration": "Step 1: charge the card. This is a local transaction in Payment.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "orch",
+              "to": "payment",
+              "label": "Charge"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "payment"
+              ],
+              "state": "success"
+            }
+          ]
+        },
+        {
+          "id": "reserve",
+          "title": "Reserve stock",
+          "narration": "Step 2: reserve stock. Both steps committed, so the saga completes.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "orch",
+              "to": "inventory",
+              "label": "Reserve"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "inventory",
+                "orch"
+              ],
+              "state": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventory-fails",
+      "title": "What if inventory fails?",
+      "branchFrom": {
+        "scenario": "happy",
+        "afterStep": "charge"
+      },
+      "steps": [
+        {
+          "id": "reserve-fails",
+          "title": "Reservation fails",
+          "narration": "Inventory is out of stock and rejects the reservation.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "orch",
+              "to": "inventory",
+              "label": "Reserve"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "inventory"
+              ],
+              "state": "error"
+            },
+            {
+              "do": "send",
+              "from": "inventory",
+              "to": "orch",
+              "label": "OutOfStock"
+            }
+          ]
+        },
+        {
+          "id": "refund",
+          "title": "Compensate",
+          "narration": "There is no distributed rollback. The saga runs **compensations** in reverse order: refund the charge.",
+          "actions": [
+            {
+              "do": "send",
+              "from": "orch",
+              "to": "payment",
+              "label": "Refund"
+            },
+            {
+              "do": "state",
+              "targets": [
+                "payment"
+              ],
+              "state": "warning"
+            },
+            {
+              "do": "callout",
+              "target": "payment",
+              "text": "Compensation is a new transaction, not an undo",
+              "start": "with"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

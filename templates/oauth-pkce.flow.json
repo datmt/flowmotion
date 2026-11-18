@@ -1,0 +1,55 @@
+{
+  "version": "2.1",
+  "meta": { "title": "OAuth 2.0 authorization code + PKCE", "summary": "How PKCE protects the authorization code for public clients." },
+  "groups": [{ "id": "idp", "label": "Identity provider" }],
+  "nodes": [
+    { "id": "user", "label": "User", "kind": "actor" },
+    { "id": "app", "label": "Client App", "kind": "service" },
+    { "id": "authz", "label": "Authorization Server", "kind": "service", "group": "idp" },
+    { "id": "api", "label": "Resource API", "kind": "service" },
+    { "id": "attacker", "label": "Attacker", "kind": "external", "hidden": true }
+  ],
+  "edges": [
+    { "from": "user", "to": "app" },
+    { "from": "app", "to": "authz" },
+    { "from": "app", "to": "api" },
+    { "from": "attacker", "to": "authz", "hidden": true, "dashed": true }
+  ],
+  "scenarios": [
+    { "id": "flow", "title": "Happy path", "steps": [
+      { "id": "verifier", "title": "Create verifier + challenge", "narration": "The app generates a random `code_verifier` and sends only its hash, the `code_challenge`, with the authorization request.",
+        "actions": [
+          { "do": "send", "from": "user", "to": "app", "label": "Log in" },
+          { "do": "callout", "target": "app", "text": "challenge = SHA256(verifier)" } ] },
+      { "id": "authorize", "title": "Authorize", "narration": "The user is redirected to the authorization server, signs in and consents. The server stores the challenge.",
+        "actions": [
+          { "do": "send", "from": "app", "to": "authz", "label": "/authorize + challenge" },
+          { "do": "state", "targets": ["authz"], "state": "active" } ] },
+      { "id": "code", "title": "Receive code", "narration": "The server redirects back with a short-lived **authorization code**. On its own the code is not enough to get tokens.",
+        "actions": [
+          { "do": "send", "from": "authz", "to": "app", "label": "code" } ] },
+      { "id": "exchange", "title": "Exchange code + verifier", "narration": "The app proves it started the flow by sending the original `code_verifier`. The server hashes it and compares it to the stored challenge.",
+        "actions": [
+          { "do": "send", "from": "app", "to": "authz", "label": "code + verifier" },
+          { "do": "state", "targets": ["authz"], "state": "success" },
+          { "do": "send", "from": "authz", "to": "app", "label": "access token" } ] },
+      { "id": "call-api", "title": "Call the API", "narration": "With the access token the app calls the resource API on the user's behalf.",
+        "actions": [
+          { "do": "send", "from": "app", "to": "api", "label": "Bearer token" },
+          { "do": "state", "targets": ["api"], "state": "success" } ] }
+    ]},
+    { "id": "stolen-code", "title": "What if the code is stolen?",
+      "branchFrom": { "scenario": "flow", "afterStep": "code" },
+      "steps": [
+        { "id": "attacker-code", "title": "Attacker has the code", "narration": "Suppose a malicious app on the device intercepted the redirect and holds the authorization code.",
+          "actions": [
+            { "do": "show", "targets": ["attacker", "attacker-authz"] },
+            { "do": "callout", "target": "attacker", "text": "Has the code, not the verifier" } ] },
+        { "id": "rejected", "title": "Exchange rejected", "narration": "The attacker cannot produce the `code_verifier`, which never left the real app. The hash check fails and no token is issued.",
+          "actions": [
+            { "do": "send", "from": "attacker", "to": "authz", "label": "code + guess" },
+            { "do": "state", "targets": ["authz"], "state": "error" },
+            { "do": "send", "from": "authz", "to": "attacker", "label": "invalid_grant" } ] }
+      ]}
+  ]
+}
