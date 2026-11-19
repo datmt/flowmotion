@@ -20,3 +20,7 @@ Copy `.env.example` to `.env` for `ANTHROPIC_API_KEY` (AI generation) and option
 ## Deploy
 
 `Dockerfile` runs typecheck and unit tests, builds the web app, and ships a Node image with Chromium and ffmpeg (port 3000). `Jenkinsfile` builds and pushes it, then bumps the image tag in the gitops repo.
+
+## Contributing and license
+
+Add or request flows: see `CONTRIBUTING.md`. Code is MIT (`LICENSE`); the flows in `templates/` are CC BY 4.0 (`templates/LICENSE`).

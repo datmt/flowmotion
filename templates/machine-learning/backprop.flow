@@ -1,5 +1,8 @@
 flow "Backpropagation on a tiny network"
 summary "One full training step on a 2-2-1 network: forward pass, loss, every gradient via the chain rule, the weight update, and a second forward pass that proves the loss dropped."
+tags neural-networks gradients training
+level intermediate
+source "http://neuralnetworksanddeeplearning.com/chap2.html"
 layout direction=LR edges=straight
 
 group input "Input"

@@ -47,7 +47,12 @@ export async function icons({ query, pack, limit, preview }: { query?: string; p
   return { packs: iconPacks, icons: hits.map((h) => ({ ...h, icon: icons[h.ref] })) };
 }
 
-export const guide = () => readFileSync(new URL("docs/guide.md", ROOT), "utf8");
+export const guide = () => {
+  const by = new Map<string, string[]>();
+  for (const t of catalog()) by.set(t.domain, [...(by.get(t.domain) ?? []), t.path.split("/")[1]!]);
+  const list = [...by].map(([d, s]) => `* \`${d}/\`: ${s.join(", ")}`).join("\n");
+  return readFileSync(new URL("docs/guide.md", ROOT), "utf8").replace("<!-- catalog -->", list);
+};
 
 /** A FlowDoc from either an object or DSL text; invalid DSL throws 422 with line-numbered issues. */
 export function docOf({ doc, dsl }: { doc?: unknown; dsl?: string }): unknown {

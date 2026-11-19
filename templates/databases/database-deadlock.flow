@@ -1,5 +1,8 @@
 flow "Database Deadlock"
 summary "How two transactions lock each other out in a circular wait, how the database breaks the cycle, and how consistent lock ordering prevents it."
+tags databases transactions locking
+level intermediate
+source "https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-DEADLOCKS"
 theme dark
 layout algorithm=layered direction=LR edges=straight
 

@@ -1,0 +1,22 @@
+name: Flow request
+description: Ask for a new explainer flow in the catalog
+labels: [flow-request]
+body:
+  - type: input
+    id: topic
+    attributes: { label: Topic, placeholder: "e.g. TLS 1.3 handshake" }
+    validations: { required: true }
+  - type: input
+    id: domain
+    attributes: { label: Domain, description: Existing folder in templates/ or a new one, placeholder: "security" }
+    validations: { required: true }
+  - type: dropdown
+    id: level
+    attributes: { label: Audience level, options: [beginner, intermediate, advanced] }
+    validations: { required: true }
+  - type: textarea
+    id: failure
+    attributes: { label: What should go wrong? , description: The failure or edge case worth showing as a branch }
+  - type: textarea
+    id: sources
+    attributes: { label: Sources, description: Links the facts can be checked against (required for banking, insurance, fintech, law) }

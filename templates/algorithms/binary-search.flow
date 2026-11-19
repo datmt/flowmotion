@@ -1,4 +1,8 @@
 flow "Binary search for 23"
+summary "Binary search halves a sorted array each step until it finds the target."
+tags algorithms search arrays
+level beginner
+source "https://en.wikipedia.org/wiki/Binary_search_algorithm"
 
 array nums = 2 5 8 12 16 23 38 56 72 91
 array vars "Variables" keys=lo,mid,hi = 0 4 9

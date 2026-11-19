@@ -1,5 +1,8 @@
 flow "Raft consensus: election, replication, failure"
 summary "Five servers elect a leader, replicate a log by quorum, then survive a leader crash and a network partition."
+tags consensus replication leader-election
+level advanced
+source "https://raft.github.io/raft.pdf"
 layout algorithm=stress
 
 group cluster "Raft cluster"

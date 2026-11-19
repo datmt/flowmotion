@@ -11,7 +11,7 @@ class DslError extends Error {
 }
 
 const ACTIONS = ["state", "show", "hide", "label", "pulse", "effect", "focus", "callout", "send", "move", "swap", "values", "highlight"];
-const TOP = ["flow", "summary", "theme", "aspect", "layout", "group", "node", "edge", "array", "grid", "token", "code", "scenario"];
+const TOP = ["flow", "summary", "tags", "level", "source", "related", "theme", "aspect", "layout", "group", "node", "edge", "array", "grid", "token", "code", "scenario"];
 const guess = (w: string, all: string[]) => { const b = all.map((x) => [x, lev(w, x)] as const).sort((p, q) => p[1] - q[1])[0]; return b && b[1] <= 2 ? `Did you mean '${b[0]}'?` : `Expected one of: ${all.join(", ")}.`; };
 
 function tokenize(text: string, base: number): Tok[] {
@@ -89,6 +89,10 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
         switch (verb.s) {
           case "flow": doc.meta.title = need(1, "title").s; at.set("/meta", n); break;
           case "summary": doc.meta.summary = need(1, "text").s; break;
+          case "tags": doc.meta.tags = rest.map((t) => t.s); break;
+          case "related": doc.meta.related = rest.map((t) => t.s); break;
+          case "level": doc.meta.level = need(1, "level").s; break;
+          case "source": (doc.meta.sources ??= []).push(need(1, "url").s); break;
           case "theme": doc.meta.theme = need(1, "theme").s; break;
           case "aspect": doc.meta.aspect = need(1, "aspect").s; break;
           case "layout": { const { o } = opts(rest, ["algorithm", "direction", "edges"], []); doc.layout = o; at.set("/layout", n); break; }
@@ -209,6 +213,10 @@ function action(toks: Tok[], eol: number): Record<string, unknown> {
 export function printDsl(doc: FlowDoc): string {
   const L: string[] = [`flow ${q(doc.meta.title)}`];
   if (doc.meta.summary) L.push(`summary ${q(doc.meta.summary)}`);
+  if (doc.meta.tags) L.push(`tags ${doc.meta.tags.join(" ")}`);
+  if (doc.meta.level) L.push(`level ${doc.meta.level}`);
+  for (const u of doc.meta.sources ?? []) L.push(`source ${q(u)}`);
+  if (doc.meta.related) L.push(`related ${doc.meta.related.join(" ")}`);
   if (doc.meta.theme) L.push(`theme ${doc.meta.theme}`);
   if (doc.meta.aspect) L.push(`aspect ${doc.meta.aspect}`);
   if (doc.layout) L.push(`layout${doc.layout.algorithm ? ` algorithm=${doc.layout.algorithm}` : ""}${doc.layout.direction ? ` direction=${doc.layout.direction}` : ""}${doc.layout.edges ? ` edges=${doc.layout.edges}` : ""}`);

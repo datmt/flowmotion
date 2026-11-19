@@ -1,5 +1,8 @@
 flow "OAuth 2.0 authorization code + PKCE"
 summary "How PKCE protects the authorization code for public clients."
+tags oauth authorization web-security
+level intermediate
+source "https://datatracker.ietf.org/doc/html/rfc7636"
 layout algorithm=sequence
 
 group idp "Identity provider"

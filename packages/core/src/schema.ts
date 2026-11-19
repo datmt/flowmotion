@@ -126,6 +126,10 @@ export const FlowDoc = z.strictObject({
   meta: z.strictObject({
     title: z.string().min(1).max(80),
     summary: z.string().max(280).optional(),
+    tags: z.array(z.string().regex(/^[a-z0-9-]+$/)).max(8).optional(),
+    level: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+    sources: z.array(z.string().url()).max(10).optional(), // where the facts come from; reviewers check the flow against these
+    related: z.array(z.string().regex(/^[a-z0-9-]+\/[a-z0-9-]+$/)).max(8).optional(), // catalog paths `<domain>/<slug>`
     theme: z.enum(["light", "dark"]).optional(),
     aspect: z.enum(["16:9", "4:3", "1:1", "9:16"]).optional(),
   }),

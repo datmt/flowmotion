@@ -1,5 +1,9 @@
 flow "Circuit breaker"
 summary "How a circuit breaker stops hammering a failing service, then probes for recovery."
+tags resilience fault-tolerance microservices
+level beginner
+source "https://martinfowler.com/bliki/CircuitBreaker.html"
+related distributed-systems/retry-backoff-dlq
 
 node client "Client" actor
 node breaker "Circuit Breaker: CLOSED" state state=success

@@ -1,5 +1,9 @@
 flow "Saga: order checkout"
 summary "How an orchestrated saga commits, and how it compensates when a step fails."
+tags transactions microservices workflows
+level intermediate
+source "https://microservices.io/patterns/data/saga.html"
+related distributed-systems/temporal-replay
 
 group services "Services"
 node client "Client" actor

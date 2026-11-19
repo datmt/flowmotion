@@ -1,5 +1,9 @@
 flow "Retry with backoff and DLQ"
 summary "A failing message is retried with growing delays, then parked in a dead-letter queue."
+tags messaging resilience queues
+level beginner
+source "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+related distributed-systems/circuit-breaker
 
 node queue "Orders Queue" queue
 node worker "Worker" service

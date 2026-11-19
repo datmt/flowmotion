@@ -131,21 +131,17 @@ Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide i
 
 ## Catalog (`templates/<domain>/<slug>.flow`)
 
-The app's left pane is a tree of this folder: one folder per domain, one DSL file per flow. Read any of them with `flow_get` as `<domain>/<slug>`. Existing:
+The app's left pane is a tree of this folder: one folder per domain, one DSL file per flow. Read any of them with `flow_get` as `<domain>/<slug>`. Existing (generated from the folder; `flow_get` with `view:"outline"` shows each summary):
 
-* `distributed-systems/`: `circuit-breaker` (closed, open, half-open + recovery branch), `saga-compensation` (compensation branch), `temporal-replay` (worker crash, replay), `retry-backoff-dlq` (backoff, dead-letter queue), `raft-consensus` (election, replication, crash and partition branches).
-* `security/`: `oauth-pkce` (auth code + PKCE, stolen-code branch).
-* `algorithms/`: `binary-search` (pointers, variables panel, code highlight).
-* `machine-learning/`: `backprop` (forward, loss, gradients, high-learning-rate branch).
-* `databases/`: `database-deadlock` (circular lock wait, cycle break, lock ordering).
+<!-- catalog -->
 
 ### Adding a flow to the catalog
 
 1. Build and review it with the normal workflow; it must compile with 0 errors and at most 1 warning.
 2. Save the final DSL as `templates/<domain>/<slug>.flow` (`flow_get` with `view:"dsl"` returns it). Reuse an existing domain folder when one fits; a new domain is a new lowercase kebab-case folder. `<slug>` is lowercase kebab-case and unique across the catalog.
-3. `meta.title` is the display name; give it a one-sentence `summary` (the sidebar and retrieval use it). Keep the style of its neighbours (theme, layout, 3-8 steps per scenario).
-4. Run `flowmotion validate templates/<domain>/<slug>.flow`, then `pnpm test`: it compiles every file, round-trips the DSL, and fails if this guide does not name the new flow.
-5. Name it in the list above (one line under its domain), commit, redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
+3. `meta.title` is the display name; give it a one-sentence `summary`, 2-5 `tags` (kebab-case), a `level` (beginner/intermediate/advanced) and `source` URLs (required for regulated domains: banking, insurance, fintech, law). `related <domain>/<slug> ...` links neighbours. Keep the style of its neighbours (theme, layout, 3-8 steps per scenario).
+4. Run `flowmotion validate templates/<domain>/<slug>.flow`, then `pnpm test`: it compiles every file, round-trips the DSL, and checks the metadata.
+5. Commit. The list above is generated from the folder. Redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
 
 ## Appendix: JSON FlowDoc
 

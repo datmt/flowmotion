@@ -18,6 +18,38 @@
           "type": "string",
           "maxLength": 280
         },
+        "tags": {
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          }
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "sources": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "related": {
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+\\/[a-z0-9-]+$"
+          }
+        },
         "theme": {
           "type": "string",
           "enum": [

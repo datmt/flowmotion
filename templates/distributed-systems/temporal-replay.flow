@@ -1,5 +1,9 @@
 flow "Temporal workflow replay"
 summary "A worker crashes mid-workflow and another resumes by replaying event history."
+tags workflows durable-execution fault-tolerance
+level intermediate
+source "https://docs.temporal.io/workflow-execution"
+related distributed-systems/saga-compensation
 
 group temporal "Temporal cluster"
 node starter "Client" actor
