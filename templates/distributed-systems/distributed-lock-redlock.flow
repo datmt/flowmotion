@@ -33,6 +33,7 @@ scenario lock-write "Acquire lock with fencing token and write"
 scenario gc-pause "GC pause breaks TTL lock; fencing token saves storage" from=lock-write/acquire
   step pause "Client 1 hits a 15s GC pause; lease expires"
     "Right after acquiring `tok=33`, Client 1 freezes in a 15s stop-the-world GC pause. Its 10s TTL expires on the lock service without Client 1 knowing."
+    detail "Stop-the-world GC pauses are only one cause of unexpected delays—even non-GC runtimes can pause on disk or EBS page faults, CPU contention, or `SIGSTOP`, and networks can delay packets arbitrarily (for example, a 90-second packet delay in a GitHub incident). Re-checking the lease right before writing does not fix this, because a pause can strike between the check and the write."
     state c1 warning
     label meta#holder "EXPIRED"
     callout c1 "Frozen in 15s GC pause!"
@@ -47,6 +48,7 @@ scenario gc-pause "GC pause breaks TTL lock; fencing token saves storage" from=l
     state c2,store success with
   step zombie-blocked "Client 1 wakes up; storage rejects stale token 33"
     "Client 1 resumes, still believing it holds the lock, and sends `PUT x=A (tok=33)`. Storage checks `33 < max_seen(34)` and **rejects** the zombie write! TTL locks alone are unsafe without fencing."
+    detail "Fencing requires the storage layer to actively track the highest token it has accepted and reject older ones, and the lock service to issue strictly monotonic tokens via consensus (such as ZooKeeper's `zxid` or znode version). Algorithms like Redlock use random values rather than monotonic counters and depend on timing assumptions, so they cannot fence out paused clients."
     send c1 > store "PUT x=A (tok=33)"
     state c1 error
     effect c1 shake
