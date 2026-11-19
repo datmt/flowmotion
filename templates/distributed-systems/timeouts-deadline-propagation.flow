@@ -25,6 +25,7 @@ scenario propagate "Absolute deadline cancels expired work early"
     state orders active
   step deep-hop "Orders forwards shrinking budget to Inventory"
     "Orders takes 350ms on earlier calls, leaving only `100ms` for Inventory. Propagating the remaining budget tells downstream services how much time actually matters."
+    detail "In gRPC, remaining time travels over the wire in the `grpc-timeout` header so machines do not need synchronized clocks. Servers derive downstream contexts from the incoming `ctx` (never `context.Background()`) and check remaining time before each expensive stage."
     send orders > inv "deadline: 100ms"
     send inv > db "query (100ms max)"
     state inv,db pending
@@ -46,6 +47,7 @@ scenario cascading-timeout "Independent timeouts cause zombie work and cascade" 
     state db error
   step client-gives-up "Client times out and retries while zombies run"
     "At 500ms, the client times out and retries — while Inventory and DB keep grinding on the abandoned **zombie request** for 4.5 more seconds."
+    detail "Google's SRE Book notes that RPCs earn no credit for late replies: zombie work plus retries exhausts thread pools. Under **bimodal latency**, a timeout orders of magnitude above normal latency lets just 5% stalled requests consume every worker thread and push overall error rates past 80%."
     send gw > client "504 at 500ms"
     send client > gw "RETRY #2"
     state orders,inv,db error

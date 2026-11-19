@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/timeouts-deadline-propagation
 distributed-systems/two-phase-commit
 distributed-systems/vector-clocks
 distributed-systems/write-through-back
