@@ -24,6 +24,7 @@ scenario hedge "Hedged backup cuts p99 tail latency"
     callout r1 "Slow: GC pause (120ms)"
   step send-hedge "Timer fires at 10ms: hedge to Replica 2"
     "Replica 1 has not answered after 10ms. Instead of waiting 120ms for the slow tail, Frontend sends a duplicate **hedged** request to Replica 2."
+    detail "Deferring the backup request until the expected 95th-percentile latency keeps extra load tiny. In Google's Bigtable benchmark (reading 1,000 keys across 100 servers), waiting 10ms before hedging cut 99.9th-percentile latency from 1,800ms down to 74ms for only 2% more total requests."
     send caller > r2 "hedge #1"
     state r2 active
   step winner "Replica 2 responds fast; cancel Replica 1"
@@ -44,5 +45,6 @@ scenario duplicate-load "Global overload turns hedging into 2x load" from=hedge/
     callout r2 "Cluster load doubles (2x)!"
   step budget "Cap hedging with a token budget"
     "Unbounded hedging accelerates collapse when the whole fleet is busy. Production systems cap hedges at **~5-10%** of traffic via a token bucket so hedging shuts off during overload."
+    detail "For example, gRPC's per-server `retryThrottling` bucket starts at `maxTokens`, subtracts `1` on failures/hedges, adds `tokenRatio` on successes, and pauses hedging and retries whenever `token_count` drops below `maxTokens / 2`."
     state caller warning
     callout caller "Hedging budget: max 10% extra QPS"
