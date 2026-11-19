@@ -37,12 +37,14 @@ scenario hot-shard "Hot shard split online into two ranges" from=route/shard-rw
     callout s1 "Hot shard: CPU 98%"
   step copy "Provision Shard 3 and backfill [G-M]"
     "To split Shard 1 without downtime, the cluster brings up Shard 3, copies existing `[G-M]` rows in the background, and streams ongoing writes to keep S3 caught up."
+    detail "Systems like Vitess (via **VReplication**) and MongoDB (via `moveChunk`) avoid long write locks by combining two phases: an initial consistent snapshot copy of `[G-M]`, followed by streaming live mutations from the source's binlog or oplog until replication lag nears zero."
     show s3,router-s3,s1-s3
     state s3 active
     send s1 > s3 "copy + tail [G-M]"
     callout s3 "Catching up without locking writes"
   step cutover "Atomically flip router map: S1=[A-F], S3=[G-M]"
     "Once Shard 3 is caught up, the router updates metadata atomically: S1 now owns `[A-F]` and S3 owns `[G-M]`. Hot writes spread evenly and S1 recovers."
+    detail "During cutover, the coordinator briefly drains final in-flight mutations on `[G-M]` so Shard 3 is exact, then commits the new range ownership atomically in its metadata store (such as MongoDB Config Servers or Vitess Topology Server) before directing new writes to Shard 3."
     label s1 "Shard 1 [A-F]"
     label map#s1 "A-F" with
     label map#s3 "G-M" with
