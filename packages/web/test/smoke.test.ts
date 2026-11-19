@@ -287,6 +287,14 @@ test("F44 icon picker: search packs, preview, pick sets the node icon", async ()
   expect(await hit.locator("svg path").count()).toBeGreaterThan(0); // preview drawn
   await hit.click();
   expect(await page.evaluate(() => (window as any).__EDITOR__.store.get().doc.nodes[0].icon)).toBe("si:postgresql");
+  await page.getByLabel("Or type pack:name").fill("SI:Redis ");
+  await page.getByLabel("Or type pack:name").press("Enter"); // typed refs are trimmed and lowercased
+  await page.waitForFunction(() => (window as any).__EDITOR__.store.get().doc.nodes[0].icon === "si:redis");
+  await page.getByLabel("Or type pack:name").fill("not a ref");
+  await page.getByLabel("Or type pack:name").press("Enter");
+  await page.getByRole("alert").filter({ hasText: "is not pack:name" }).waitFor();
+  await page.getByRole("button", { name: "Clear icon" }).click();
+  await page.waitForFunction(() => (window as any).__EDITOR__.store.get().doc.nodes[0].icon === undefined);
   await page.getByLabel("Search icons").fill("zzzqqq");
   await page.getByText("No icons match").waitFor({ timeout: 30_000 });
   await page.close();

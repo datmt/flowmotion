@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { CompiledIcon } from "@flowmotion/core/runtime";
-import { getLocalIcons } from "./localIcons.ts";
+import { getLocalIcons, useLocalIcons } from "./localIcons.ts";
+import { Text } from "./fields.tsx";
+
+const REF_RE = /^[a-z][a-z0-9]{0,15}:[a-z0-9]+(-[a-z0-9]+)*$/; // = core ICON_RE (kept here so core stays a lazy import)
 
 const PACKS = ["", "lucide", "si", "carbon", "devicon"]; // ponytail: mirrors core iconPacks; read them from core if packs change often
 
@@ -35,8 +38,25 @@ export function IconPicker({ current, onPick }: { current?: string; onPick: (ref
     }, 200);
     return () => { dead = true; ctl.abort(); clearTimeout(t); };
   }, [q, pack]);
+  const local = useLocalIcons(), [cur, setCur] = useState<CompiledIcon>(), [bad, setBad] = useState("");
+  useEffect(() => { // preview of the icon the node uses now
+    setCur(undefined);
+    if (current) void import("@flowmotion/core").then((c) => c.resolveIcons([current], local)).then((r) => setCur(r.icons[current]));
+  }, [current, local]);
+  const typed = (t: string) => {
+    const ref = t.trim().toLowerCase();
+    if (!ref || REF_RE.test(ref)) { setBad(""); onPick(ref); } else setBad(`“${t}” is not pack:name (lowercase letters, digits, dashes), e.g. si:postgresql.`);
+  };
   return (
     <div className="mb-2">
+      <div className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-stone-500">Icon</div>
+      <div className="mb-1 flex items-center gap-2 rounded border border-stone-300 bg-white p-1 text-stone-800">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-stone-100">{cur ? <IconSvg icon={cur} size={28} /> : <span className="text-xs text-stone-400">{current ? "…" : "none"}</span>}</span>
+        <span className="min-w-0 flex-1 truncate text-xs" title={current}>{current ?? "No icon (shows the kind glyph)"}</span>
+        {current && <button className="px-1 text-xs text-stone-500 hover:text-red-600" aria-label="Clear icon" onClick={() => onPick("")}>Clear</button>}
+      </div>
+      <Text label="Or type pack:name" max={40} value={current ?? ""} onCommit={typed} />
+      {bad && <p role="alert" className="-mt-1 mb-1 text-xs text-red-600">{bad}</p>}
       <div className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-stone-500">Find icon</div>
       <div className="flex gap-1">
         <input className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm" placeholder="search, e.g. postgres" aria-label="Search icons" value={q} onChange={(e) => setQ(e.target.value)} />
