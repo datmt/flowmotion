@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
+import { template } from "./catalog.ts";
 import { expect, test } from "vitest";
 import { createApp } from "./app.ts";
 import { memoryStore } from "./store.ts";
 
-const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+const tpl = template("algorithms/binary-search");
 
 async function serve(env = {}) {
   const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x", ...env } }).listen(0);

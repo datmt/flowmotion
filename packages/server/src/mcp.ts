@@ -38,7 +38,7 @@ function buildServer(c: tools.Ctx) {
     (a) => run(() => tools.publish(c, tools.docOf(a)), true)());
   s.registerTool("flow_edit", { description: "Edit flow `id` with ID-addressed `ops`, or replace it wholesale with `dsl`; publishes a NEW id (old one stays intact).", inputSchema: { id: z.string(), ops: ops.optional(), dsl: dsl.optional() }, outputSchema: out, annotations: hint(false), _meta: ui },
     (a) => run(() => tools.edit(c, a), true)());
-  s.registerTool("flow_get", { description: "Read a flow: outline (compact), full doc, `dsl` text, or only the entities/steps in `ids`.", inputSchema: { id: z.string(), view: z.enum(["outline", "full", "dsl"]).optional(), ids: z.array(z.string()).optional() }, outputSchema: out, annotations: hint(true) },
+  s.registerTool("flow_get", { description: "Read a flow by `id` (or a catalog template as `<domain>/<slug>`, e.g. `security/oauth-pkce`): outline (compact), full doc, `dsl` text, or only the entities/steps in `ids`.", inputSchema: { id: z.string(), view: z.enum(["outline", "full", "dsl"]).optional(), ids: z.array(z.string()).optional() }, outputSchema: out, annotations: hint(true) },
     (a) => run(() => tools.get(c, a))());
 
   const target = { id: z.string().optional(), doc: doc.optional(), dsl: dsl.optional() }; // an existing id, or a new flow to snapshot first

@@ -1,0 +1,43 @@
+flow "Circuit breaker"
+summary "How a circuit breaker stops hammering a failing service, then probes for recovery."
+
+node client "Client" actor
+node breaker "Circuit Breaker: CLOSED" state state=success
+node payments "Payments API" service
+edge client > breaker
+edge breaker > payments
+
+scenario trip "Failures trip the breaker"
+  step healthy "Closed: calls flow"
+    "While **closed**, every call passes straight through to Payments and the breaker just counts failures."
+    send client > breaker "charge"
+    send breaker > payments "charge"
+    state payments success
+  step failing "Payments starts failing"
+    "Payments begins timing out. The breaker records each failure; the threshold is 3 in a row."
+    state payments error
+    send client > breaker "charge"
+    send breaker > payments "charge"
+    label breaker "Breaker: CLOSED (3 fails)" with
+    state breaker warning
+  step open "Open: fail fast"
+    "Threshold reached, so the breaker **opens**. New calls are rejected instantly and Payments gets room to recover."
+    label breaker "Breaker: OPEN"
+    state breaker error
+    send client > breaker "charge"
+    send breaker > client "503 fast-fail"
+    callout breaker "No call reaches Payments" with
+
+scenario recover "Half-open probe succeeds" from=trip/open
+  step half-open "Half-open: one probe"
+    "After the cool-down the breaker goes **half-open** and lets a single probe call through."
+    label breaker "Breaker: HALF-OPEN"
+    state breaker pending
+    state payments success
+    send breaker > payments "probe"
+  step closed-again "Closed again"
+    "The probe succeeded, so the breaker **closes** and normal traffic resumes. A failed probe would have re-opened it."
+    label breaker "Breaker: CLOSED"
+    state breaker success
+    send client > breaker "charge"
+    send breaker > payments "charge"

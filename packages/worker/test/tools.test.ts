@@ -1,3 +1,4 @@
+import { parseDsl } from "../../core/src/index.ts";
 import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -8,7 +9,7 @@ import { memoryStore } from "../../server/src/store.ts";
 import { createWorker } from "../src/worker.ts";
 
 const web = new URL("../../web/", import.meta.url).pathname;
-const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+const tpl = parseDsl(readFileSync(new URL("../../../templates/algorithms/binary-search.flow", import.meta.url), "utf8")).doc!;
 let server: ReturnType<ReturnType<typeof createApp>["listen"]>, worker: ReturnType<typeof createWorker>, base: string;
 
 beforeAll(async () => {

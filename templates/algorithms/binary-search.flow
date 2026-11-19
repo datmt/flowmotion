@@ -1,0 +1,27 @@
+flow "Binary search for 23"
+
+array nums = 2 5 8 12 16 23 38 56 72 91
+array vars "Variables" keys=lo,mid,hi = 0 4 9
+token lo "lo" at=nums#0
+token mid "mid" at=nums#4
+token hi "hi" at=nums#9
+
+scenario main "Find 23"
+  step probe-1 "Probe index 4"
+    "mid = (0 + 9) / 2 = 4. nums[4] = 16 < 23, so discard the left half."
+    pulse nums#4
+    state nums#0..4 disabled
+    move lo to nums#5
+    label vars#lo "5" with
+  step probe-2 "Probe index 7"
+    "mid = (5 + 9) / 2 = 7. nums[7] = 56 > 23, so discard the right half."
+    move mid to nums#7
+    label vars#mid "7" with
+    state nums#7..9 disabled
+    move hi to nums#6
+    label vars#hi "6" with
+  step found "Found"
+    "mid = (5 + 6) / 2 = 5. nums[5] = 23. Found in 3 probes instead of up to 10."
+    move mid to nums#5
+    label vars#mid "5" with
+    state nums#5 success

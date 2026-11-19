@@ -3,9 +3,9 @@ import { expect, test } from "vitest";
 import { parseDsl, printDsl } from "./index.ts";
 
 const dir = new URL("../../../templates/", import.meta.url);
-for (const f of readdirSync(dir).filter((x) => x.endsWith(".flow.json")))
+for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((x) => x.endsWith(".flow")))
   test(`round-trip ${f}`, () => {
-    const doc = JSON.parse(readFileSync(new URL(f, dir), "utf8"));
+    const doc = parseDsl(readFileSync(new URL(f, dir), "utf8")).doc!;
     const r = parseDsl(printDsl(doc));
     expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
     expect(r.doc).toEqual(doc);

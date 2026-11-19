@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
+import { template } from "./catalog.ts";
 import { expect, test } from "vitest";
 import { printDsl } from "@flowmotion/core";
 import { editWithAI, generate, MAX_REPAIRS, type GenEvent, type Model } from "./generate.ts";
 import { memoryStore } from "./store.ts";
 
-const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+const tpl = template("algorithms/binary-search");
 const good = printDsl(tpl);
 const c = { store: memoryStore() };
 const run = async (m: Model) => { const ev: GenEvent[] = []; for await (const e of generate(c, m, { prompt: "binary search" })) ev.push(e); return ev; };

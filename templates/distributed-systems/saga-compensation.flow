@@ -1,0 +1,37 @@
+flow "Saga: order checkout"
+summary "How an orchestrated saga commits, and how it compensates when a step fails."
+
+group services "Services"
+node client "Client" actor
+node orch "Order Saga" service
+node payment "Payment" service in=services
+node inventory "Inventory" service in=services
+edge client > orch
+edge orch > payment
+edge orch > inventory
+
+scenario happy "Happy path"
+  step checkout "Checkout"
+    "The client places an order. The saga orchestrator now owns the transaction."
+    send client > orch "PlaceOrder"
+    state orch active
+  step charge "Charge card"
+    "Step 1: charge the card. This is a local transaction in Payment."
+    send orch > payment "Charge"
+    state payment success
+  step reserve "Reserve stock"
+    "Step 2: reserve stock. Both steps committed, so the saga completes."
+    send orch > inventory "Reserve"
+    state inventory,orch success
+
+scenario inventory-fails "What if inventory fails?" from=happy/charge
+  step reserve-fails "Reservation fails"
+    "Inventory is out of stock and rejects the reservation."
+    send orch > inventory "Reserve"
+    state inventory error
+    send inventory > orch "OutOfStock"
+  step refund "Compensate"
+    "There is no distributed rollback. The saga runs **compensations** in reverse order: refund the charge."
+    send orch > payment "Refund"
+    state payment warning
+    callout payment "Compensation is a new transaction, not an undo" with

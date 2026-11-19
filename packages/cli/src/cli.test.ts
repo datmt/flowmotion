@@ -3,20 +3,20 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseDsl } from "@flowmotion/core";
 
 const run = (...a: string[]) => spawnSync("node", ["--experimental-strip-types", join(import.meta.dirname, "main.ts"), ...a], { encoding: "utf8" });
 const dir = mkdtempSync(join(tmpdir(), "fm-"));
-const good = join(import.meta.dirname, "../../../templates/oauth-pkce.flow.json");
+const good = join(import.meta.dirname, "../../../templates/security/oauth-pkce.flow");
 const bad = join(dir, "bad.flow.json");
-const doc = JSON.parse(readFileSync(good, "utf8"));
+const doc = parseDsl(readFileSync(good, "utf8")).doc as any;
 const first = doc.scenarios[0].steps[0];
 (first.actions ??= []).push({ type: "highlight", targets: ["nope"] });
 writeFileSync(bad, JSON.stringify(doc));
 
 describe("flowmotion validate (.flow text)", () => {
   it("valid → 0; typo → exit 1 with line number", async () => {
-    const { printDsl } = await import("@flowmotion/core");
-    const text = printDsl(JSON.parse(readFileSync(good, "utf8")));
+    const text = readFileSync(good, "utf8");
     const ok = join(dir, "ok.flow"), ko = join(dir, "ko.flow");
     writeFileSync(ok, text);
     writeFileSync(ko, text.replace("\nnode ", "\nnod "));

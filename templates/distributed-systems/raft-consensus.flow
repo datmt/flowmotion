@@ -1,0 +1,238 @@
+flow "Raft consensus: election, replication, failure"
+summary "Five servers elect a leader, replicate a log by quorum, then survive a leader crash and a network partition."
+layout algorithm=stress
+
+group cluster "Raft cluster"
+node client "Client" actor pos=80,490 hidden
+node s1 "S1" service in=cluster pos=80,400
+node s2 "S2" service in=cluster pos=410,30
+node s3 "S3" service in=cluster pos=740,400
+node s4 "S4" service in=cluster pos=580,150
+node s5 "S5" service in=cluster pos=240,150
+edge s1 > s2 noarrow
+edge s1 > s3 noarrow
+edge s1 > s4 noarrow
+edge s1 > s5 noarrow
+edge s2 > s3 noarrow
+edge s3 > s4 noarrow
+edge s3 > s5 noarrow
+edge client > s1 hidden
+edge client > s3 hidden
+array roles "Role (Foll / Cand / Lead)" keys=s1,s2,s3,s4,s5 pos=460,560 = Foll Foll Foll Foll Foll
+array terms "Term" keys=s1,s2,s3,s4,s5 pos=460,670 = 0 0 0 0 0
+array log-s1 "S1 log" pos=900,60 =
+array log-s2 "S2 log" pos=900,160 =
+array log-s3 "S3 log" pos=900,260 =
+array log-s4 "S4 log" pos=900,360 =
+array log-s5 "S5 log" pos=900,460 =
+code rpc go "AppendEntries (receiver)"
+  | func (n *Node) AppendEntries(r Req) bool {
+  |   if r.Term < n.term { return false }
+  |   n.term, n.role = r.Term, Follower
+  |   if !n.log.Matches(r.PrevIdx, r.PrevTerm) {
+  |     return false
+  |   }
+  |   n.log.TruncateConflicts(r.Entries)
+  |   n.log.Append(r.Entries)
+  |   n.commit = min(r.Commit, n.log.Last())
+  |   return true
+  | }
+
+scenario main "Election, then replication"
+  step boot "Everyone starts as a follower"
+    "All five servers are followers in term 0. Each waits a random election timeout. If no leader's heartbeat arrives before it fires, that server will start an election."
+    callout s1 "Randomized timeouts avoid split votes"
+  step timeout "S1's timer fires first" hold=1
+    "S1 hears nothing, so it becomes a candidate: it increments its term to 1 and votes for itself."
+    state s1 warning
+    label roles#s1 "Cand" with
+    label terms#s1 "1" with
+    pulse s1
+  step ask "S1 asks for votes"
+    "S1 sends RequestVote for term 1 to every peer it can reach. Each server grants at most one vote per term."
+    send s1 > s2 "RequestVote t1"
+    send s1 > s3 "RequestVote t1" with
+    send s1 > s4 "RequestVote t1" with
+    send s1 > s5 "RequestVote t1" with
+  step vote "Followers grant their votes"
+    "Each follower sees a higher term, adopts it and grants its vote. Updating the term is the first thing every RPC handler does."
+    send s2 > s1 "granted"
+    send s3 > s1 "granted" with
+    send s4 > s1 "granted" with
+    send s5 > s1 "granted" with
+    label terms#s2 "1" with
+    label terms#s3 "1" with
+    label terms#s4 "1" with
+    label terms#s5 "1" with
+  step win "A majority makes S1 leader" hold=1
+    "Votes from itself plus two peers is 3 of 5, a majority; no two candidates can both reach it in the same term. S1 becomes leader."
+    state s1 success
+    label roles#s1 "Lead" with
+    focus s1,s2,s3 dim
+    callout s1 "3 of 5 votes = majority"
+  step heartbeat "Heartbeats suppress new elections"
+    "The leader sends empty AppendEntries at a fixed interval. Followers reset their timers, so nobody else starts an election while S1 is healthy."
+    focus
+    send s1 > s2 "heartbeat"
+    send s1 > s3 "heartbeat" with
+    send s1 > s4 "heartbeat" with
+    send s1 > s5 "heartbeat" with
+  step write "A client writes x=5"
+    "Clients talk only to the leader. S1 appends the command to its own log as an uncommitted entry tagged with the current term."
+    show client,client-s1
+    send client > s1 "SET x=5"
+    values log-s1 = 1:x=5
+    state log-s1#0 pending with
+  step explain "What a follower checks"
+    "Before accepting entries a follower runs the consistency check: reject stale terms, then verify its log matches the leader's at the previous index. That check is what keeps all logs identical."
+    highlight rpc "2-5"
+    pulse rpc
+  step partial "Replication reaches S2 first" hold=1
+    "S1 sends AppendEntries. Only S2 has it so far; the messages to S3-S5 are still in flight. The entry is on 2 of 5 servers, not yet safe."
+    highlight rpc "7-8"
+    send s1 > s2 "Append 1:x=5"
+    values log-s2 = 1:x=5
+    state log-s2#0 pending with
+    callout log-s1 "Not committed: 2 of 5"
+  step fanout "The rest catch up"
+    "The remaining followers receive the entry and append it. Every server now holds x=5, but the leader still cannot call it durable until it counts the acknowledgements."
+    send s1 > s3 "Append 1:x=5"
+    send s1 > s4 "Append 1:x=5" with
+    send s1 > s5 "Append 1:x=5" with
+    values log-s3 with = 1:x=5
+    values log-s4 with = 1:x=5
+    values log-s5 with = 1:x=5
+    state log-s3#0,log-s4#0,log-s5#0 pending with
+  step quorum "Quorum acknowledges" hold=1
+    "S2, S3 and S4 acknowledge. With the leader that is a majority, so the entry is committed. Any future leader's election quorum must overlap this one, so it will see the entry."
+    send s2 > s1 "ack"
+    send s3 > s1 "ack" with
+    send s4 > s1 "ack" with
+    focus s1,s2,s3,s4 dim
+    callout s1 "4 of 5 stored it: committed"
+  step commit "Commit and reply"
+    "The leader marks the entry committed, applies it to its state machine and answers the client. Followers learn the new commit index from the next heartbeat."
+    focus
+    state log-s1#0 success
+    send s1 > client "OK" with
+    send s1 > s2 "commit=1"
+    send s1 > s3 "commit=1" with
+    send s1 > s4 "commit=1" with
+    send s1 > s5 "commit=1" with
+    state log-s2#0,log-s3#0,log-s4#0,log-s5#0 success with
+
+scenario crash "What if the leader crashes mid-replication?" from=main/partial
+  step crash "S1 crashes" hold=1
+    "The leader dies after the entry reached only S2. The client never got an OK, so it does not know whether x=5 was applied."
+    state s1 error
+    state log-s1#0 disabled with
+    label roles#s1 "Down" with
+    callout log-s2 "Only copy besides S1"
+  step s3-timeout "S3 times out"
+    "Heartbeats stop, S3's timer fires first and it starts term 2. Note S3's log is empty while S2's has the entry."
+    state s3 warning
+    label roles#s3 "Cand" with
+    label terms#s3 "2" with
+    send s3 > s2 "RequestVote t2"
+    send s3 > s4 "RequestVote t2" with
+    send s3 > s5 "RequestVote t2" with
+  step deny "S2 denies the vote" hold=1
+    "S2's log is more up to date than S3's (it holds an entry S3 lacks), so it refuses. Voters never help a candidate whose log is behind theirs. S4 and S5 have equal logs and grant."
+    state s2 error
+    send s2 > s3 "denied"
+    send s4 > s3 "granted" with
+    send s5 > s3 "granted" with
+    label terms#s2 "2" with
+    label terms#s4 "2" with
+    label terms#s5 "2" with
+    callout s2 "My log is newer: no vote"
+  step elected "S3 still wins with 3 of 5"
+    "Votes from S3, S4 and S5 are a majority, so S3 is leader for term 2. S2's denial only mattered for safety; it can no longer stop a quorum. The uncommitted x=5 entry is in danger."
+    state s2 idle
+    state s3 success
+    label roles#s3 "Lead" with
+    focus s3,s4,s5 dim
+  step retry "Client retries on the new leader"
+    "The client timed out, so it retries the write against S3. Commands must be idempotent or de-duplicated by request id, because x=5 might get applied twice."
+    focus
+    show client-s3
+    send client > s3 "SET x=5"
+    values log-s3 = 2:x=5
+    state log-s3#0 pending with
+  step overwrite "S2's stale entry is overwritten"
+    "S3 replicates its entry. S2's log conflicts at index 0 (term 1 vs term 2), so the follower deletes its entry and every entry after it, then appends the leader's. Uncommitted entries from a dead term are safe to discard."
+    highlight rpc "7-8"
+    send s3 > s2 "Append 2:x=5"
+    send s3 > s4 "Append 2:x=5" with
+    send s3 > s5 "Append 2:x=5" with
+    values log-s2 with = 2:x=5
+    values log-s4 with = 2:x=5
+    values log-s5 with = 2:x=5
+    state log-s2#0,log-s4#0,log-s5#0 pending with
+  step committed "Committed under the new leader"
+    "A majority stores the entry, so S3 commits it and answers the client."
+    highlight rpc ""
+    state log-s3#0,log-s2#0,log-s4#0,log-s5#0 success
+    send s3 > client "OK" with
+  step rejoin "S1 rejoins as a follower"
+    "S1 restarts, sees term 2 in the first heartbeat, steps down and copies S3's log. Its old uncommitted entry is replaced. All five logs agree again."
+    state s1 idle
+    state log-s1#0 success with
+    label roles#s1 "Foll" with
+    label terms#s1 "2" with
+    send s3 > s1 "heartbeat"
+    values log-s1 with = 2:x=5
+
+scenario partition "What if the network partitions?" from=main/commit
+  step cut "The cluster splits 2 / 3" hold=1
+    "A partition separates {S1, S2} from {S3, S4, S5}. Nobody crashed; each side just cannot hear the other. S1 still believes it is leader."
+    hide s1-s3,s1-s4,s1-s5,s2-s3
+    focus s1,s2 dim
+    callout s1 "Still thinks it leads term 1"
+  step minority "The minority accepts a write it cannot commit"
+    "A client still reaches S1 and writes y=9. S1 and S2 store it, but 2 of 5 is not a majority. The entry stays uncommitted and the client gets no reply."
+    focus
+    send client > s1 "SET y=9"
+    values log-s1 = 1:x=5 1:y=9
+    state log-s1#1 pending
+    send s1 > s2 "Append 1:y=9"
+    values log-s2 with = 1:x=5 1:y=9
+    state log-s2#1 pending with
+    callout log-s1 "2 of 5: can never commit"
+  step s3-vote "The majority elects its own leader" hold=1
+    "S3, S4 and S5 stop hearing heartbeats. S3 times out, asks for votes in term 2 and wins 3 of 5. The cluster now has two leaders, but in different terms."
+    state s3 success
+    label roles#s3 "Lead" with
+    label terms#s3 "2" with
+    label terms#s4 "2" with
+    label terms#s5 "2" with
+    send s3 > s4 "RequestVote t2"
+    send s3 > s5 "RequestVote t2" with
+    focus s3,s4,s5 dim
+    callout s3 "Quorum: can commit"
+  step majority "The majority keeps making progress"
+    "A client writes z=1 to S3. S3, S4 and S5 store it, which is a majority, so it commits. Safety holds because only the side with a quorum can commit."
+    focus
+    show client-s3
+    send client > s3 "SET z=1"
+    values log-s3 = 1:x=5 2:z=1
+    send s3 > s4 "Append 2:z=1"
+    send s3 > s5 "Append 2:z=1" with
+    values log-s4 with = 1:x=5 2:z=1
+    values log-s5 with = 1:x=5 2:z=1
+    state log-s3#1,log-s4#1,log-s5#1 success
+  step heal "The partition heals"
+    "Connectivity returns and S3's heartbeat reaches S1 carrying term 2."
+    show s1-s3,s1-s4,s1-s5,s2-s3
+    send s3 > s1 "heartbeat t2"
+    send s3 > s2 "heartbeat t2" with
+  step stepdown "The old leader steps down"
+    "S1 sees a higher term, so it drops to follower (line 3 of the handler). Its entry y=9 does not match S3's log, so the conflict check removes it and S1 and S2 copy the committed log. Nothing the client was told is lost, because y=9 was never acknowledged."
+    highlight rpc "3,7-8"
+    state s1 idle
+    label roles#s1 "Foll" with
+    label terms#s1 "2" with
+    label terms#s2 "2" with
+    values log-s1 with = 1:x=5 2:z=1
+    values log-s2 with = 1:x=5 2:z=1
+    state log-s1#1,log-s2#1 success with

@@ -1,3 +1,4 @@
+import { parseDsl } from "@flowmotion/core";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { build } from "vite";
@@ -24,7 +25,7 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close(); server?.close(); });
 
 test("template published via API opens at /v/:id; → shows step 2 narration; library lists templates", async () => {
-  const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+  const tpl = parseDsl(readFileSync(new URL("../../../templates/algorithms/binary-search.flow", import.meta.url), "utf8")).doc!;
   const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
   const page = await browser.newPage({ viewport: { width: 1000, height: 900 } });
   const errors: string[] = [];
@@ -50,7 +51,7 @@ test("template published via API opens at /v/:id; → shows step 2 narration; li
 }, 90_000);
 
 test("F20 render page: identical pixels across loads; sheet mode within 1600px", async () => {
-  const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+  const tpl = parseDsl(readFileSync(new URL("../../../templates/algorithms/binary-search.flow", import.meta.url), "utf8")).doc!;
   const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
   const hashAt = async (qs: string, t: number) => {
     const page = await browser.newPage();
@@ -75,6 +76,16 @@ test("F20 render page: identical pixels across loads; sheet mode within 1600px",
   expect(Math.max(s.size.w, s.size.h)).toBeLessThanOrEqual(1600);
   expect(s.nonBlank).toBe(true);
 }, 120_000);
+
+test("catalog tree: domain folders in the sidebar, a template plays in place", async () => {
+  const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
+  await page.goto(`${base}/`);
+  await page.locator("summary", { hasText: "Distributed systems" }).click();
+  await page.locator("nav a", { hasText: "Circuit Breaker" }).click();
+  await page.waitForURL(/\/t\/distributed-systems\/circuit-breaker$/);
+  await page.getByRole("button", { name: "Make a copy" }).waitFor();
+  await page.close();
+}, 60_000);
 
 test("F27/F28 editor: drag pins, label + connect + delete are undoable and survive reload", async () => {
   const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
@@ -182,9 +193,9 @@ test("F29/F30 inspector + step editor: edit text, cells, narration, add/move/rem
 }, 120_000);
 
 test("F24 deep link, embed, standalone script, share card, remix", async () => {
-  const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+  const tpl = parseDsl(readFileSync(new URL("../../../templates/algorithms/binary-search.flow", import.meta.url), "utf8")).doc!;
   const { id } = await (await fetch(`${base}/api/share`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc: tpl }) })).json();
-  const sc = tpl.scenarios[0].id;
+  const sc = tpl.scenarios[0]!.id;
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));

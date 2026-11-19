@@ -1,0 +1,39 @@
+flow "Retry with backoff and DLQ"
+summary "A failing message is retried with growing delays, then parked in a dead-letter queue."
+
+node queue "Orders Queue" queue
+node worker "Worker" service
+node api "Flaky Partner API" external
+node dlq "Dead-letter Queue" queue
+edge queue > worker
+edge worker > api
+edge worker > dlq "after 3 fails" dashed
+
+scenario dlq-path "Retries exhausted"
+  step attempt-1 "Attempt 1 fails"
+    "The worker pulls a message and calls the partner API. It fails, so the worker waits **1s** before retrying."
+    send queue > worker "msg-42"
+    send worker > api "call"
+    state api error
+    callout worker "retry in 1s" with
+  step attempt-2 "Attempt 2 fails"
+    "Same failure. The delay doubles to **2s**. Exponential backoff gives the partner time to recover."
+    send worker > api "retry 1"
+    pulse api
+    callout worker "retry in 2s"
+  step attempt-3 "Attempt 3 fails"
+    "Third failure with a **4s** delay. Adding random jitter in real systems stops all workers retrying in lockstep."
+    send worker > api "retry 2"
+    pulse api
+    callout worker "retry in 4s"
+  step park "Park in the DLQ"
+    "Retries are exhausted. Rather than loop forever, the worker moves the message to the **dead-letter queue** for a human to inspect."
+    send worker > dlq "msg-42"
+    state dlq warning
+
+scenario recovers "Partner recovers on retry 2" from=dlq-path/attempt-2
+  step success "Retry succeeds"
+    "This time the partner answers. The message is acknowledged and never reaches the DLQ."
+    state api success
+    send worker > api "retry 2"
+    state worker success

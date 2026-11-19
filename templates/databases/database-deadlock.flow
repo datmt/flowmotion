@@ -1,0 +1,142 @@
+flow "Database Deadlock"
+summary "How two transactions lock each other out in a circular wait, how the database breaks the cycle, and how consistent lock ordering prevents it."
+theme dark
+layout algorithm=layered direction=LR edges=straight
+
+group engine "Database Engine"
+node tx-a "Transaction A" service
+node tx-b "Transaction B" service
+node row-1 "Row 1 (Alice)" db in=engine
+node row-2 "Row 2 (Bob)" db in=engine
+node detector "Deadlock Detector" decision in=engine hidden
+
+edge tx-a > row-1
+edge tx-a > row-2
+edge tx-b > row-1
+edge tx-b > row-2
+edge detector > tx-b hidden dashed
+
+array locks "Row Lock Owner" keys=row-1,row-2 = Free Free
+
+code sql-a sql "Tx A: Alice -> Bob" pos=24,520
+  | BEGIN;
+  | UPDATE acct SET bal=bal-100 WHERE id=1;
+  | UPDATE acct SET bal=bal+100 WHERE id=2;
+  | COMMIT;
+code sql-b sql "Tx B: Bob -> Alice" pos=370,520
+  | BEGIN;
+  | UPDATE acct SET bal=bal-50 WHERE id=2;
+  | UPDATE acct SET bal=bal+50 WHERE id=1;
+  | COMMIT;
+code sql-fixed sql "Tx B, ordered by id" pos=716,520
+  | BEGIN;
+  | UPDATE acct SET bal=bal+50 WHERE id=1;
+  | UPDATE acct SET bal=bal-50 WHERE id=2;
+  | COMMIT;
+
+scenario deadlock "Deadlock and victim abort"
+  step tx-a-lock-1 "Tx A locks Row 1"
+    "Transaction A transfers $100 from Alice to Bob. It starts by updating **Row 1 (Alice)**, acquiring an exclusive (`X`) lock."
+    highlight sql-a "2"
+    state tx-a active
+    send tx-a > row-1 "X-Lock Row 1"
+    state row-1,locks#row-1 active with
+    label locks#row-1 "Tx A" with
+
+  step tx-b-lock-2 "Tx B locks Row 2"
+    "Concurrently, Transaction B transfers $50 from Bob to Alice. It updates **Row 2 (Bob)** first, acquiring its own exclusive (`X`) lock."
+    highlight sql-a ""
+    highlight sql-b "2"
+    state tx-b active
+    send tx-b > row-2 "X-Lock Row 2"
+    state row-2,locks#row-2 active with
+    label locks#row-2 "Tx B" with
+
+  step tx-a-wait-2 "Tx A waits for Row 2"
+    "To credit Bob, Transaction A now requests a lock on **Row 2**. Tx B already holds it, so Tx A blocks and waits."
+    highlight sql-b ""
+    highlight sql-a "3"
+    send tx-a > row-2 "Wait X-Lock"
+    state tx-a pending
+    state locks#row-2 warning with
+    callout tx-a "Blocked waiting on Tx B"
+
+  step cycle "Circular wait: Deadlock!" hold=1
+    "Transaction B now requests a lock on **Row 1** to credit Alice. Row 1 is held by Tx A, which is waiting on Tx B: a **circular wait** neither can resolve."
+    highlight sql-b "3"
+    send tx-b > row-1 "Wait X-Lock"
+    state tx-a,tx-b,row-1,row-2,locks#row-1,locks#row-2 error
+    callout row-1 "Tx A waits for Tx B, Tx B waits for Tx A"
+
+  step abort-victim "Detector aborts a victim"
+    "The database's **wait-for graph** detector spots the cycle. It picks Transaction B as the victim, rolls it back with error `40P01`, and frees Row 2."
+    highlight sql-a ""
+    highlight sql-b ""
+    show detector,detector-tx-b
+    state detector warning
+    send detector > tx-b "Abort (40P01)"
+    state tx-b disabled
+    state row-2,locks#row-2 idle with
+    label locks#row-2 "Free" with
+    state tx-a pending with
+    state row-1,locks#row-1 active with
+    callout tx-b "Rolled back; app must retry"
+
+  step tx-a-lock-2 "Tx A acquires Row 2"
+    "With Row 2 free, Transaction A wakes up and acquires the lock on **Row 2**."
+    highlight sql-a "3"
+    send tx-a > row-2 "Acquire X-Lock"
+    state tx-a,row-2,locks#row-2 active with
+    label locks#row-2 "Tx A" with
+
+  step tx-a-commit "Tx A commits"
+    "Both updates are done. Transaction A commits and releases all its locks."
+    highlight sql-a "4"
+    state tx-a,row-1,row-2,locks#row-1,locks#row-2 success
+    label locks#row-1 "Free" with
+    label locks#row-2 "Free" with
+
+scenario prevention "Prevention: Lock rows in ID order" from=deadlock/tx-a-lock-1
+  step tx-b-wait-1 "Tx B also requests Row 1 first"
+    "If every transaction locks rows in ascending ID order (`id = 1` before `id = 2`), Transaction B must request **Row 1** first. It blocks cleanly behind Tx A."
+    highlight sql-a ""
+    highlight sql-fixed "2"
+    state tx-b pending
+    send tx-b > row-1 "Wait X-Lock"
+    state locks#row-1 warning with
+    callout tx-b "Waits while holding no lock"
+
+  step p-tx-a-lock-2 "Tx A locks Row 2"
+    "Because Transaction B holds no locks while waiting, **Row 2** is still free. Transaction A locks it."
+    highlight sql-fixed ""
+    highlight sql-a "3"
+    send tx-a > row-2 "X-Lock Row 2"
+    state row-2,locks#row-2 active with
+    label locks#row-2 "Tx A" with
+
+  step p-tx-a-commit "Tx A commits"
+    "Transaction A finishes its transfer, commits, and releases both locks."
+    highlight sql-a "4"
+    state tx-a,row-1,row-2,locks#row-1,locks#row-2 success
+    label locks#row-1 "Free" with
+    label locks#row-2 "Free" with
+
+  step tx-b-acquire "Tx B locks Row 1, then Row 2"
+    "Now unblocked, Transaction B acquires **Row 1** and then **Row 2**, always in the same order as everyone else."
+    highlight sql-a ""
+    highlight sql-fixed "2-3"
+    state tx-b active
+    send tx-b > row-1 "X-Lock Row 1"
+    state row-1,locks#row-1 active with
+    label locks#row-1 "Tx B" with
+    send tx-b > row-2 "X-Lock Row 2"
+    state row-2,locks#row-2 active with
+    label locks#row-2 "Tx B" with
+
+  step tx-b-commit "Tx B commits: no deadlock" hold=1
+    "Transaction B commits. Zero deadlocks, zero retries."
+    highlight sql-fixed "4"
+    state tx-b,row-1,row-2,locks#row-1,locks#row-2 success
+    label locks#row-1 "Free" with
+    label locks#row-2 "Free" with
+    callout tx-b "A fixed lock order makes cycles impossible"

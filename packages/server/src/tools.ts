@@ -1,3 +1,4 @@
+import { catalog } from "./catalog.ts";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { applyOps, compile, iconPacks, outline, resolveIcons, sanitizeSvg, searchIcons, type LocalIcon, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
@@ -89,8 +90,14 @@ export async function publish(c: Ctx, doc: unknown, from?: string, icons?: unkno
   return { id, url: `${c.baseUrl ?? ""}/v/${id}`, warnings: b.warnings, outline: outline(b.doc) };
 }
 
+function catalogDoc(path: string) {
+  const t = catalog().find((x) => x.path === path);
+  if (!t) throw new ToolError(404, { error: "not_found", message: `No template '${path}'. Templates are listed in flow_guide.` });
+  return t.doc;
+}
+
 export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; view?: "outline" | "full" | "dsl"; ids?: string[] }) {
-  const { doc } = await snapshot(c, id);
+  const { doc } = id.includes("/") ? { doc: catalogDoc(id) } : await snapshot(c, id); // `<domain>/<slug>` = catalog template
   if (ids?.length) {
     const d: any = doc, items: Record<string, unknown> = {};
     const all = [...["nodes", "edges", "groups", "arrays", "grids", "tokens", "code", "scenarios"].flatMap((k) => d[k] ?? []), ...d.scenarios.flatMap((s: any) => s.steps)];

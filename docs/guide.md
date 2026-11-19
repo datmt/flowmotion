@@ -75,7 +75,7 @@ State persists across steps; `callout`, `pulse`, `effect` and packets end with t
 
 ## Workflow
 
-1. Call `flow_guide` once. Optionally `flow_get` (`view:"dsl"`) the closest template.
+1. Call `flow_guide` once. Optionally `flow_get` (`view:"dsl"`) the closest catalog template as a style reference, e.g. `id:"distributed-systems/circuit-breaker"`.
 2. Plan: entities, a happy-path scenario, and the failure or edge case worth showing as a branch.
 3. Up to ~40 entities: `flow_create` with the full `dsl`. Larger: `flow_create` with entities and the first scenario, then one `flow_edit` per remaining scenario (incremental).
 4. Fix **every** reported error in one follow-up call. Syntax issues carry `line`/`col`; all issues have a `where` and a `hint`. `flow_edit` takes `ops` for small changes or a whole new `dsl`.
@@ -95,7 +95,7 @@ Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide i
 | `flow_guide` | This guide. Call once. |
 | `flow_create` | `dsl` (or `doc`) -> immutable snapshot: `id`, `url`, `outline`, `warnings`. |
 | `flow_edit` | `id` + `ops` (small change) or `id` + `dsl` (rewrite). Publishes a NEW id; the old one stays. Always continue from the newest id. |
-| `flow_get` | `id`, `view` = `outline` (default) / `dsl` / `full`; `ids` = only those entities or steps. Use `dsl` to read a template before copying its style. |
+| `flow_get` | `id` (a flow id, or a catalog template as `<domain>/<slug>`), `view` = `outline` (default) / `dsl` / `full`; `ids` = only those entities or steps. Use `dsl` to read a template or an earlier flow. |
 | `flow_preview` | PNGs: contact sheet per scenario, or `scenario` + `step` (0-based) for one frame. Accepts `id`, or `dsl`/`doc` to snapshot and preview in one call. |
 | `flow_export` / `flow_job` | Video (`mp4`/`webm`/`gif`, `height` 720/1080, `fps` 30/60, `captions`). Poll `flow_job` until `done`, then give the user `url`. Only on request; max 180 s. |
 
@@ -129,16 +129,23 @@ Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide i
 * `schema`: extra key, id not kebab-case, or text over its limit.
 * Hidden entity used before `show`: add a `show` action first.
 
-## Templates (`flow_get` by id)
+## Catalog (`templates/<domain>/<slug>.flow`)
 
-* `circuit-breaker`: closed, open, half-open states with a recovery branch.
-* `saga-compensation`: orchestrated saga with a compensation branch.
-* `temporal-replay`: worker crash, replay of event history.
-* `retry-backoff-dlq`: exponential backoff, then dead-letter queue.
-* `oauth-pkce`: authorization code + PKCE, and a stolen-code branch.
-* `binary-search`: pointers, a variables panel and code highlight.
-* `backprop`: forward pass, loss, gradients, and a high-learning-rate branch.
-* `raft-consensus`: leader election, quorum log replication, then a leader-crash branch and a network-partition branch (5 servers, role/term panels, per-node logs).
+The app's left pane is a tree of this folder: one folder per domain, one DSL file per flow. Read any of them with `flow_get` as `<domain>/<slug>`. Existing:
+
+* `distributed-systems/`: `circuit-breaker` (closed, open, half-open + recovery branch), `saga-compensation` (compensation branch), `temporal-replay` (worker crash, replay), `retry-backoff-dlq` (backoff, dead-letter queue), `raft-consensus` (election, replication, crash and partition branches).
+* `security/`: `oauth-pkce` (auth code + PKCE, stolen-code branch).
+* `algorithms/`: `binary-search` (pointers, variables panel, code highlight).
+* `machine-learning/`: `backprop` (forward, loss, gradients, high-learning-rate branch).
+* `databases/`: `database-deadlock` (circular lock wait, cycle break, lock ordering).
+
+### Adding a flow to the catalog
+
+1. Build and review it with the normal workflow; it must compile with 0 errors and at most 1 warning.
+2. Save the final DSL as `templates/<domain>/<slug>.flow` (`flow_get` with `view:"dsl"` returns it). Reuse an existing domain folder when one fits; a new domain is a new lowercase kebab-case folder. `<slug>` is lowercase kebab-case and unique across the catalog.
+3. `meta.title` is the display name; give it a one-sentence `summary` (the sidebar and retrieval use it). Keep the style of its neighbours (theme, layout, 3-8 steps per scenario).
+4. Run `flowmotion validate templates/<domain>/<slug>.flow`, then `pnpm test`: it compiles every file, round-trips the DSL, and fails if this guide does not name the new flow.
+5. Name it in the list above (one line under its domain), commit, redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
 
 ## Appendix: JSON FlowDoc
 

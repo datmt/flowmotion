@@ -1,0 +1,51 @@
+flow "OAuth 2.0 authorization code + PKCE"
+summary "How PKCE protects the authorization code for public clients."
+layout algorithm=sequence
+
+group idp "Identity provider"
+node user "User" actor
+node app "Client App" service
+node authz "Authorization Server" service in=idp
+node api "Resource API" service
+node attacker "Attacker" external hidden
+edge user > app "Log in" id=login
+edge app > authz "/authorize + challenge" id=authorize
+edge authz > app "code" id=code dashed
+edge app > authz "code + verifier" id=exchange
+edge authz > app "access token" id=token dashed
+edge app > api "Bearer token" id=call
+edge attacker > authz "code + guess" id=steal hidden
+edge authz > attacker "invalid_grant" id=deny dashed hidden
+
+scenario flow "Happy path"
+  step verifier "Create verifier + challenge"
+    "The app generates a random `code_verifier` and sends only its hash, the `code_challenge`, with the authorization request."
+    send user > app "Log in" via=login
+    callout app "challenge = SHA256(verifier)"
+  step authorize "Authorize"
+    "The user is redirected to the authorization server, signs in and consents. The server stores the challenge."
+    send app > authz "/authorize + challenge" via=authorize
+    state authz active
+  step code "Receive code"
+    "The server redirects back with a short-lived **authorization code**. On its own the code is not enough to get tokens."
+    send authz > app "code" via=code
+  step exchange "Exchange code + verifier"
+    "The app proves it started the flow by sending the original `code_verifier`. The server hashes it and compares it to the stored challenge."
+    send app > authz "code + verifier" via=exchange
+    state authz success
+    send authz > app "access token" via=token
+  step call-api "Call the API"
+    "With the access token the app calls the resource API on the user's behalf."
+    send app > api "Bearer token" via=call
+    state api success
+
+scenario stolen-code "What if the code is stolen?" from=flow/code
+  step attacker-code "Attacker has the code"
+    "Suppose a malicious app on the device intercepted the redirect and holds the authorization code."
+    show attacker,steal,deny
+    callout attacker "Has the code, not the verifier"
+  step rejected "Exchange rejected"
+    "The attacker cannot produce the `code_verifier`, which never left the real app. The hash check fails and no token is issued."
+    send attacker > authz "code + guess" via=steal
+    state authz error
+    send authz > attacker "invalid_grant" via=deny

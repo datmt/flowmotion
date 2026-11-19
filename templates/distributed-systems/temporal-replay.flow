@@ -1,0 +1,45 @@
+flow "Temporal workflow replay"
+summary "A worker crashes mid-workflow and another resumes by replaying event history."
+
+group temporal "Temporal cluster"
+node starter "Client" actor
+node server "Temporal Server" service in=temporal
+node history "Event History" db in=temporal
+node worker-a "Worker A" service
+node worker-b "Worker B" service hidden
+edge starter > server
+edge server > history
+edge server > worker-a
+edge server > worker-b hidden
+edge history > worker-b dashed hidden
+array events "History" orientation=column = Started
+
+scenario crash "Worker crashes, workflow resumes"
+  step start "Start workflow"
+    "The client starts a workflow. The server records a `WorkflowStarted` event and hands a task to Worker A."
+    send starter > server "start"
+    send server > history "Started"
+    send server > worker-a "task"
+  step activity "Activity completes"
+    "Worker A runs the workflow code, which schedules an activity. The result is **appended** to history before the workflow moves on."
+    state worker-a active
+    send worker-a > server "ChargeCard done"
+    values events = Started "ChargeCard done"
+  step crash-a "Worker A crashes"
+    "Worker A dies mid-workflow. It held local variables, but they do not matter: history is the source of truth, not worker memory."
+    state worker-a error
+    callout worker-a "Local state lost"
+  step takeover "Worker B takes over"
+    "The server times out Worker A's task and schedules it on Worker B, which has never seen this workflow."
+    show worker-b,server-worker-b
+    send server > worker-b "task"
+  step replay "Replay history"
+    "Worker B **replays** the workflow code against the recorded events. `ChargeCard` is not run again; its recorded result is returned instead."
+    show history-worker-b
+    send history > worker-b "events"
+    state events#0..1 success
+    state worker-b active
+  step resume "Continue where it stopped"
+    "Replay catches Worker B up to the crash point, and then it executes new work, appending to the same history."
+    values events = Started "ChargeCard done" "ShipOrder done"
+    state worker-b success

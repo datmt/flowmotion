@@ -2,7 +2,22 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import * as db from "./db.ts";
 import { getLocalIcons, localRefs, refresh as refreshIcons } from "./editor/localIcons.ts";
 
-const templates = import.meta.glob<any>("../../../templates/*.flow.json", { eager: true, import: "default" });
+// Catalog: templates/<domain>/<slug>.flow. Raw DSL text; only the title is read up front (full parse is lazy, it pulls in core).
+const raw = import.meta.glob<string>("../../../templates/*/*.flow", { eager: true, query: "?raw", import: "default" });
+type Tpl = { domain: string; slug: string; title: string; dsl: string };
+const catalog: Tpl[] = Object.entries(raw).map(([p, dsl]) => {
+  const [domain, file] = p.split("/").slice(-2);
+  return { domain: domain!, slug: file!.replace(/\.flow$/, ""), title: JSON.parse(/^flow\s+("(?:[^"\\]|\\.)*")/m.exec(dsl)?.[1] ?? '""') || file!, dsl };
+}).sort((a, b) => a.domain.localeCompare(b.domain) || a.title.localeCompare(b.title));
+const domains = new Map<string, Tpl[]>();
+for (const t of catalog) domains.set(t.domain, [...(domains.get(t.domain) ?? []), t]);
+const domainName = (d: string) => d.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+async function tplDoc(t: Tpl) {
+  const { parseDsl } = await import("@flowmotion/core");
+  const r = parseDsl(t.dsl);
+  if (!r.doc) throw new Error(r.issues.map((i) => i.message).join("\n"));
+  return r.doc;
+}
 const Player = "flow-player" as any; // custom element, see packages/player
 
 const Editor = lazy(() => import("./editor/Editor.tsx")); // pulls core (zod/elk/shiki): keep off the first paint
@@ -23,10 +38,17 @@ function Sidebar() {
         {flows.length === 0 && <p className="px-2 pb-2 text-sm text-stone-400">Nothing yet</p>}
         {flows.map((f) => <a key={f.id} href={`/local/${f.id}`} className={item(here === `/local/${f.id}`)}>{f.doc?.meta?.title ?? f.id}</a>)}
       </details>
-      <details open className="mt-3">
-        <summary className={head}>Templates</summary>
-        {Object.values(templates).map((t) => <a key={t.meta.title} href="/" className={item(false)}>{t.meta.title}</a>)}
-      </details>
+      <div className="mt-3">
+        <div className={head}>Catalog ({catalog.length})</div>
+        {[...domains].map(([d, ts]) => (
+          <details key={d} open={here.startsWith(`/t/${d}/`)}>
+            <summary className="cursor-pointer px-2 py-1 text-sm font-semibold text-stone-700">{domainName(d)} <span className="font-normal text-stone-400">({ts.length})</span></summary>
+            <div className="ml-3 border-l border-stone-300 pl-1">
+              {ts.map((t) => <a key={t.slug} href={`/t/${d}/${t.slug}`} className={item(here === `/t/${d}/${t.slug}`)}>{t.title}</a>)}
+            </div>
+          </details>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -126,15 +148,20 @@ function Library() {
         </label>
       </section>
       <section>
-        <h2 className="mb-2 font-semibold">Templates</h2>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {Object.values(templates).map((t) => (
-            <li key={t.meta.title} className="flex items-center justify-between rounded border bg-white p-3">
-              <span>{t.meta.title}</span>
-              <button className={btn} onClick={() => add(t)}>Use</button>
-            </li>
-          ))}
-        </ul>
+        <h2 className="mb-2 font-semibold">Catalog</h2>
+        {[...domains].map(([d, ts]) => (
+          <div key={d} className="mb-3">
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-stone-500">{domainName(d)}</h3>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {ts.map((t) => (
+                <li key={t.slug} className="flex items-center justify-between rounded border bg-white p-3">
+                  <a className={link} href={`/t/${d}/${t.slug}`}>{t.title}</a>
+                  <button className={btn} onClick={() => tplDoc(t).then(add, (e) => setErr(String(e.message)))}>Use</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </section>
     </Shell>
   );
@@ -196,6 +223,34 @@ function Embed({ id }: { id: string }) {
   return <div className="h-screen"><Player ref={ref} fill src={`/api/share/${id}`} scenario={q.get("s") ?? undefined} step={q.get("step") ?? undefined} /></div>;
 }
 
+/** A catalog template: play it in place; "Make a copy" puts an editable one in My flows. */
+function Template({ domain, slug }: { domain: string; slug: string }) {
+  const t = catalog.find((x) => x.domain === domain && x.slug === slug);
+  const [src, setSrc] = useState<string>();
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if (!t) return;
+    void (async () => {
+      try {
+        const { compile } = await import("@flowmotion/core");
+        const r = await compile(await tplDoc(t));
+        setSrc(URL.createObjectURL(new Blob([JSON.stringify(r.compiled)], { type: "application/json" })));
+      } catch (e) { setErr(String((e as Error).message)); }
+    })();
+  }, [t]);
+  if (!t) return <Shell><p>No such template. <a className={link} href="/">Back</a></p></Shell>;
+  return (
+    <Shell>
+      <div className="flex items-center gap-2">
+        <h1 className="mr-auto text-xl font-bold">{t.title} <span className="text-sm font-normal text-stone-500">{domainName(domain)}</span></h1>
+        <button className={btn} onClick={async () => { location.href = `/edit/${await db.save(await tplDoc(t))}`; }}>Make a copy</button>
+      </div>
+      {err && <p role="alert" className="text-red-600">{err}</p>}
+      {src && <div className="min-h-0 flex-1"><Player fill src={src} /></div>}
+    </Shell>
+  );
+}
+
 function Local({ id }: { id: string }) {
   const [flow, setFlow] = useState<db.LocalFlow | null | undefined>();
   const [src, setSrc] = useState<string>();
@@ -247,8 +302,9 @@ function Local({ id }: { id: string }) {
 }
 
 export function App() {
-  const [, root, id] = location.pathname.split("/");
+  const [, root, id, slug] = location.pathname.split("/");
   switch (root) {
+    case "t": return <Template domain={id!} slug={slug!} />;
     case "v": return <Viewer id={id!} />;
     case "embed": return <Embed id={id!} />;
     case "local": return <Local id={id!} />;

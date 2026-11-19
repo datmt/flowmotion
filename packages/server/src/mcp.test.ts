@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
+import { template } from "./catalog.ts";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { expect, test } from "vitest";
 import { createApp } from "./app.ts";
 import { memoryStore } from "./store.ts";
 
-const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+const tpl = template("algorithms/binary-search");
 
 test("mcp: tools list, create → edit roundtrip, invalid → isError", async () => {
   const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" } }).listen(0);

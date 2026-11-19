@@ -1,3 +1,4 @@
+import { parseDsl } from "../../core/src/index.ts";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -9,7 +10,7 @@ import { memoryStore } from "../../server/src/store.ts";
 import { createWorker } from "../src/worker.ts";
 
 const web = new URL("../../web/", import.meta.url).pathname;
-const tpl = JSON.parse(readFileSync(new URL("../../../templates/binary-search.flow.json", import.meta.url), "utf8"));
+const tpl = parseDsl(readFileSync(new URL("../../../templates/algorithms/binary-search.flow", import.meta.url), "utf8")).doc!;
 const blobs = new Map<string, Uint8Array>();
 let server: ReturnType<ReturnType<typeof createApp>["listen"]>, worker: ReturnType<typeof createWorker>;
 

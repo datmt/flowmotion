@@ -1,0 +1,134 @@
+flow "Backpropagation on a tiny network"
+summary "One full training step on a 2-2-1 network: forward pass, loss, every gradient via the chain rule, the weight update, and a second forward pass that proves the loss dropped."
+layout direction=LR edges=straight
+
+group input "Input"
+group hidden "Hidden"
+group output "Output"
+node x1 "x1 = 1.0" value in=input
+node x2 "x2 = 0.5" value in=input
+node h1 "h1" value in=hidden
+node h2 "h2" value in=hidden
+node y "y" value in=output
+node loss "L" value
+edge x1 > h1 "w1" id=w1
+edge x2 > h1 "w2" id=w2
+edge x1 > h2 "w3" id=w3
+edge x2 > h2 "w4" id=w4
+edge h1 > y "w5" id=w5
+edge h2 > y "w6" id=w6
+edge y > loss "(t−y)²" id=sq
+array weights "Weights" keys=w1,w2,w3,w4,w5,w6 pos=240,260 = 0.4 0.2 0.3 0.6 0.7 0.5
+array grads "Gradients dL/dw" keys=w1,w2,w3,w4,w5,w6 pos=240,390 = – – – – – –
+code src python "Training step (pseudo-code)" pos=690,260
+  | # forward
+  | h1 = w1*x1 + w2*x2
+  | h2 = w3*x1 + w4*x2
+  | y  = w5*h1 + w6*h2
+  | L  = (t - y) ** 2
+  | # backward (chain rule)
+  | dy = 2 * (y - t)
+  | dw5, dw6 = dy*h1, dy*h2
+  | dh1, dh2 = dy*w5, dy*w6
+  | dw1, dw2 = dh1*x1, dh1*x2
+  | dw3, dw4 = dh2*x1, dh2*x2
+  | # update
+  | w -= lr * dw   # every weight
+
+scenario train "One training step"
+  step setup "The tiny network"
+    "Two inputs (x1 = 1.0, x2 = 0.5), two hidden neurons, one output, six weights w1–w6. Target t = 1.0, learning rate lr = 0.1. To keep the arithmetic readable there is no activation function, every neuron is just a weighted sum. Goal: nudge the weights so y moves toward 1.0."
+    callout y "Target t = 1.0"
+  step fwd-h1 "Forward: h1"
+    "h1 = w1·x1 + w2·x2 = 0.4·1.0 + 0.2·0.5 = 0.4 + 0.1 = **0.5**. Each weight scales the value on its edge and the neuron adds them up."
+    highlight src "2"
+    send x1 > h1 "0.4"
+    send x2 > h1 "0.1" with
+    label h1 "h1 = 0.5"
+    state h1 active
+  step fwd-h2 "Forward: h2"
+    "h2 = w3·x1 + w4·x2 = 0.3·1.0 + 0.6·0.5 = 0.3 + 0.3 = **0.6**. Same inputs, different weights, so a different value."
+    highlight src "3"
+    send x1 > h2 "0.3"
+    send x2 > h2 "0.3" with
+    label h2 "h2 = 0.6"
+    state h2 active
+  step fwd-out "Forward: output"
+    "y = w5·h1 + w6·h2 = 0.7·0.5 + 0.5·0.6 = 0.35 + 0.30 = **0.65**. The network predicts 0.65 but the target is 1.0."
+    highlight src "4"
+    send h1 > y "0.35"
+    send h2 > y "0.30" with
+    label y "y = 0.65"
+    state y warning
+  step loss "Loss and its first gradient"
+    "Loss L = (t − y)² = (1.0 − 0.65)² = 0.35² = **0.1225**. Backprop starts here: dL/dy = 2(y − t) = 2·(0.65 − 1.0) = **−0.70**. Negative means raising y lowers the loss."
+    highlight src "5,7"
+    send y > loss "0.1225"
+    state y,loss error
+    callout loss "L = 0.1225"
+    callout y "dL/dy = −0.70"
+  step back-out "Gradients of the output weights"
+    "A weight's gradient = (gradient arriving at its output) × (the input it multiplied). dL/dw5 = dy·h1 = −0.70·0.5 = **−0.35**. dL/dw6 = dy·h2 = −0.70·0.6 = **−0.42**."
+    highlight src "8"
+    send loss > y "−0.70"
+    send y > h1 "−0.35" with
+    send y > h2 "−0.42" with
+    label grads#w5 "−0.35"
+    label grads#w6 "−0.42" with
+    state h1,h2 warning
+  step back-hidden "Pass the error to the hidden layer"
+    "To go further back, ask how much each hidden value affected y. dL/dh1 = dy·w5 = −0.70·0.7 = **−0.49**, dL/dh2 = dy·w6 = −0.70·0.5 = **−0.35**. Note: this uses the old w5 and w6, before any update."
+    highlight src "9"
+    callout h1 "dL/dh1 = −0.49"
+    callout h2 "dL/dh2 = −0.35"
+  step back-h1 "Gradients into h1"
+    "h1 was fed by x1 and x2 through w1 and w2. dL/dw1 = dh1·x1 = −0.49·1.0 = **−0.49**. dL/dw2 = dh1·x2 = −0.49·0.5 = **−0.245**."
+    highlight src "10"
+    send h1 > x1 "−0.49"
+    send h1 > x2 "−0.245" with
+    label grads#w1 "−0.49"
+    label grads#w2 "−0.245" with
+    state x1,x2 warning
+  step back-h2 "Gradients into h2"
+    "Same for h2: dL/dw3 = dh2·x1 = −0.35·1.0 = **−0.35**. dL/dw4 = dh2·x2 = −0.35·0.5 = **−0.175**. Now all six weights have a gradient, and they are all negative: each weight should increase."
+    highlight src "11"
+    send h2 > x1 "−0.35"
+    send h2 > x2 "−0.175" with
+    label grads#w3 "−0.35"
+    label grads#w4 "−0.175" with
+  step update "Update every weight"
+    "Gradient descent: w ← w − lr·grad, with lr = 0.1. w1: 0.4 + 0.049 = **0.449**; w2: 0.2 + 0.0245 = **0.2245**; w3: 0.3 + 0.035 = **0.335**; w4: 0.6 + 0.0175 = **0.6175**; w5: 0.7 + 0.035 = **0.735**; w6: 0.5 + 0.042 = **0.542**."
+    highlight src "13"
+    label weights#w1 "0.449"
+    label weights#w2 "0.2245" with
+    label weights#w3 "0.335" with
+    label weights#w4 "0.6175" with
+    label weights#w5 "0.735" with
+    label weights#w6 "0.542" with
+    state x1,x2,h1,h2,y,loss success
+  step recheck "Did it work? Forward again"
+    "With the new weights: h1 = 0.449·1.0 + 0.2245·0.5 = 0.5613, h2 = 0.335 + 0.6175·0.5 = 0.6438, y = 0.735·0.5613 + 0.542·0.6438 = **0.7614**. Loss = (1 − 0.7614)² = **0.0569**, down from 0.1225. Repeat many times and y converges to 1.0."
+    highlight src "2-5"
+    label h1 "h1 = 0.56"
+    label h2 "h2 = 0.64" with
+    label y "y = 0.76" with
+    callout loss "0.1225 → 0.0569"
+
+scenario lr-too-high "What if the learning rate is too high?" from=train/back-h2
+  step big-update "Update with lr = 5"
+    "Same gradients, but lr = 5. w1: 0.4 + 2.45 = **2.85**; w2: 0.2 + 1.225 = **1.425**; w3: 0.3 + 1.75 = **2.05**; w4: 0.6 + 0.875 = **1.475**; w5: 0.7 + 1.75 = **2.45**; w6: 0.5 + 2.1 = **2.6**. Each step is 50× bigger than before."
+    highlight src "13"
+    label weights#w1 "2.85"
+    label weights#w2 "1.425" with
+    label weights#w3 "2.05" with
+    label weights#w4 "1.475" with
+    label weights#w5 "2.45" with
+    label weights#w6 "2.6" with
+    state y,loss error
+  step big-forward "Overshoot: the loss explodes"
+    "Forward again: h1 = 2.85 + 1.425·0.5 = 3.5625, h2 = 2.05 + 1.475·0.5 = 2.7875, y = 2.45·3.5625 + 2.6·2.7875 = **15.98**. Loss = (1 − 15.98)² ≈ **224**, about 1800× worse. The gradient only says which way to go, lr decides how far."
+    highlight src "2-5"
+    label h1 "h1 = 3.56"
+    label h2 "h2 = 2.79" with
+    label y "y = 15.98" with
+    callout loss "Diverges: 0.1225 → 224"

@@ -1,10 +1,11 @@
+import { parseDsl } from "@flowmotion/core";
 import { readFileSync } from "node:fs";
 import { compile } from "@flowmotion/core";
 import { expect, test } from "vitest";
 import { addOp, connectOp, deleteOp, labelOp, moveOp, relayoutOps, uniqueId, usedInSteps } from "../src/editor/edits.ts";
 import { createStore } from "../src/editor/store.ts";
 
-const tpl = () => JSON.parse(readFileSync(new URL("../../../templates/circuit-breaker.flow.json", import.meta.url), "utf8"));
+const tpl = () => parseDsl(readFileSync(new URL("../../../templates/distributed-systems/circuit-breaker.flow", import.meta.url), "utf8")).doc!;
 
 test("drag-to-pin, relayout, label, add, connect, delete are undoable single batches", async () => {
   const s = createStore(tpl()), n0 = s.get().doc.nodes[0]!;

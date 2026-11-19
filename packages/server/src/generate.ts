@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { readdirSync, readFileSync } from "node:fs";
 import { outline, parseDsl, printDsl, type FlowDoc, type Issue } from "@flowmotion/core";
+import { catalog } from "./catalog.ts";
 import * as tools from "./tools.ts";
 
 /** Text-in/text-out model seam: the real one is `anthropicModel`, tests pass a stub. */
@@ -16,15 +16,13 @@ export type GenEvent =
 export const MAX_REPAIRS = 3;
 export const MODEL = "claude-opus-5-5";
 
-const TEMPLATES = new URL("../../../templates/", import.meta.url);
 const words = (s: string) => new Set(s.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
 
 /** The `n` templates whose title/summary share the most words with the prompt (as DSL: far smaller than JSON). */
 export function closestTemplates(prompt: string, n = 2): { title: string; dsl: string }[] {
   const want = words(prompt);
-  return readdirSync(TEMPLATES).filter((f) => f.endsWith(".flow.json"))
-    .map((f) => {
-      const doc = JSON.parse(readFileSync(new URL(f, TEMPLATES), "utf8")) as FlowDoc;
+  return catalog()
+    .map(({ doc }) => {
       const have = words(`${doc.meta.title} ${doc.meta.summary ?? ""}`);
       return { doc, score: [...want].filter((w) => have.has(w)).length };
     })
