@@ -1,0 +1,52 @@
+flow "Sharding and hot shard resharding"
+summary "Partitions data across shards by key range or hash for horizontal scale, and splits a hot shard online when traffic concentrates."
+tags sharding partitioning databases
+level intermediate
+source "https://en.wikipedia.org/wiki/Shard_(database_architecture)"
+related distributed-systems/consistent-hashing
+
+node client "Clients" actor
+node router "Shard Router" service tone=primary
+group shards "Database shards"
+node s1 "Shard 1 [A-M]" db in=shards
+node s2 "Shard 2 [N-Z]" db in=shards
+node s3 "Shard 3 [G-M]" db in=shards hidden
+edge client > router
+edge router > s1
+edge router > s2
+edge router > s3 hidden
+edge s1 > s3 dashed hidden
+array map "Routing table" keys=s1,s2,s3 = A-M N-Z -
+
+scenario route "Key-range sharding distributes storage and writes"
+  step shard-rw "Router maps each key to its owning shard"
+    "A single database hits CPU and disk limits. Range sharding splits keys across shards (`[A-M]` on Shard 1, `[N-Z]` on Shard 2); the router sends `Alice` to S1 and `Zoe` to S2."
+    send client > router "Alice + Zoe"
+    state router active
+    send router > s1 "PUT Alice"
+    send router > s2 "PUT Zoe" with
+    state s1,s2 success
+    callout router "Write load scales across shards"
+
+scenario hot-shard "Hot shard split online into two ranges" from=route/shard-rw
+  step hotspot "Shard 1 becomes a hot shard"
+    "Heavy writes to keys in `[G-M]` saturate Shard 1's CPU and disk while Shard 2 stays mostly idle — a common **hot shard** problem with range or skewed keys."
+    state s1 error
+    effect s1 shake
+    send router > s1 "90% of writes!"
+    callout s1 "Hot shard: CPU 98%"
+  step copy "Provision Shard 3 and backfill [G-M]"
+    "To split Shard 1 without downtime, the cluster brings up Shard 3, copies existing `[G-M]` rows in the background, and streams ongoing writes to keep S3 caught up."
+    show s3,router-s3,s1-s3
+    state s3 active
+    send s1 > s3 "copy + tail [G-M]"
+    callout s3 "Catching up without locking writes"
+  step cutover "Atomically flip router map: S1=[A-F], S3=[G-M]"
+    "Once Shard 3 is caught up, the router updates metadata atomically: S1 now owns `[A-F]` and S3 owns `[G-M]`. Hot writes spread evenly and S1 recovers."
+    label s1 "Shard 1 [A-F]"
+    label map#s1 "A-F" with
+    label map#s3 "G-M" with
+    send router > s1 "PUT Alice"
+    send router > s3 "PUT Maya" with
+    state s1,s2,s3,router,map success
+    callout router "Balanced across 3 shards"

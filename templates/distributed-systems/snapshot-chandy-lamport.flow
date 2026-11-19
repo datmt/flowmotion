@@ -1,0 +1,50 @@
+flow "Chandy-Lamport global snapshot"
+summary "Captures a consistent global state across processes without pausing execution by sending markers on FIFO channels and logging in-flight messages."
+tags snapshots distributed-algorithms consistency
+level advanced
+source "https://lamport.azurewebsites.net/pubs/chandy.pdf"
+related distributed-systems/lamport-clocks
+
+node p1 "Process P1 ($100)" service tone=primary
+node p2 "Process P2 ($100)" service
+node snap "Snapshot Store" db
+edge p1 > p2
+edge p1 > snap dashed
+edge p2 > snap dashed
+array rec "Snapshot (total must be $200)" keys=p1,p2,chan-12 = - - empty
+
+scenario clean-snap "Consistent snapshot with no in-flight messages"
+  step start "P2 initiates snapshot and sends Marker"
+    "Two processes hold `$200` total (`$100` each). To snapshot without stopping the world, P2 records its local state (`$100`), starts logging incoming messages, and sends a `Marker`."
+    state p2 active
+    send p2 > snap "save P2=$100"
+    label rec#p2 "$100"
+    send p2 > p1 "Marker"
+  step p1-records "P1 receives Marker, saves state, echoes Marker"
+    "On receiving its first `Marker`, P1 records its local state (`$100`) and sends `Marker` back along FIFO channel `P1 -> P2`. No transfer occurred, so the channel log stays empty."
+    send p1 > snap "save P1=$100"
+    label rec#p1 "$100"
+    send p1 > p2 "Marker"
+    state p1,p2,snap,rec success
+    callout snap "Consistent: $100 + $100 + $0 = $200"
+
+scenario in-flight "In-flight transfer captured in channel state" from=clean-snap/start
+  step transfer "P1 had already sent $30 before seeing Marker"
+    "Just before P2's `Marker` arrived, P1 transferred `$30` to P2 — dropping P1 to `$70` while `$30` is still **in flight** on channel `P1 -> P2`."
+    label p1 "Process P1 ($70)"
+    state p1 warning
+    send p1 > p2 "$30 (in-flight)"
+    callout p1 "Sent $30 before Marker arrived"
+  step p1-snap "P1 receives Marker and records $70"
+    "P1 now receives P2's `Marker`, records its post-send state `$70`, and puts its own `Marker` onto FIFO channel `P1 -> P2` **behind** the `$30` transfer."
+    send p1 > snap "save P1=$70"
+    label rec#p1 "$70"
+    send p1 > p2 "Marker (after $30)"
+  step log-channel "P2 logs in-flight $30 before P1's Marker closes channel"
+    "Because P2 already snapshotted at `$100` and is recording channel `P1 -> P2`, it captures `$30` in `chan-12` before P1's `Marker` closes recording. Total = `$70 + $100 + $30 = $200`!"
+    label p2 "Process P2 ($130)"
+    label rec#chan-12 "$30"
+    state rec#chan-12 active with
+    send p2 > snap "chan-12=$30"
+    state p1,p2,snap,rec success
+    callout snap "FIFO marker preserved the $30 in flight!"

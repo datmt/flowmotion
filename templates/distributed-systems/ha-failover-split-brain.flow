@@ -1,0 +1,61 @@
+flow "High-availability failover and split brain"
+summary "Promotes a standby replica when the primary fails, using fencing (STONITH) to prevent two primaries from corrupting data during a partition."
+tags high-availability failover fencing
+level advanced
+source "https://en.wikipedia.org/wiki/Split-brain_(computing)"
+related distributed-systems/leader-lease distributed-systems/distributed-lock-redlock
+
+node client "Clients" actor
+node p1 "Primary A" db tone=primary
+node p2 "Standby B" db
+node fence "Fencing Controller" service
+node disk "Shared Storage" db
+edge client > p1
+edge client > p2 hidden
+edge p1 > p2 noarrow
+edge p1 > disk
+edge p2 > disk
+edge fence > p1 dashed
+edge fence > p2 dashed
+array roles "Cluster roles" keys=p1,p2 = Primary Standby
+
+scenario clean-failover "Fenced failover preserves single writer"
+  step replicate "Primary A serves writes and replicates to B"
+    "In active-passive HA, only Primary A writes to storage and streams replication + heartbeats to Standby B."
+    send client > p1 "WRITE x=1"
+    send p1 > disk "x=1"
+    send p1 > p2 "replicate + hb" with
+    state p1,p2,disk success
+  step fail-and-fence "Primary A fails; controller fences A first"
+    "Primary A stops responding. Before promoting Standby B, the Fencing Controller cuts A's power or revokes its storage lease (**STONITH**: Shoot The Other Node In The Head)."
+    state p1 error
+    send fence > p1 "FENCE / power-off"
+    label roles#p1 "FENCED"
+    state roles#p1 error with
+    callout fence "Confirm A is dead before promoting B"
+  step promote "Standby B promotes safely to Primary"
+    "Only after fencing confirms Primary A cannot touch storage does Standby B promote and take client traffic — guaranteeing a single writer."
+    show client-p2
+    label p2 "Primary B"
+    label roles#p2 "Primary" with
+    state p2 success
+    send client > p2 "WRITE x=2"
+    send p2 > disk "x=2"
+
+scenario split-brain "Partition without fencing causes split brain" from=clean-failover/replicate
+  step partition "Heartbeat link breaks while both nodes live"
+    "The network link between A and B fails, so B stops hearing heartbeats — yet **Primary A is still alive** and accepting writes from clients!"
+    state p1-p2 error
+    callout p2 "No heartbeat: thinks A is dead!"
+  step dual-primary "Unfenced B promotes -> two active primaries"
+    "Without fencing or a quorum tie-breaker, Standby B promotes itself to Primary. Now both A (`x=2`) and B (`x=9`) write conflicting updates to storage (**split brain**)."
+    show client-p2
+    label p2 "Primary B (rogue!)"
+    label roles#p2 "Primary!" with
+    state p1,p2,disk error
+    effect disk shake
+    send client > p1 "WRITE x=2"
+    send client > p2 "WRITE x=9" with
+    send p1 > disk "x=2"
+    send p2 > disk "x=9 (CORRUPT!)" with
+    callout disk "Split brain: dual writes corrupt data"

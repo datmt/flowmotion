@@ -1,0 +1,48 @@
+flow "Hedged requests"
+summary "Sends a backup request to another replica after a short tail-latency delay to cut p99 latency, risking duplicate load under saturation."
+tags latency resilience tail-latency
+level intermediate
+source "https://research.google/pubs/the-tail-at-scale/"
+related distributed-systems/timeouts-deadline-propagation distributed-systems/retry-backoff-dlq
+
+node client "Client" actor
+node caller "Frontend" service tone=primary
+group replicas "Read replicas"
+node r1 "Replica 1" service in=replicas
+node r2 "Replica 2" service in=replicas
+edge client > caller
+edge caller > r1
+edge caller > r2
+
+scenario hedge "Hedged backup cuts p99 tail latency"
+  step send-first "Send primary request to Replica 1"
+    "The client reads an idempotent endpoint. Frontend sends the request to Replica 1 and starts a timer at the **p95 latency** threshold (10ms)."
+    send client > caller "GET /profile"
+    state caller active
+    send caller > r1 "req #1"
+    state r1 warning
+    callout r1 "Slow: GC pause (120ms)"
+  step send-hedge "Timer fires at 10ms: hedge to Replica 2"
+    "Replica 1 has not answered after 10ms. Instead of waiting 120ms for the slow tail, Frontend sends a duplicate **hedged** request to Replica 2."
+    send caller > r2 "hedge #1"
+    state r2 active
+  step winner "Replica 2 responds fast; cancel Replica 1"
+    "Replica 2 replies in 3ms. Frontend returns the fast answer immediately (13ms total instead of 120ms) and cancels the slow call on Replica 1."
+    send r2 > caller "200 OK (3ms)"
+    send caller > client "200 OK (13ms)"
+    send caller > r1 "cancel" with
+    state caller,r2 success
+    callout caller "p99 cut from 120ms -> 13ms"
+
+scenario duplicate-load "Global overload turns hedging into 2x load" from=hedge/send-first
+  step both-slow "Both replicas are saturated"
+    "During a traffic spike, **every** replica slows past 10ms. Now almost every single incoming request fires a hedged copy."
+    state r1,r2 error
+    effect r1,r2 shake
+    send caller > r1 "100% QPS"
+    send caller > r2 "+100% hedged QPS!" with
+    callout r2 "Cluster load doubles (2x)!"
+  step budget "Cap hedging with a token budget"
+    "Unbounded hedging accelerates collapse when the whole fleet is busy. Production systems cap hedges at **~5-10%** of traffic via a token bucket so hedging shuts off during overload."
+    state caller warning
+    callout caller "Hedging budget: max 10% extra QPS"

@@ -143,6 +143,10 @@ The app's left pane is a tree of this folder: one folder per domain, one DSL fil
 4. Run `flowmotion validate templates/<domain>/<slug>.flow`, then `pnpm test`: it compiles every file, round-trips the DSL, and checks the metadata.
 5. Commit. The list above is generated from the folder. Redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
 
+### Picking what to build
+
+`docs/backlog.md` lists every flow, built (`[x]`) and planned (`[ ]`): `slug: topic (level) - failure branch to show`. To build the next one: take the first `[ ]` line in the domain you were given (or the `**pilot**` lines first for new domains), use `<domain>/<slug>` as the file path, set `level` from the line and the failure branch as a branch scenario. When `pnpm test` passes, change its line to `- [x] <slug>` (drop the description) in the same commit. Report DSL gaps you hit instead of working around them silently.
+
 ## Appendix: JSON FlowDoc
 
 `doc` is the same model as JSON, version `"2.1"`:

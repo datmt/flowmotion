@@ -1,0 +1,53 @@
+flow "Timeouts and deadline propagation"
+summary "Passes an absolute end-to-end deadline down every RPC hop so expired work cancels immediately instead of triggering cascading timeouts."
+tags resilience timeouts microservices
+level intermediate
+source "https://sre.google/sre-book/addressing-cascading-failures/"
+related distributed-systems/hedged-requests distributed-systems/circuit-breaker
+
+node client "Client (500ms)" actor
+node gw "API Gateway" service tone=primary
+node orders "Orders Service" service
+node inv "Inventory Service" service
+node db "Inventory DB" db
+edge client > gw
+edge gw > orders
+edge orders > inv
+edge inv > db
+array budget "Remaining deadline" keys=gw,orders,inv = 500ms 450ms 100ms
+
+scenario propagate "Absolute deadline cancels expired work early"
+  step gw-call "Client sets an end-to-end 500ms deadline"
+    "Instead of each hop inventing its own timeout, the client attaches an **absolute deadline** (`now + 500ms`). Gateway spends 50ms and forwards `450ms left` to Orders."
+    send client > gw "GET /order (500ms)"
+    state gw active
+    send gw > orders "deadline: 450ms"
+    state orders active
+  step deep-hop "Orders forwards shrinking budget to Inventory"
+    "Orders takes 350ms on earlier calls, leaving only `100ms` for Inventory. Propagating the remaining budget tells downstream services how much time actually matters."
+    send orders > inv "deadline: 100ms"
+    send inv > db "query (100ms max)"
+    state inv,db pending
+  step clean-cancel "Deadline expires: DB query cancels immediately"
+    "At 500ms, the deadline hits `0ms`. Inventory immediately aborts the slow DB query and frees its thread — zero wasted work after the client stopped listening."
+    label budget#inv "0ms (expired)"
+    state inv,db warning
+    send inv > db "CANCEL query"
+    send gw > client "504 Deadline Exceeded"
+    callout db "Cancelled cleanly; resources freed"
+
+scenario cascading-timeout "Independent timeouts cause zombie work and cascade" from=propagate/gw-call
+  step local-timeouts "Each hop uses its own hardcoded 5s timeout"
+    "Without deadline propagation, Orders and Inventory each allow a 5s local timeout even though the client gives up after 500ms."
+    label budget#orders "5000ms (local!)"
+    label budget#inv "5000ms (local!)" with
+    send orders > inv "timeout: 5s"
+    send inv > db "slow query (5s)"
+    state db error
+  step client-gives-up "Client times out and retries while zombies run"
+    "At 500ms, the client times out and retries — while Inventory and DB keep grinding on the abandoned **zombie request** for 4.5 more seconds."
+    send gw > client "504 at 500ms"
+    send client > gw "RETRY #2"
+    state orders,inv,db error
+    effect db shake
+    callout db "Zombie queries pile up -> outage"

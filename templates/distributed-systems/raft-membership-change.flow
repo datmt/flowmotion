@@ -1,0 +1,66 @@
+flow "Raft membership change (joint consensus)"
+summary "Transitions cluster membership through a joint configuration requiring dual quorums so split brains cannot form, even when removing the current leader."
+tags consensus raft reconfiguration
+level advanced
+source "https://raft.github.io/raft.pdf"
+related distributed-systems/raft-consensus
+
+group old "C_old (S1, S2, S3)"
+node s1 "S1 (Leader)" service in=old tone=primary
+node s2 "S2" service in=old
+node s3 "S3" service in=old
+group added "Joining node"
+node s4 "S4" service in=added hidden
+edge s1 > s2
+edge s1 > s3
+edge s1 > s4 hidden
+edge s2 > s3 noarrow
+edge s2 > s4 hidden noarrow
+edge s3 > s4 hidden noarrow
+array cfg "Active config & quorum" keys=config,quorum = C_old "2/3 of {S1,S2,S3}"
+
+scenario joint-consensus "Two-phase joint consensus avoids split quorums"
+  step c-old "Cluster starts in C_old = {S1, S2, S3}"
+    "Jumping directly from `C_old` to `C_new` is unsafe: different servers switch at different times, allowing two disjoint quorums to elect two leaders in the same term."
+    state s1 success
+    callout s1 "Direct switch risks 2 leaders"
+  step enter-joint "Phase 1: append and replicate C_old,new"
+    "To replace S1 with S4 (`C_new = {S2, S3, S4}`), leader S1 appends joint config `C_old,new`. Immediately on append, every commit and election requires a majority of **both** `C_old` AND `C_new`."
+    show s4,s1-s4,s2-s4,s3-s4
+    state s4 active
+    send s1 > s2 "Append C_old,new"
+    send s1 > s3 "Append C_old,new" with
+    send s1 > s4 "Append C_old,new" with
+    label cfg#config "C_old,new"
+    label cfg#quorum "maj(Old) AND maj(New)" with
+    state cfg active with
+  step commit-joint "C_old,new commits with dual majorities"
+    "S2, S3, and S4 acknowledge. Both `C_old` (`{S1,S2,S3}`) and `C_new` (`{S2,S3,S4}`) reached a majority, so no conflicting leader can be elected."
+    send s2 > s1 "ack"
+    send s3 > s1 "ack" with
+    send s4 > s1 "ack" with
+    state s2,s3,s4 success
+
+scenario remove-leader "Removing the current leader cleanly" from=joint-consensus/commit-joint
+  step append-new "Phase 2: S1 appends C_new = {S2, S3, S4}"
+    "Now that `C_old,new` is committed, S1 appends `C_new = {S2, S3, S4}` — a configuration that does **not** include S1 itself. S1 keeps managing replication without counting its own vote in `C_new`."
+    send s1 > s2 "Append C_new"
+    send s1 > s3 "Append C_new" with
+    send s1 > s4 "Append C_new" with
+    label cfg#config "C_new"
+    label cfg#quorum "2/3 of {S2,S3,S4}" with
+    callout s1 "S1 manages log until C_new commits"
+  step step-down "C_new commits: S1 steps down"
+    "S2, S3, and S4 acknowledge `C_new`. The instant `C_new` is committed, S1 steps down and leaves the cluster."
+    send s2 > s1 "ack"
+    send s3 > s1 "ack" with
+    send s4 > s1 "ack" with
+    state s1 disabled
+    label s1 "S1 (Removed)"
+    callout s1 "Steps down once C_new commits"
+  step new-leader "Remaining cluster elects S2 safely"
+    "`{S2, S3, S4}` hold every committed entry and elect S2 as the new leader under `C_new` with zero downtime and zero split-brain window."
+    send s2 > s3 "RequestVote"
+    send s2 > s4 "RequestVote" with
+    label s2 "S2 (New Leader)"
+    state s2,s3,s4,cfg success

@@ -42,14 +42,14 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 - [x] kafka-consumer-groups
 - [x] distributed-lock-redlock
 - [x] zookeeper-election
-- [ ] hedged-requests: tail latency (intermediate) - duplicate load
-- [ ] timeouts-deadline-propagation: deadlines (intermediate) - cascading timeout
-- [ ] strangler-fig: incremental migration (beginner) - rollback route
-- [ ] sharding-resharding: range/hash shards (intermediate) - hot shard split
-- [ ] ha-failover-split-brain: failover (advanced) - split brain, fencing
-- [ ] leader-election-bully: bully algorithm (intermediate) - coordinator crash
-- [ ] snapshot-chandy-lamport: global snapshot (advanced) - in-flight messages
-- [ ] raft-membership-change: joint consensus (advanced) - removal of leader
+- [x] hedged-requests
+- [x] timeouts-deadline-propagation
+- [x] strangler-fig
+- [x] sharding-resharding
+- [x] ha-failover-split-brain
+- [x] leader-election-bully
+- [x] snapshot-chandy-lamport
+- [x] raft-membership-change
 
 ## security
 - [x] oauth-pkce

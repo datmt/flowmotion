@@ -1,0 +1,53 @@
+flow "Bully leader election"
+summary "Elects the highest-ID live process as coordinator by having higher nodes bully lower challengers out of the election."
+tags leader-election algorithms fault-tolerance
+level intermediate
+source "https://en.wikipedia.org/wiki/Bully_algorithm"
+related distributed-systems/raft-consensus distributed-systems/zookeeper-election
+layout algorithm=stress edges=straight
+
+group nodes "Processes (highest ID wins)"
+node n1 "Node 1" service in=nodes
+node n2 "Node 2" service in=nodes tone=primary
+node n3 "Node 3" service in=nodes
+node n4 "Node 4 (Leader)" service in=nodes
+edge n1 > n2 noarrow
+edge n1 > n3 noarrow
+edge n2 > n3 noarrow
+edge n2 > n4 noarrow
+edge n3 > n4 noarrow
+array leader "Known coordinator" keys=n1,n2,n3,n4 = N4 N4 N4 N4
+
+scenario steady "Highest-ID node leads the cluster"
+  step active "Node 4 acts as coordinator"
+    "Every process knows every peer's numeric ID. Under the **Bully algorithm**, the highest-ID healthy node (Node 4) is always the coordinator."
+    state n4 success
+    send n2 > n4 "work request"
+    send n4 > n2 "reply"
+
+scenario coord-crash "Coordinator crashes; highest survivor bullies into lead" from=steady/active
+  step n4-dies "Node 4 crashes; Node 2 notices timeout"
+    "Node 4 crashes and stops answering. Node 2 times out and starts an election by sending `ELECTION` to every node with a **higher ID** (N3 and N4)."
+    state n4 error
+    effect n4 shake
+    state n2 active
+    send n2 > n3 "ELECTION"
+    send n2 > n4 "ELECTION (lost)" with
+  step n3-bullies "Node 3 replies OK and takes over election"
+    "Node 3 is alive and has a higher ID (`3 > 2`), so it replies `OK` — bullying Node 2 to step back — and starts its own election against higher IDs (N4)."
+    send n3 > n2 "OK (step back)"
+    state n2 pending
+    state n3 active
+    send n3 > n4 "ELECTION (timeout)"
+    callout n3 "Higher ID takes over election"
+  step n3-wins "No reply from N4 -> Node 3 declares victory"
+    "Nobody above Node 3 answers before timeout. Node 3 crowns itself coordinator and broadcasts `COORDINATOR(N3)` to all lower-ID peers."
+    label n3 "Node 3 (Leader)"
+    state n3 success
+    send n3 > n2 "COORDINATOR(N3)"
+    send n3 > n1 "COORDINATOR(N3)" with
+    label leader#n1 "N3"
+    label leader#n2 "N3" with
+    label leader#n3 "N3" with
+    state leader#n1,leader#n2,leader#n3 success with
+    callout n3 "Note: if N4 recovers later, it bullies N3 back"

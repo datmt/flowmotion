@@ -1,0 +1,59 @@
+flow "Strangler fig migration"
+summary "Places a routing facade in front of a legacy monolith to migrate endpoints incrementally to new services with instant rollback."
+tags architecture migration microservices
+level beginner
+source "https://martinfowler.com/bliki/StranglerFigApplication.html"
+related distributed-systems/load-balancer-algorithms
+
+node client "Clients" actor
+node facade "Routing Facade" service tone=primary
+node legacy "Legacy Monolith" service
+node billing "New Billing Service" service
+node db "Data Store" db
+edge client > facade
+edge facade > legacy
+edge facade > billing
+edge legacy > db
+edge billing > db
+array routes "Active route table" keys=orders,billing = Legacy Legacy
+
+scenario migrate "Migrate one slice at a time behind a facade"
+  step intercept "Facade proxies all traffic to Legacy"
+    "Instead of a risky big-bang rewrite, place a **routing facade** in front of the monolith. At first, 100% of routes still flow to Legacy untouched."
+    send client > facade "/orders + /billing"
+    send facade > legacy "/orders + /billing"
+    send legacy > db "R/W"
+    state facade,legacy success
+  step cutover "Shift /billing to the new service"
+    "Once the new Billing Service is ready and verified, flip only `/billing` at the facade. `/orders` keeps running safely on Legacy while real traffic proves Billing."
+    label routes#billing "New Billing"
+    state routes#billing active with
+    send client > facade "/orders + /billing"
+    send facade > legacy "/orders"
+    send facade > billing "/billing" with
+    send billing > db "R/W"
+    state billing success
+    callout facade "Incremental slice-by-slice cutover"
+  step retire "Eventually Legacy shrinks until retired"
+    "Repeating this slice by slice moves every route onto new services until the monolith receives zero traffic and can be decommissioned cleanly."
+    label routes#orders "New Orders"
+    state routes success
+    state legacy disabled
+    callout legacy "Zero traffic -> safe to retire"
+
+scenario rollback "Bug in new service triggers instant rollback" from=migrate/cutover
+  step regression "New Billing Service fails in production"
+    "A subtle edge case in the new Billing Service starts returning `500` errors on checkout."
+    state billing error
+    effect billing shake
+    send billing > facade "500 Error"
+    callout billing "Regression on /billing"
+  step revert "Facade flips /billing back to Legacy in seconds"
+    "Because Legacy is still live behind the facade, operators revert the `/billing` route instantly without a redeploy — cutting downtime to seconds while fixing the bug."
+    label routes#billing "Legacy (rollback)"
+    state routes#billing warning with
+    send client > facade "/billing"
+    send facade > legacy "/billing"
+    send legacy > facade "200 OK"
+    state legacy,facade success
+    callout facade "Instant rollback via route flip"
