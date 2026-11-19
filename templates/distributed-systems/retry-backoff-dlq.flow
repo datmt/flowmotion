@@ -27,11 +27,13 @@ scenario dlq-path "Retries exhausted"
     callout worker "retry in 2s"
   step attempt-3 "Attempt 3 fails"
     "Third failure with a **4s** delay. Adding random jitter in real systems stops all workers retrying in lockstep."
+    detail "With **full jitter**, each worker sleeps `random_between(0, min(cap, base * 2^attempt))`. Spreading retries across the interval breaks synchronized waves (thundering herds) that otherwise hit a recovering downstream service all at once."
     send worker > api "retry 2"
     pulse api
     callout worker "retry in 4s"
   step park "Park in the DLQ"
     "Retries are exhausted. Rather than loop forever, the worker moves the message to the **dead-letter queue** for a human to inspect."
+    detail "In queue brokers such as Amazon SQS, a **redrive policy** moves a message to `deadLetterTargetArn` once its receive count exceeds `maxReceiveCount`. Isolating unprocessable messages keeps workers free for healthy traffic until operators inspect and redrive them."
     send worker > dlq "msg-42"
     state dlq warning
 
