@@ -35,6 +35,7 @@ scenario commit "Two-phase commit succeeds"
     callout db-a "Locks held until decision"
   step decide "Coordinator logs the commit point"
     "Every participant voted Yes, so the coordinator fsyncs `COMMIT` to its own log. This single write is the atomic point of no return."
+    detail "To cut logging and message overhead, implementations commonly use **presumed abort**: if a transaction has no record in the coordinator's log after a crash, recovery presumes it aborted, avoiding forced log writes and acks on the abort path."
     state coord success
     label state#coord "COMMIT" with
     pulse coord
@@ -56,6 +57,7 @@ scenario coord-crash "Coordinator crashes after Prepare" from=commit/vote-yes
     label state#coord "CRASHED" with
   step blocked "Participants block in-doubt"
     "Neither database knows if the other voted No or if `COMMIT` was already logged. Both must stay blocked holding locks until the coordinator recovers — **2PC is a blocking protocol**."
+    detail "A prepared participant cannot unilaterally abort (the coordinator may have logged `COMMIT` and told another node) or commit (another node may have voted No). Distributed databases mitigate this by replicating the coordinator via consensus (Paxos or Raft) so coordinator state survives single-node crashes."
     state db-a,db-b warning
     label state#db-a "in-doubt" with
     label state#db-b "in-doubt" with
