@@ -1,0 +1,56 @@
+flow "Cache-aside"
+summary "The application checks cache first, populates it lazily on a miss from the database, and risks serving stale data after writes."
+tags caching databases latency
+level beginner
+source "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+related distributed-systems/cache-stampede distributed-systems/write-through-back
+
+node client "Client" actor
+node app "App Service" service tone=primary
+node cache "Cache" db
+node db "Database" db
+edge client > app
+edge app > cache
+edge app > db
+array data "Value of user:7" keys=cache,db = empty "Alice v1"
+
+scenario read-miss "Lazy population on miss, then fast hit"
+  step miss "Read checks cache first and misses"
+    "In **cache-aside**, the cache does not talk to the database itself. The app checks the cache first and gets a miss."
+    send client > app "GET user:7"
+    send app > cache "GET user:7"
+    send cache > app "MISS"
+    state cache warning
+  step fetch "Fetch from DB and populate cache"
+    "On a miss, the app reads `Alice v1` from the database, writes it into the cache with a TTL, and returns it to the client."
+    send app > db "SELECT user:7"
+    send db > app "Alice v1"
+    send app > cache "SET user:7 (TTL)"
+    label data#cache "Alice v1"
+    state cache,data#cache success with
+    send app > client "Alice v1"
+  step hit "Next read hits cache directly"
+    "Subsequent reads find `user:7` in cache and return immediately without touching the database."
+    send client > app "GET user:7"
+    send app > cache "GET user:7"
+    send cache > app "HIT: Alice v1"
+    send app > client "Alice v1"
+    state app success
+    callout db "Zero DB load on cache hit"
+
+scenario stale-cache "Stale read when DB changes without invalidation" from=read-miss/hit
+  step db-updated "Database updates to Alice v2"
+    "A write updates the database to `Alice v2`, but cache invalidation is skipped, delayed, or fails before completing."
+    send app > db "UPDATE Alice v2"
+    label data#db "Alice v2"
+    state data#db active with
+    callout cache "Still holds Alice v1!"
+  step stale-read "Client reads stale value from cache"
+    "The next reader hits the cache and gets stale `Alice v1`. Cache-aside relies on **delete-on-write** invalidation plus a bounded TTL as a safety net against stale data."
+    send client > app "GET user:7"
+    send app > cache "GET user:7"
+    state cache error
+    effect cache shake
+    send cache > app "Alice v1 (stale)"
+    send app > client "Alice v1 (stale)"
+    state data#cache error with

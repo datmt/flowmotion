@@ -1,0 +1,49 @@
+flow "Write-through vs write-back caching"
+summary "Write-through persists every write synchronously to storage for safety, while write-back replies immediately and risks losing unflushed data on crash."
+tags caching durability storage
+level intermediate
+source "https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies"
+related distributed-systems/cache-aside
+
+node client "Client" actor
+node cache "Cache" db tone=primary
+node db "Database" db
+edge client > cache
+edge cache > db
+array store "Value of x" keys=cache,db = v0 v0
+
+scenario write-through "Write-through: synchronous durability"
+  step write-req "Client writes x=v1 to cache"
+    "The client sends `SET x=v1` to the cache layer. The cache updates its in-memory entry immediately."
+    send client > cache "SET x=v1"
+    label store#cache "v1"
+    state cache active
+  step sync-db "Cache writes synchronously to DB"
+    "Under **write-through**, the cache waits to persist `x=v1` in the database before acknowledging the client. Write latency includes the DB round trip."
+    send cache > db "WRITE x=v1"
+    label store#db "v1"
+    state db success
+    send db > cache "persisted"
+  step ack-safe "Reply OK: cache and DB match"
+    "The client gets `OK` only after the DB confirms. Even if the cache crashes a millisecond later, `x=v1` is safely durable in the database."
+    send cache > client "OK"
+    state cache,store success
+    callout db "Durable before client sees OK"
+
+scenario crash-before-flush "Write-back: fast reply, lost on crash" from=write-through/write-req
+  step fast-ack "Write-back replies OK before DB flush"
+    "Under **write-back**, the cache marks `x=v1` as **dirty** and replies `OK` right away, planning to flush batches to the DB asynchronously for high write throughput."
+    state store#cache warning
+    label store#cache "v1 (dirty)"
+    send cache > client "OK (fast!)"
+    callout cache "Dirty entry not yet in DB"
+  step crash "Cache crashes before background flush"
+    "Power fails or the cache node restarts before the dirty entry flushes. The in-memory `v1` vanishes while the database still holds `v0`."
+    state cache error
+    effect cache shake
+    label store#cache "LOST"
+    state store#cache error with
+  step data-loss "Acknowledged write is lost"
+    "The client was told `OK`, yet `x=v1` is gone. Write-back trades durability for latency unless paired with battery-backed RAM or replicated logs."
+    focus cache,db dim
+    callout db "Still v0: acknowledged write lost"

@@ -1,0 +1,54 @@
+flow "Sliding window rate limiter"
+summary "Weights the previous and current window counts to enforce rate limits smoothly and prevent fixed-window boundary bursts."
+tags rate-limiting resilience api
+level intermediate
+source "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+related distributed-systems/rate-limiter-token-bucket
+
+node client "Client" actor
+node limiter "Rate Limiter" service tone=primary
+node store "Window Counters" db
+node api "Backend API" service
+edge client > limiter
+edge limiter > store
+edge limiter > api
+array win "Window state (limit=4/min)" keys=prev,curr,est = 2 1 2.5
+
+scenario sliding "Weighted sliding window allows normal traffic"
+  step arrive "Request arrives at 01:15 (25% into window)"
+    "At `01:15`, the current minute is 25% elapsed, so the rolling 60s window overlaps **75%** of the previous minute (`00:00-01:00`)."
+    send client > limiter "GET /api"
+    state limiter active
+    send limiter > store "read prev=2, curr=1"
+  step check "Compute weighted count"
+    "Instead of storing every request timestamp, the sliding-window counter estimates `prev * 0.75 + curr = 2*0.75 + 1 = 2.5`. That is under the limit of `4`."
+    pulse store
+    callout limiter "2 * 0.75 + 1 = 2.5 < 4 -> allow"
+  step allow "Increment current counter and forward"
+    "The limiter increments `curr` to `2` (`est = 3.5`) and forwards the request to the backend."
+    send limiter > store "INCR curr -> 2"
+    label win#curr "2"
+    label win#est "3.5" with
+    send limiter > api "GET /api"
+    state limiter,api success
+
+scenario boundary-burst "Boundary burst blocked across minute edge" from=sliding/arrive
+  step spike-end "Client sends 4 requests at 00:59"
+    "A client fires the full limit of 4 requests right before the minute rolls over (`00:59`). A **fixed window** would reset to `0` at `01:00` and allow 4 more — doubling the real rate."
+    label win#prev "4"
+    label win#curr "0" with
+    label win#est "4.0" with
+    state win#prev warning with
+    callout store "00:59: previous window full (4)"
+  step spike-start "More requests arrive at 01:01"
+    "Just 2 seconds later (`01:01`), another burst arrives. The sliding window still weights **98%** of the previous minute: `4 * 0.98 + 0 = 3.92`, so adding this request reaches `4.92 > 4`."
+    send client > limiter "burst at 01:01"
+    send limiter > store "read prev=4, curr=0"
+    label win#est "4.92 (>4)"
+    state win#est error with
+  step reject "Reject with 429 to stop double-rate burst"
+    "Because the weighted estimate exceeds `4`, the limiter returns `429 Too Many Requests`. The rolling overlap eliminates the fixed-window boundary loophole."
+    state limiter error
+    effect limiter shake
+    send limiter > client "429 Too Many Requests"
+    callout api "No 2x burst reaches backend"

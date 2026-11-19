@@ -1,0 +1,69 @@
+flow "CQRS and event sourcing"
+summary "Separates write commands that append immutable events from read projections that materialize query views and can be rebuilt from history."
+tags architecture event-sourcing cqrs
+level intermediate
+source "https://martinfowler.com/bliki/CQRS.html"
+source "https://martinfowler.com/eaaDev/EventSourcing.html"
+related distributed-systems/temporal-replay
+
+node client "Client" actor
+node cmd "Command API" service tone=primary
+node store "Event Store" db
+node proj "Projector" service
+node read-db "Read View" db
+node query "Query API" service
+edge client > cmd
+edge cmd > store
+edge store > proj
+edge proj > read-db
+edge client > query
+edge query > read-db
+array events "Event stream" = Opened
+array view "Read view" keys=balance,ver = $0 v1
+
+scenario write-read "Command appends event; projection updates read view"
+  step command "Client sends write command"
+    "The write side handles business rules only. The client sends `Deposit($50)` to the Command API, which loads the aggregate from prior events and validates the command."
+    send client > cmd "Deposit($50)"
+    state cmd active
+  step append "Append immutable event"
+    "Instead of overwriting a `balance` column in place, the handler appends a new immutable fact `Deposited(50)` to the Event Store."
+    send cmd > store "Deposited(50)"
+    values events = Opened Deposited(50)
+    state store,events#1 success with
+  step project "Projector updates read view asynchronously"
+    "The Projector subscribes to the event stream and updates the denormalized Read View. Writes stay fast while reads get a tailor-made schema — at the cost of **eventual consistency**."
+    send store > proj "Deposited(50)"
+    send proj > read-db "balance=$50"
+    label view#balance "$50"
+    label view#ver "v2" with
+    state proj,read-db success with
+  step query-step "Client queries optimized read model"
+    "Reads go to the Query API and hit the precomputed Read View directly, without replaying the event log."
+    send client > query "GetBalance"
+    send query > read-db "SELECT"
+    send read-db > query "$50"
+    send query > client "$50"
+
+scenario rebuild "Rebuilding a corrupted or new projection" from=write-read/project
+  step corrupt "Read view is corrupted or schema changes"
+    "A bug corrupts the Read View (or a new query shape is needed). Because the Event Store holds the complete source of truth, the Read View is completely disposable."
+    state read-db error
+    effect read-db shake
+    label view#balance "CORRUPT" with
+    callout read-db "Disposable derived view"
+  step wipe "Drop view and reset projector offset"
+    "Operators wipe the Read View and rewind the Projector to offset `0` in the Event Store."
+    label view#balance "$0"
+    label view#ver "v0" with
+    state read-db pending
+    state proj active with
+  step replay "Replay full event log to rebuild"
+    "The Projector replays `Opened` then `Deposited(50)` in order and materializes a clean, exact Read View with zero data loss."
+    send store > proj "replay 0..1"
+    state events#0..1 active with
+    send proj > read-db "rebuild: $50"
+    label view#balance "$50"
+    label view#ver "v2" with
+    state read-db,proj success with
+    callout proj "Exact state restored from events"

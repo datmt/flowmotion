@@ -1,0 +1,51 @@
+flow "Idempotent consumer (inbox)"
+summary "Records processed message IDs in the same database transaction as state updates so redelivered messages never apply twice."
+tags messaging idempotency reliability
+level intermediate
+source "https://microservices.io/patterns/communication-style/idempotent-consumer.html"
+related distributed-systems/outbox-pattern distributed-systems/retry-backoff-dlq
+
+node broker "Message Broker" queue
+node consumer "Payment Consumer" service tone=primary
+group db "Payments Database"
+node inbox "inbox (msg_id)" db in=db
+node ledger "balances" db in=db
+edge broker > consumer
+edge consumer > inbox
+edge consumer > ledger
+array state "DB state" keys=inbox,balance = empty $100
+
+scenario process "First delivery executes once"
+  step deliver "Broker delivers msg-9"
+    "The broker delivers `msg-9` (`debit $30`) under at-least-once delivery. Until the consumer acknowledges it, the broker may send it again."
+    send broker > consumer "msg-9: -$30"
+    state consumer active
+  step atomic-tx "Record msg-9 and update balance atomically"
+    "Inside a single DB transaction, the consumer inserts `msg-9` into `inbox` (unique key) and debits `balances` to `$70`. Both commit or neither does."
+    send consumer > inbox "INSERT msg-9"
+    send consumer > ledger "balance -= 30" with
+    label state#inbox "msg-9"
+    label state#balance "$70" with
+    state inbox,ledger success with
+  step ack "Acknowledge message to broker"
+    "Now that the local transaction is durable, the consumer sends `ACK` so the broker removes `msg-9` from the queue."
+    send consumer > broker "ACK msg-9"
+    state consumer,broker success
+
+scenario redelivery "Redelivery is safely ignored" from=process/atomic-tx
+  step lost-ack "Consumer crashes before ACK"
+    "The DB transaction committed, but the consumer dies before sending `ACK`. The broker assumes delivery failed."
+    state consumer error
+    effect consumer shake
+    callout broker "No ACK -> will redeliver"
+  step retry "Broker redelivers msg-9"
+    "A fresh consumer receives the exact same `msg-9`. Without an inbox table, it would charge `$30` a second time."
+    state consumer active
+    send broker > consumer "msg-9: -$30 (dup)"
+  step dedup "Unique constraint detects duplicate"
+    "The consumer tries `INSERT msg-9` into `inbox` and hits a duplicate key. It skips the balance update and sends `ACK` — balance stays `$70`."
+    send consumer > inbox "INSERT msg-9"
+    state inbox warning
+    callout inbox "Duplicate msg-9: skip!"
+    send consumer > broker "ACK msg-9"
+    state consumer,ledger success

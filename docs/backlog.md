@@ -18,14 +18,14 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 - [x] leader-lease
 - [x] gossip-protocol
 - [x] swim-membership
-- [ ] outbox-pattern: transactional outbox (intermediate) - relay crash, duplicate publish
-- [ ] inbox-idempotency: idempotent consumer (intermediate) - redelivery
-- [ ] cqrs-event-sourcing: command/event/projection (intermediate) - projection rebuild
-- [ ] rate-limiter-token-bucket: token bucket (beginner) - burst then throttle
-- [ ] rate-limiter-sliding-window: sliding window (intermediate) - boundary burst
-- [ ] cache-stampede: thundering herd (intermediate) - request coalescing
-- [ ] cache-aside: read-through/aside (beginner) - stale cache
-- [ ] write-through-back: write policies (intermediate) - crash before flush
+- [x] outbox-pattern
+- [x] inbox-idempotency
+- [x] cqrs-event-sourcing
+- [x] rate-limiter-token-bucket
+- [x] rate-limiter-sliding-window
+- [x] cache-stampede
+- [x] cache-aside
+- [x] write-through-back
 - [ ] vector-clocks: causality (advanced) - concurrent writes
 - [ ] lamport-clocks: logical time (intermediate) - out-of-order events
 - [ ] crdt-counter: G-counter merge (advanced) - partition and merge

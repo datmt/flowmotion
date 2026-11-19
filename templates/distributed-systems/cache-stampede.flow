@@ -1,0 +1,61 @@
+flow "Cache stampede and request coalescing"
+summary "When a hot cache key expires, concurrent misses can flood the database unless request coalescing collapses them into a single fetch."
+tags caching resilience concurrency
+level intermediate
+source "https://en.wikipedia.org/wiki/Cache_stampede"
+related distributed-systems/cache-aside
+
+group callers "Concurrent callers"
+node c1 "Client 1" actor in=callers
+node c2 "Client 2" actor in=callers
+node c3 "Client 3" actor in=callers
+node app "App Server" service tone=primary
+node cache "Redis Cache" db
+node db "Primary DB" db
+edge c1 > app
+edge c2 > app
+edge c3 > app
+edge app > cache
+edge app > db
+
+scenario stampede "Thundering herd hits the database"
+  step expire "Hot key TTL expires"
+    "A popular homepage key expires in Redis right as traffic peaks. Every incoming request is about to see a cache miss."
+    state cache warning
+    label cache "Redis: key EXPIRED"
+    callout cache "TTL hit 0"
+  step misses "Concurrent requests all miss cache"
+    "Three clients ask for the same key at the exact same millisecond. All three check Redis and get `MISS`."
+    send c1 > app "GET home"
+    send c2 > app "GET home" with
+    send c3 > app "GET home" with
+    send app > cache "GET home (x3)"
+    send cache > app "MISS (x3)"
+  step herd "All misses stampede Primary DB"
+    "Without coordination, every request runs the same expensive query against Primary DB at once. At scale, this **thundering herd** exhausts DB CPU and triggers cascading outages."
+    send app > db "SELECT home (x3!)"
+    state db error
+    effect db shake
+    callout db "Overloaded by identical queries"
+
+scenario coalescing "Request coalescing (singleflight) shields DB" from=stampede/expire
+  step first-wins "Singleflight lets only the first miss fetch"
+    "All three requests miss cache, but the app tracks in-flight keys (`singleflight`). Client 1 starts the DB fetch while Clients 2 and 3 attach to the same pending promise."
+    send c1 > app "GET home"
+    send c2 > app "GET home" with
+    send c3 > app "GET home" with
+    state app active
+    callout app "Coalesce 3 callers -> 1 DB query"
+    send app > db "SELECT home (x1)"
+    state db active
+  step fill-and-fanout "One DB query fills cache and answers all 3"
+    "Primary DB computes the result just **once**. The app populates Redis and fans the shared response out to all waiting clients simultaneously."
+    send db > app "home payload"
+    state db success
+    send app > cache "SET home (TTL 60s)"
+    state cache success
+    label cache "Redis: HIT" with
+    send app > c1 "200 OK"
+    send app > c2 "200 OK" with
+    send app > c3 "200 OK" with
+    state app success

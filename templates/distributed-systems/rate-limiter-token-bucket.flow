@@ -1,0 +1,49 @@
+flow "Token bucket rate limiter"
+summary "Allows short bursts up to bucket capacity while enforcing a steady average refill rate and rejecting requests when empty."
+tags rate-limiting resilience api
+level beginner
+source "https://en.wikipedia.org/wiki/Token_bucket"
+related distributed-systems/rate-limiter-sliding-window
+
+node client "Client" actor
+node limiter "Token Bucket" service tone=primary
+node api "Backend API" service
+edge client > limiter
+edge limiter > api
+array bucket "Bucket (cap=3, refill=1/s)" = tok tok tok
+
+scenario steady "Steady traffic stays within refill rate"
+  step allow "Request consumes one token"
+    "Each incoming request must take one token from the bucket. With 3 tokens available, the limiter removes one and forwards the request."
+    send client > limiter "GET /orders"
+    values bucket = tok tok
+    send limiter > api "GET /orders"
+    state limiter,api success
+  step refill "Timer refills up to capacity"
+    "Tokens arrive at a fixed rate (`1/s`) and stop accumulating once the bucket is full (`cap=3`). Steady traffic below the refill rate never throttles."
+    values bucket = tok tok tok
+    state bucket success with
+    callout limiter "Refilled: capped at 3"
+
+scenario burst-throttle "Burst drains bucket, then throttles" from=steady/allow
+  step burst "Short burst spends remaining tokens"
+    "Two more requests arrive back-to-back. Unlike a strict leaky queue, a token bucket **absorbs short bursts** up to its remaining tokens without queuing delay."
+    send client > limiter "burst x2"
+    values bucket =
+    send limiter > api "burst x2"
+    state limiter warning
+    callout limiter "Bucket empty: 0 tokens left"
+  step throttle "Next request rejected with 429"
+    "A fourth request arrives before the next refill tick. The bucket is empty, so the limiter fast-fails with `429 Too Many Requests` and shields the backend."
+    send client > limiter "GET /orders"
+    state limiter error
+    effect limiter shake
+    send limiter > client "429 Retry-After: 1s"
+    callout api "Protected from overload"
+  step recover "Next tick restores one token"
+    "One second later, a single token is added. The next request passes while sustained traffic stays capped at the refill rate."
+    values bucket = tok
+    state limiter success
+    send client > limiter "GET /orders"
+    values bucket =
+    send limiter > api "GET /orders"

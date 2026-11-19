@@ -1,0 +1,60 @@
+flow "Transactional outbox"
+summary "Writes domain state and an outbox event in one database transaction so a relay can publish reliably without dual-write data loss."
+tags messaging transactions reliability
+level intermediate
+source "https://microservices.io/patterns/data/transactional-outbox.html"
+related distributed-systems/inbox-idempotency distributed-systems/saga-compensation
+
+node client "Client" actor
+node svc "Order Service" service tone=primary
+group db "Orders Database"
+node orders "orders table" db in=db
+node outbox "outbox table" db in=db
+node relay "Outbox Relay" service
+node broker "Message Broker" queue
+edge client > svc
+edge svc > orders
+edge svc > outbox
+edge outbox > relay
+edge relay > broker
+array status "Outbox row #42" keys=order,outbox,broker = - - -
+
+scenario publish "Atomic write and relay publish"
+  step tx "Write order and outbox in one TX"
+    "Updating a database and publishing to a broker separately is a **dual write** that can leave them out of sync. Instead, the service writes both `orders` and `outbox` inside one local ACID transaction."
+    send client > svc "CreateOrder"
+    state svc active
+    send svc > orders "INSERT #42"
+    send svc > outbox "INSERT OrderCreated" with
+    label status#order "saved"
+    label status#outbox "pending" with
+    state orders,outbox success with
+  step poll "Relay reads unpublished rows"
+    "A separate relay process (polling or reading the DB WAL via CDC) picks up unpublished rows from `outbox`."
+    send outbox > relay "row #42 (pending)"
+    state relay active
+  step emit "Publish event to broker"
+    "The relay publishes `OrderCreated` to the message broker. Even if the broker was briefly unreachable earlier, the row stayed safe in the database."
+    send relay > broker "OrderCreated #42"
+    label status#broker "published"
+    state broker success with
+  step mark "Mark outbox row sent"
+    "Once the broker acknowledges the publish, the relay marks row `#42` as `sent` so it is not picked up again."
+    send relay > outbox "UPDATE sent=true"
+    label status#outbox "sent"
+    state relay,status#outbox success with
+
+scenario relay-crash "Relay crashes before marking sent" from=publish/emit
+  step crash "Relay dies after broker publish"
+    "The broker already accepted `OrderCreated #42`, but the relay crashes before updating `sent=true` in the outbox table."
+    state relay error
+    effect relay shake
+    callout outbox "Still marked pending!"
+  step duplicate "Restarted relay publishes a duplicate"
+    "When the relay restarts, it sees row `#42` is still `pending` and publishes `OrderCreated #42` a second time. The outbox guarantees **at-least-once** delivery, so consumers must be idempotent."
+    state relay warning
+    send outbox > relay "row #42 (pending)"
+    send relay > broker "OrderCreated #42 (dup)"
+    label status#broker "published x2"
+    state status#broker warning with
+    callout broker "Duplicate! Consumer needs deduplication"
