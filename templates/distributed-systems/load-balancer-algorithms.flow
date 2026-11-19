@@ -51,6 +51,7 @@ scenario slow-backend "Slow backend: round-robin vs least-connections" from=algo
     label conns#b2 "9 (worse)"
   step least-conn "Least-connections routes around slow B2"
     "Switching to **least-connections** inspects live in-flight counts (`B1=1, B2=9, B3=1`) and steers new traffic to B1 and B3 until B2 drains and recovers."
+    detail "In large pools, inspecting every server on every request adds overhead and can cause multiple load balancers to herd onto the same idle server. NGINX's `random two least_conn` (Power of Two Choices) samples just two random backends and picks the one with fewer active connections."
     send client > lb "req 5, 6"
     send lb > b1 "req 5"
     send lb > b3 "req 6" with
