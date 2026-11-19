@@ -74,6 +74,9 @@ test("flow_icons: postgres → si:postgresql; REST route agrees", async () => {
     const rest = await (await fetch(`${base}/api/icons?q=postgres&pack=si`)).json() as any;
     expect(rest.icons[0].ref).toBe("si:postgresql");
     expect(rest.icons.every((i: any) => i.ref.startsWith("si:"))).toBe(true);
+    expect(rest.icons[0].icon).toBeUndefined(); // names only unless preview=1
+    const pv = await (await fetch(`${base}/api/icons?q=postgres&pack=si&preview=1`)).json() as any;
+    expect(pv.icons[0].icon.paths.length).toBeGreaterThan(0);
     expect((await fetch(`${base}/api/icons?q=x&pack=nope`)).status).toBe(422);
   } finally { await client.close(); server.close(); }
 });

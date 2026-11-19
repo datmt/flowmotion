@@ -683,7 +683,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   Inspector "Find icon": search box + pack filter (all, lucide, si, carbon, devicon, local) over the bundled packs and this
   browser's local icons; results are a grid of previewed tiles (mono icons follow text colour, logos keep colours); click sets `icon`.
   *Done when:* Playwright: search `postgres` shows `si:postgresql` with a drawn preview, click sets the node icon; no match shows a message.
-  *Built:* client-side with lazy core `searchIcons` + `resolveIcons` (no server call); 200 ms debounce; max 30 tiles. `resolveIcons` now exported from core.
+  *Built:* ajax: `GET /api/icons?q=&pack=&preview=1` returns each hit with its drawable `icon` (MCP tool stays names only); local icons are matched in the browser. 200 ms debounce, aborts stale requests, shows Searching…/error/no-match. `resolveIcons` exported from core.
   *Commit:* `feat(web): F44 icon picker with search and preview`
 
 Dependency notes: A, B, C are independent lanes. F34 gates the visual quality pass; F35 gates all of B.

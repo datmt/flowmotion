@@ -45,7 +45,7 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
   api.get("/share/:id", read, async (req, res) => void res.json(await tools.snapshot(c, String(req.params.id))));
   api.get("/share/:id/og.png", read, async (req, res) => void res.type("png").set("cache-control", "public, max-age=86400").send(Buffer.from(await tools.ogImage(c, String(req.params.id)))));
   api.get("/share/:id/dsl", read, async (req, res) => void res.type("text/plain").send((await tools.get(c, { id: String(req.params.id), view: "dsl" }) as { dsl: string }).dsl));
-  api.get("/icons", read, async (req, res) => void res.json(await tools.icons({ query: String(req.query.q ?? ""), pack: req.query.pack ? String(req.query.pack) : undefined, limit: req.query.limit ? Number(req.query.limit) : undefined })));
+  api.get("/icons", read, async (req, res) => void res.json(await tools.icons({ query: String(req.query.q ?? ""), pack: req.query.pack ? String(req.query.pack) : undefined, limit: req.query.limit ? Number(req.query.limit) : undefined, preview: req.query.preview === "1" })));
   api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body ?? {})));
   api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
   api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, tools.docOf(req.body ?? {}), undefined, req.body?.icons)));

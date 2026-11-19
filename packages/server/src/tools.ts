@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyOps, compile, iconPacks, outline, sanitizeSvg, searchIcons, type LocalIcon, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
+import { applyOps, compile, iconPacks, outline, resolveIcons, sanitizeSvg, searchIcons, type LocalIcon, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
 import type { BlobStore } from "./store.ts";
 
 export class ToolError extends Error {
@@ -38,9 +38,12 @@ export async function snapshot(c: Ctx, id: string): Promise<{ doc: FlowDoc; comp
 }
 
 /** Icon name search for agents/editors: `{ packs, icons: [{ref, tags}] }`. */
-export async function icons({ query, pack, limit }: { query?: string; pack?: string; limit?: number }) {
+export async function icons({ query, pack, limit, preview }: { query?: string; pack?: string; limit?: number; preview?: boolean }) {
   if (pack && !iconPacks.includes(pack)) throw new ToolError(422, { error: "invalid", message: `Unknown pack '${pack}'. Packs: ${iconPacks.join(", ")}.` });
-  return { packs: iconPacks, icons: await searchIcons(query ?? "", { pack, limit }) };
+  const hits = await searchIcons(query ?? "", { pack, limit });
+  if (!preview) return { packs: iconPacks, icons: hits };
+  const { icons } = await resolveIcons(hits.map((h) => h.ref)); // REST preview: drawable icon data per hit (the MCP tool stays names only)
+  return { packs: iconPacks, icons: hits.map((h) => ({ ...h, icon: icons[h.ref] })) };
 }
 
 export const guide = () => readFileSync(new URL("docs/guide.md", ROOT), "utf8");

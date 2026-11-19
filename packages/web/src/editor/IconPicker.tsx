@@ -13,23 +13,27 @@ export function IconSvg({ icon, size = 28 }: { icon: CompiledIcon; size?: number
   );
 }
 
-/** Search the bundled icon packs (and this browser's local icons) by name; each hit is previewed, click to use. Core is lazy: pack data loads on first search. */
+/** Ajax search: GET /api/icons (bundled packs, with preview data) plus this browser's local icons; each hit is previewed, click to use. */
 export function IconPicker({ current, onPick }: { current?: string; onPick: (ref: string) => void }) {
-  const [q, setQ] = useState(""), [pack, setPack] = useState(""), [hits, setHits] = useState<{ ref: string; icon?: CompiledIcon }[]>([]), [busy, setBusy] = useState(false);
+  const [q, setQ] = useState(""), [pack, setPack] = useState(""), [hits, setHits] = useState<{ ref: string; icon?: CompiledIcon }[]>([]), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   useEffect(() => {
     if (!q.trim()) return setHits([]);
     let dead = false;
+    const ctl = new AbortController();
     setBusy(true);
     const t = setTimeout(async () => {
-      const core = await import("@flowmotion/core"), local = getLocalIcons();
-      const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-      const mine = pack && pack !== "local" ? [] : Object.keys(local).filter((r) => words.every((w) => r.includes(w)));
-      const found = pack === "local" ? [] : (await core.searchIcons(q, { pack: pack || undefined, limit: 24 })).map((h) => h.ref);
-      const refs = [...mine, ...found].slice(0, 30);
-      const { icons } = await core.resolveIcons(refs, local);
-      if (!dead) { setHits(refs.map((ref) => ({ ref, icon: icons[ref] }))); setBusy(false); }
+      try {
+        const local = getLocalIcons(), words = q.toLowerCase().split(/\s+/).filter(Boolean);
+        const mine = pack && pack !== "local" ? [] : Object.keys(local).filter((r) => words.every((w) => r.includes(w)));
+        const mineIcons = mine.length ? (await (await import("@flowmotion/core")).resolveIcons(mine, local)).icons : {};
+        const r = pack === "local" ? undefined : await fetch(`/api/icons?preview=1&limit=24&q=${encodeURIComponent(q)}${pack ? `&pack=${pack}` : ""}`, { signal: ctl.signal });
+        if (r && !r.ok) throw new Error(`search failed (${r.status})`);
+        const found: { ref: string; icon?: CompiledIcon }[] = r ? (await r.json()).icons : [];
+        if (!dead) { setHits([...mine.map((ref) => ({ ref, icon: mineIcons[ref] })), ...found].slice(0, 30)); setErr(""); }
+      } catch (e) { if (!dead) setErr(String((e as Error).message ?? e)); }
+      if (!dead) setBusy(false);
     }, 200);
-    return () => { dead = true; clearTimeout(t); };
+    return () => { dead = true; ctl.abort(); clearTimeout(t); };
   }, [q, pack]);
   return (
     <div className="mb-2">
@@ -40,7 +44,9 @@ export function IconPicker({ current, onPick }: { current?: string; onPick: (ref
           {[...PACKS, "local"].map((p) => <option key={p} value={p}>{p || "all"}</option>)}
         </select>
       </div>
-      {q.trim() && !busy && !hits.length && <p className="mt-1 text-xs text-stone-500">No icons match “{q}”.</p>}
+      {busy && <p className="mt-1 text-xs text-stone-500">Searching…</p>}
+      {err && <p role="alert" className="mt-1 text-xs text-red-600">{err}</p>}
+      {q.trim() && !busy && !err && !hits.length && <p className="mt-1 text-xs text-stone-500">No icons match “{q}”.</p>}
       <div className="mt-1 grid grid-cols-4 gap-1" role="list" aria-label="Icon results">
         {hits.map(({ ref, icon }) => (
           <button key={ref} role="listitem" title={ref} aria-label={ref} onClick={() => onPick(ref)}
