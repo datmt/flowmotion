@@ -1,0 +1,67 @@
+{
+ "version": "2.1",
+ "meta": {
+  "title": "Tones"
+ },
+ "nodes": [
+  {
+   "id": "n0",
+   "label": "N0",
+   "kind": "service",
+   "tone": "primary"
+  },
+  {
+   "id": "n1",
+   "label": "N1",
+   "kind": "service",
+   "tone": "muted"
+  },
+  {
+   "id": "n2",
+   "label": "N2",
+   "kind": "service",
+   "tone": "danger"
+  },
+  {
+   "id": "n3",
+   "label": "N3",
+   "kind": "service"
+  }
+ ],
+ "edges": [
+  {
+   "from": "n0",
+   "to": "n1"
+  },
+  {
+   "from": "n1",
+   "to": "n2"
+  },
+  {
+   "from": "n2",
+   "to": "n3"
+  }
+ ],
+ "scenarios": [
+  {
+   "id": "s",
+   "title": "s",
+   "steps": [
+    {
+     "id": "x",
+     "title": "x",
+     "narration": "n0 fails.",
+     "actions": [
+      {
+       "do": "state",
+       "targets": [
+        "n0"
+       ],
+       "state": "error"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

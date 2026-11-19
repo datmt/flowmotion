@@ -82,6 +82,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 40
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "muted",
+              "danger"
+            ]
           }
         },
         "required": [
@@ -136,6 +144,14 @@
               "warning",
               "pending",
               "disabled"
+            ]
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "muted",
+              "danger"
             ]
           },
           "hidden": {

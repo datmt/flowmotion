@@ -1,4 +1,4 @@
-import type { NodeKind, StateName } from "../schema.ts";
+import type { NodeKind, StateName, Tone } from "../schema.ts";
 
 export type Shape = "rounded" | "pill" | "diamond" | "cylinder" | "queue" | "actor" | "dashed" | "circle";
 export interface StateColors { fill: string; stroke: string; text: string }
@@ -8,6 +8,7 @@ export interface Theme {
   cell: { fill: string; stroke: string; text: string; key: string };
   code: { bg: string; text: string; highlight: string; gutter: string };
   state: Record<StateName, StateColors>;
+  tone: Record<Tone, StateColors>; // replaces the idle look of a node/group; other states still win
 }
 
 const sc = (fill: string, stroke: string, text: string): StateColors => ({ fill, stroke, text });
@@ -25,6 +26,7 @@ export const themes: Record<"light" | "dark", Theme> = {
       warning: sc("#fef3c7", "#d97706", "#78350f"), pending: sc("#ede9fe", "#7c3aed", "#4c1d95"),
       disabled: sc("#f8fafc", "#cbd5e1", "#9ca3af"),
     },
+    tone: { primary: sc("#1d4ed8", "#1e3a8a", "#ffffff"), muted: sc("#ffffff", "#e2e8f0", "#94a3b8"), danger: sc("#fff1f2", "#e11d48", "#9f1239") },
   },
   dark: {
     bg: "#0f172a", text: "#e2e8f0", muted: "#94a3b8", edge: "#64748b", packet: "#60a5fa", token: "#a78bfa",
@@ -38,6 +40,7 @@ export const themes: Record<"light" | "dark", Theme> = {
       warning: sc("#78350f", "#fbbf24", "#fef3c7"), pending: sc("#4c1d95", "#a78bfa", "#ede9fe"),
       disabled: sc("#0f172a", "#334155", "#64748b"),
     },
+    tone: { primary: sc("#3b82f6", "#93c5fd", "#0f172a"), muted: sc("#0f172a", "#1e293b", "#64748b"), danger: sc("#4c0519", "#fb7185", "#ffe4e6") },
   },
 };
 

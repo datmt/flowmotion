@@ -114,3 +114,25 @@ test.each(["raft-consensus", "raft-old"])("%s: nested branches render the step t
   expect(await page.evaluate(() => (window as any).__el.shadowRoot.querySelector(".branches > summary")?.checkVisibility())).toBe(true);
   expect(errors).toEqual([]);
 }, 90_000);
+
+test("F42: primary, muted and danger nodes are drawn with three distinct looks; non-idle state wins", async () => {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 600 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}?src=tones.flow.json`);
+  await page.waitForFunction(() => (window as any).__el?.player, null, { timeout: 30_000 });
+  const looks = () => page.evaluate(() => {
+    const p = (window as any).__el.player;
+    p.seek(0);
+    // first rounded Rect of each node group = the body (nodes are the only 120x56 rects)
+    return p.stage.find("Rect").filter((r: any) => r.width() >= 120 && r.height() >= 56).map((r: any) => `${r.fill()}|${r.stroke()}`);
+  });
+  const idle = await looks();
+  expect(idle).toHaveLength(4);
+  expect(new Set(idle).size).toBe(4); // primary, muted, danger and plain are all different
+  const end = await page.evaluate(() => { const p = (window as any).__el.player; p.seek(p.duration ?? 99); return p.stage.find("Rect").filter((r: any) => r.width() >= 120 && r.height() >= 56).map((r: any) => `${r.fill()}|${r.stroke()}`); });
+  expect(end[0]).not.toBe(idle[0]); // state=error on the primary node replaces its tone look
+  expect(end[1]).toBe(idle[1]);
+  expect(errors).toEqual([]);
+  await page.close();
+}, 60_000);

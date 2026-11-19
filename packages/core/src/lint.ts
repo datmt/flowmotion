@@ -35,6 +35,10 @@ export function lint(doc: FlowDoc, lay: Layout): Issue[] {
   decl("node", doc.nodes, "nodes"); decl("array", doc.arrays, "arrays"); decl("grid", doc.grids, "grids"); decl("code block", doc.code, "code"); decl("group", doc.groups, "groups");
   doc.edges.forEach((e, i) => e.hidden && !shown.has(e.id ?? `${e.from}-${e.to}`) && warn("never_visible", `/edges/${i}/hidden`, `edges › ${e.id ?? `${e.from}-${e.to}`}`, `Edge '${e.id ?? `${e.from}-${e.to}`}' is hidden and never shown.`));
 
+  const primary = doc.nodes.filter((n) => n.tone === "primary").length;
+  if (doc.nodes.length >= 3 && primary * 3 > doc.nodes.length)
+    warn("tone_overuse", "/nodes", "nodes", `${primary} of ${doc.nodes.length} nodes are tone 'primary'; emphasis only works when it is rare.`, "Keep primary for the one or two nodes the viewer should look at.");
+
   doc.nodes.forEach((n, i) => {
     if (wrap(n.label, 200 - 2 * metrics.nodePadX, "inter", metrics.labelSize, 2).overflow)
       warn("label_wraps", `/nodes/${i}/label`, `nodes › ${n.id}`, `Label of '${n.id}' wraps past 2 lines.`, "Shorten it.");

@@ -1,4 +1,4 @@
-import type { NodeKind, StateName } from "../schema.ts";
+import type { NodeKind, StateName, Tone } from "../schema.ts";
 
 export interface CompiledIcon { w: number; h: number; mono: boolean; paths: { d: string; fill?: string; stroke?: string; sw?: number; cap?: string; join?: string }[] }
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -9,8 +9,8 @@ export interface CompiledFlow {
   meta: { title: string; summary?: string; theme: "light" | "dark"; aspect: "16:9" | "4:3" | "1:1" | "9:16" };
   bounds: Rect; // whole diagram incl. hidden entities
   shift?: { x: number; y: number }; // compiled coords = layout coords + shift; editor pins `pos = compiled - shift`
-  groups: { id: string; label: string; rect: Rect }[];
-  nodes: { id: string; kind: NodeKind; rect: Rect; icon?: string }[];
+  groups: { id: string; label: string; tone?: Tone; rect: Rect }[];
+  nodes: { id: string; kind: NodeKind; rect: Rect; icon?: string; tone?: Tone }[];
   edges: { id: string; from: string; to: string; arrow: boolean; dashed: boolean; points: number[]; length: number; labelAt: { x: number; y: number } }[];
   arrays: { id: string; label?: string; rect: Rect; orientation: "row" | "column"; keys?: string[]; slots: Rect[] }[];
   grids: { id: string; label?: string; rect: Rect; rows: number; cols: number; rowLabels?: string[]; colLabels?: string[]; slots: Rect[] }[];

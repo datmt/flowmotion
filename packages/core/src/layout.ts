@@ -4,15 +4,15 @@ import type { FlowDoc } from "./schema.ts";
 import { flattenScenario } from "./timing.ts";
 import { maxLengths } from "./cells.ts";
 import { kinds, measure, metrics, wrap } from "./runtime/index.ts";
-import type { NodeKind } from "./schema.ts";
+import type { NodeKind, Tone } from "./schema.ts";
 
 import type { Rect } from "./runtime/compiled.ts";
 export type { Rect };
 export interface Layout {
   bounds: Rect;
   shift: { x: number; y: number }; // compiled = ELK space + shift; `pos` pins live in ELK space
-  groups: { id: string; label: string; rect: Rect }[];
-  nodes: { id: string; kind: NodeKind; rect: Rect; icon?: string }[];
+  groups: { id: string; label: string; tone?: Tone; rect: Rect }[];
+  nodes: { id: string; kind: NodeKind; rect: Rect; icon?: string; tone?: Tone }[];
   edges: { id: string; from: string; to: string; arrow: boolean; dashed: boolean; points: number[]; length: number; labelAt: { x: number; y: number } }[];
   arrays: { id: string; label?: string; rect: Rect; orientation: "row" | "column"; keys?: string[]; slots: Rect[] }[];
   grids: { id: string; label?: string; rect: Rect; rows: number; cols: number; rowLabels?: string[]; colLabels?: string[]; slots: Rect[] }[];
@@ -179,7 +179,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     const h = seq ? lifelines[0]!.y1 - u.y : u.h;
     return { x: u.x - groupPad, y: u.y - groupPad - 16, w: u.w + 2 * groupPad, h: h + 2 * groupPad + 16 };
   };
-  const groups = (doc.groups ?? []).flatMap((g) => { const r = groupRect(g.id); return r ? [{ id: g.id, label: g.label, rect: r }] : []; });
+  const groups = (doc.groups ?? []).flatMap((g) => { const r = groupRect(g.id); return r ? [{ id: g.id, label: g.label, ...(g.tone ? { tone: g.tone } : {}), rect: r }] : []; });
 
   // — edges —
   const edges = doc.edges.map((e, i) => {
@@ -231,7 +231,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     shift: { x: dx, y: dy },
     bounds: { x: 0, y: 0, w: bounds.x + bounds.w + M, h: bounds.y + bounds.h + M },
     groups: g2,
-    nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id), ...(n.icon ? { icon: n.icon } : {}) })),
+    nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id), ...(n.icon ? { icon: n.icon } : {}), ...(n.tone ? { tone: n.tone } : {}) })),
     edges, arrays, grids,
     lifelines: lifelines.map((l) => ({ ...l, x: l.x + dx, y0: l.y0 + dy, y1: l.y1 + dy })),
     code: (doc.code ?? []).map((c) => ({ id: c.id, ...(c.title ? { title: c.title } : {}), rect: R(c.id), lineCount: c.code.split("\n").length })),

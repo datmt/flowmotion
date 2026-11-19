@@ -660,11 +660,13 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   imported icons. Also added `carbon` and `devicon` packs (`gen:icons` skips icons using gradients/opacity/transforms/`<use>`).
   *Commit:* `feat(web): F41 local icon import and share rules`
 
-- [ ] **F42 Tones**
+- [x] **F42 Tones**
   *Depends:* F09
   Optional `tone: primary | muted | danger` on nodes and groups: semantic emphasis mapped by the theme
   (light and dark), orthogonal to `state`. Lint: more than a third of nodes `primary` → warning.
   *Done when:* schema + compile test; player draws three distinct tones; guide updated.
+  *Built (deviations):* a tone replaces only the *idle* look (any other state wins while it lasts). On groups it recolours the outline
+  and label only (no fill flood). Lint `tone_overuse` applies from 3 nodes up. Inspector has a Tone pick for nodes and groups; DSL `tone=`.
   *Commit:* `feat(core): F42 semantic tones`
 
 - [ ] **F43 Named effects**

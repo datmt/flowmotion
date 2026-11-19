@@ -11,12 +11,13 @@ export const Ref = z.string().max(90).regex(REF_RE);
 
 export const NodeKind = z.enum(["service", "state", "decision", "db", "queue", "actor", "external", "value"]);
 export const StateName = z.enum(["idle", "active", "success", "error", "warning", "pending", "disabled"]);
+export const Tone = z.enum(["primary", "muted", "danger"]);
 const Ease = z.enum(["linear", "inOut", "spring"]);
 const Pos = z.strictObject({ x: z.number(), y: z.number() });
 const Cell = z.string().max(40);
 const Targets = z.array(Ref).max(64);
 
-export const Group = z.strictObject({ id: Id, label: z.string().min(1).max(40) });
+export const Group = z.strictObject({ id: Id, label: z.string().min(1).max(40), tone: Tone.optional() });
 
 export const Node = z.strictObject({
   id: Id,
@@ -25,6 +26,7 @@ export const Node = z.strictObject({
   icon: z.string().regex(ICON_RE).optional(), // "<pack>:<name>", e.g. "si:postgresql"
   group: Id.optional(),
   state: StateName.optional(),
+  tone: Tone.optional(), // semantic emphasis; orthogonal to state (a non-idle state wins while it lasts)
   hidden: z.boolean().optional(),
   pos: Pos.optional(),
 });
@@ -143,6 +145,7 @@ export const FlowDoc = z.strictObject({
 export type FlowDoc = z.infer<typeof FlowDoc>;
 export type Action = z.infer<typeof Action>;
 export type NodeKind = z.infer<typeof NodeKind>;
+export type Tone = z.infer<typeof Tone>;
 export type StateName = z.infer<typeof StateName>;
 export type Node = z.infer<typeof Node>;
 export type Edge = z.infer<typeof Edge>;

@@ -22,8 +22,10 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
   layer.add(world);
   const parts = new Map<string, Part>();
   const pulseTargets = new Map<string, Konva.Group>();
-  const statePaint = (f: EntFrame) => {
-    const a = th.state[f.fromState as StateName], b = th.state[f.state as StateName];
+  // A tone replaces only the idle look; any other state wins while it lasts.
+  const statePaint = (f: EntFrame, tone?: keyof Theme["tone"]) => {
+    const pick = (s: string) => (tone && s === "idle" ? th.tone[tone] : th.state[s as StateName]);
+    const a = pick(f.fromState), b = pick(f.state);
     return { fill: mix(a.fill, b.fill, f.stateK), stroke: mix(a.stroke, b.stroke, f.stateK), text: mix(a.text, b.text, f.stateK) };
   };
   const labelPair = (g: Konva.Group, o: Konva.TextConfig) => {
@@ -43,7 +45,11 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
     const gr = new Konva.Group({ x: g.rect.x, y: g.rect.y }), r = new Konva.Rect({ width: g.rect.w, height: g.rect.h, cornerRadius: 12, strokeWidth: 1, dash: [6, 4] });
     gr.add(r);
     const lab = labelPair(gr, { x: 12, y: 10, fontSize: 12, fontStyle: "bold", width: g.rect.w - 24 });
-    add(g.id, gr, (f, t, dim) => { r.fill(t.group.fill); r.stroke(t.group.stroke); lab(f, t.group.label); gr.opacity(f.opacity * dim); });
+    add(g.id, gr, (f, t, dim) => {
+      const tc = g.tone && f.state === "idle" && f.fromState === "idle" ? t.tone[g.tone] : undefined;
+      // a group is a backdrop: tone recolours the outline and label only, never floods the panel behind its children
+      r.fill(t.group.fill); r.stroke(tc ? tc.stroke : t.group.stroke); r.strokeWidth(tc ? 2 : 1); lab(f, tc ? (g.tone === "muted" ? tc.text : tc.stroke) : t.group.label); gr.opacity(f.opacity * dim);
+    });
   }
   // sequence lifelines (under edges)
   for (const l of c.lifelines ?? []) {
@@ -91,7 +97,7 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
     const lab = labelPair(gr, { x: 8 + side, y: labY, width: w - 16 - side, height: labH, align: "center", verticalAlign: "middle" });
     gr.offset({ x: -0, y: 0 });
     add(n.id, gr, (f, t, dim) => {
-      const p = statePaint(f);
+      const p = statePaint(f, n.tone);
       fills.forEach((s) => { s.stroke(p.stroke); if (s.fillEnabled()) s.fill(p.fill); });
       extra.forEach((s) => s.stroke(p.stroke));
       gr.findOne(".head")?.setAttrs({ stroke: p.stroke, fill: p.fill });

@@ -92,10 +92,10 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
           case "theme": doc.meta.theme = need(1, "theme").s; break;
           case "aspect": doc.meta.aspect = need(1, "aspect").s; break;
           case "layout": { const { o } = opts(rest, ["algorithm", "direction", "edges"], []); doc.layout = o; at.set("/layout", n); break; }
-          case "group": push("groups", { id: need(1, "id").s, label: need(2, "label").s }); break;
+          case "group": { const { o } = opts(toks.slice(3), ["tone"], []); push("groups", { id: need(1, "id").s, label: need(2, "label").s, ...(o.tone && { tone: o.tone }) }); break; }
           case "node": {
-            const { o, f } = opts(toks.slice(4), ["in", "state", "pos", "icon"], ["hidden"]);
-            push("nodes", { id: need(1, "id").s, label: need(2, "label").s, kind: need(3, "kind").s, ...(o.in && { group: o.in }), ...(o.icon && { icon: o.icon }), ...(o.state && { state: o.state }), ...(o.pos && { pos: pos(o.pos, verb.col) }), ...(f.has("hidden") && { hidden: true }) });
+            const { o, f } = opts(toks.slice(4), ["in", "state", "pos", "icon", "tone"], ["hidden"]);
+            push("nodes", { id: need(1, "id").s, label: need(2, "label").s, kind: need(3, "kind").s, ...(o.in && { group: o.in }), ...(o.icon && { icon: o.icon }), ...(o.state && { state: o.state }), ...(o.tone && { tone: o.tone }), ...(o.pos && { pos: pos(o.pos, verb.col) }), ...(f.has("hidden") && { hidden: true }) });
             break;
           }
           case "edge": {
@@ -214,8 +214,8 @@ export function printDsl(doc: FlowDoc): string {
   const px = (p?: { x: number; y: number }) => (p ? ` pos=${p.x},${p.y}` : "");
   const join = (...p: (string | false | undefined)[]) => p.filter(Boolean).join(" ");
   L.push("");
-  for (const g of doc.groups ?? []) L.push(`group ${g.id} ${q(g.label)}`);
-  for (const x of doc.nodes) L.push(join("node", x.id, q(x.label), x.kind, x.group && `in=${x.group}`, x.icon && `icon=${x.icon}`, x.state && `state=${x.state}`, x.pos && px(x.pos).trim(), x.hidden && "hidden"));
+  for (const g of doc.groups ?? []) L.push(join("group", g.id, q(g.label), g.tone && `tone=${g.tone}`));
+  for (const x of doc.nodes) L.push(join("node", x.id, q(x.label), x.kind, x.group && `in=${x.group}`, x.icon && `icon=${x.icon}`, x.state && `state=${x.state}`, x.tone && `tone=${x.tone}`, x.pos && px(x.pos).trim(), x.hidden && "hidden"));
   for (const e of doc.edges) L.push(join("edge", e.from, ">", e.to, e.label !== undefined && q(e.label), e.id && `id=${e.id}`, e.arrow === true && "arrow", e.arrow === false && "noarrow", e.dashed && "dashed", e.hidden && "hidden"));
   for (const a of doc.arrays ?? []) L.push(join("array", a.id, a.label !== undefined && q(a.label), a.keys && `keys=${a.keys.join(",")}`, a.orientation && `orientation=${a.orientation}`, a.group && `in=${a.group}`, a.pos && px(a.pos).trim(), a.hidden && "hidden", "=", ...a.values.map(cell)));
   for (const g of doc.grids ?? []) {

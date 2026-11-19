@@ -5,6 +5,7 @@ import { Check, Heading, mini, Pick, Text } from "./fields.tsx";
 import type { Store } from "./store.ts";
 
 const KINDS = ["service", "state", "decision", "db", "queue", "actor", "external", "value"];
+const TONES = ["", "primary", "muted", "danger"];
 const STATES = ["", "idle", "active", "success", "error", "warning", "pending", "disabled"];
 
 /** Edit whatever is selected; with nothing selected, edit the flow itself. One commit = one undo entry. */
@@ -41,9 +42,11 @@ export function Inspector({ store, doc, sel }: { store: Store; doc: FlowDoc; sel
       {f.entity === "node" && <>
         <Pick label="Kind" value={v.kind} options={KINDS} onChange={(kind) => set({ kind })} />
         <Pick label="Initial state" value={v.state ?? ""} options={STATES} onChange={(state) => set({ state: state || undefined })} />
+        <Pick label="Tone" value={v.tone ?? ""} options={TONES} onChange={(tone) => set({ tone: tone || undefined }, "tone")} />
         <Text label="Icon (pack:name)" max={40} value={v.icon ?? ""} onCommit={(t) => { const icon = t.trim(); if (!icon || ICON_RE.test(icon)) set({ icon: icon || undefined }, "icon"); }} />
         <IconImport current={v.icon} onPick={(icon) => set({ icon }, "icon")} />
       </>}
+      {f.entity === "group" && <Pick label="Tone" value={v.tone ?? ""} options={TONES} onChange={(tone) => set({ tone: tone || undefined }, "tone")} />}
       {f.entity === "edge" && <>
         <Check label="Dashed" checked={!!v.dashed} onChange={(c) => set({ dashed: c || undefined })} />
         <Check label="Arrow" checked={v.arrow ?? true} onChange={(c) => set({ arrow: c ? undefined : false })} />
