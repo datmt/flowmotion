@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/rate-limiter-token-bucket
 distributed-systems/read-repair
 distributed-systems/retry-backoff-dlq
 distributed-systems/saga-compensation

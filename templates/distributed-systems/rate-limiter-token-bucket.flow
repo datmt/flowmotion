@@ -21,6 +21,7 @@ scenario steady "Steady traffic stays within refill rate"
     state limiter,api success
   step refill "Timer refills up to capacity"
     "Tokens arrive at a fixed rate (`1/s`) and stop accumulating once the bucket is full (`cap=3`). Steady traffic below the refill rate never throttles."
+    detail "Instead of running a background timer for every client key, production implementations refill lazily on each request by storing `(tokens, last_refill)` and computing `min(cap, tokens + (now - last_refill) * refill_rate)` using a monotonic clock."
     values bucket = tok tok tok
     state bucket success with
     callout limiter "Refilled: capped at 3"
@@ -28,6 +29,7 @@ scenario steady "Steady traffic stays within refill rate"
 scenario burst-throttle "Burst drains bucket, then throttles" from=steady/allow
   step burst "Short burst spends remaining tokens"
     "Two more requests arrive back-to-back. Unlike a strict leaky queue, a token bucket **absorbs short bursts** up to its remaining tokens without queuing delay."
+    detail "When a request arrives with no tokens left, **traffic policing** immediately rejects or drops it (`429`), while **traffic shaping** queues it until enough tokens accumulate. By contrast, a leaky-bucket queue smooths output to a strictly constant drip with zero burstiness."
     send client > limiter "burst x2"
     values bucket =
     send limiter > api "burst x2"
