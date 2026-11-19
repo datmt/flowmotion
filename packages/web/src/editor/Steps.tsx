@@ -4,6 +4,7 @@ import { Heading, mini, Pick, Text } from "./fields.tsx";
 import type { Store } from "./store.ts";
 
 const TIMING = new Set(["do", "start", "delay", "dur", "ease"]);
+const EFFECTS = ["shake", "grow", "fade", "flash"];
 const STATES = ["idle", "active", "success", "error", "warning", "pending", "disabled"];
 const summary = (a: any) => Object.entries(a).filter(([k]) => !TIMING.has(k)).map(([, v]) => (Array.isArray(v) ? v.join(",") : String(v))).join(" ");
 
@@ -58,6 +59,7 @@ export function Steps({ store, doc, scenarioId, setScenario, step, setStep, sel 
                 <button className={mini} aria-label={`Remove action ${i + 1}`} onClick={() => put({ actions: cur.actions.filter((_, k) => k !== i) }, "remove action")}>✕</button>
               </div>
               {(a.do === "label" || a.do === "callout") && <Text bare label={`${a.do} text`} max={a.do === "label" ? 60 : 120} value={a.text} onCommit={(text) => setAction(i, { text })} />}
+              {a.do === "effect" && <Pick label="Effect" value={a.name} options={EFFECTS} onChange={(name) => setAction(i, { name })} />}
               {a.do === "state" && <Pick label="State" value={a.state} options={STATES} onChange={(state) => setAction(i, { state })} />}
             </li>
           ))}

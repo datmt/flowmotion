@@ -198,6 +198,16 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
       if (!id.includes("@")) { const n = c.nodes.find((x) => x.id === id)!; g.offset({ x: n.rect.w / 2, y: n.rect.h / 2 }); g.position({ x: n.rect.x + n.rect.w / 2, y: n.rect.y + n.rect.h / 2 }); }
       void cx;
     }
+    // named effects (transient, over the action's span): offsets are applied after the base position/opacity of this frame
+    for (const e of fr.effects) {
+      const g = pulseTargets.get(e.target);
+      if (!g) continue;
+      const bell = Math.sin(Math.PI * e.k);
+      if (e.name === "shake") g.x(g.x() + Math.sin(e.k * 6 * Math.PI) * 6 * (1 - e.k));
+      else if (e.name === "grow") g.scale({ x: g.scaleX() * (1 + 0.25 * bell), y: g.scaleY() * (1 + 0.25 * bell) });
+      else if (e.name === "fade") g.opacity(g.opacity() * (1 - 0.75 * bell));
+      else g.opacity(g.opacity() * (1 - 0.8 * Math.abs(Math.sin(e.k * 3 * Math.PI)))); // flash = three quick blinks
+    }
     for (const t of tokenParts) {
       const f = fr.ents.get(t.id)!, lbl = c.tokens.find((x) => x.id === t.id)?.label ?? "";
       const r = f.x === undefined ? undefined : rectAt(f.x, f.y!);

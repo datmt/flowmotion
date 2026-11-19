@@ -12,7 +12,7 @@ node      := "node" ID STR KIND ["in" ID] ["hidden"]
 edge      := "edge" ID ">" ID [STR] ["hidden"] ["dashed"]
 scenario  := "scenario" ID STR ["from" ID "/" ID] NL step+          # from <scenario>/<afterStep>
 step      := INDENT "step" ID STR NL INDENT2 STR NL action*         # STR line = narration
-action    := send | state | show | hide | label | pulse | focus | callout | move | swap | values | highlight
+action    := send | state | show | hide | label | pulse | effect | focus | callout | move | swap | values | highlight
 send      := "send" ID ">" ID [STR] ["via" ID] ["token" ID] timing*
 state     := "state" ID{,ID} STATE            show/hide/pulse := verb ID{,ID}
 callout   := "callout" REF STR                label := "label" REF STR

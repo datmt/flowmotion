@@ -62,6 +62,7 @@ Rules: 2-space indent; a line starting with `#` is a comment (no trailing commen
 | show / hide | `show attacker` (reveals hidden entities; edges by id) |
 | label | `label vars#lo "5" with` (node, edge or cell text) |
 | pulse | `pulse nums#4` (attention bump, for comparisons) |
+| effect | `effect api shake` — one of `shake` (error/jitter), `grow` (emphasis), `fade` (dim and return), `flash` (quick blinks) |
 | focus | `focus orch,payment dim`; bare `focus` = full view |
 | callout | `callout orch "Owns the transaction"` (<= 120 chars, ends with its step) |
 | send | `send orch > payment "Charge"` (needs an edge either way; `via=id` if several; `token=id` moves a token) |
@@ -70,7 +71,7 @@ Rules: 2-space indent; a line starting with `#` is a comment (no trailing commen
 | values | `values stack dur=1 = a b` (push, pop, enqueue; unchanged values stay put) |
 | highlight | `highlight src "3-5,9"`; `""` clears |
 
-State persists across steps; `callout`, `pulse` and packets end with their step. Cell refs are checked against the array length at that moment.
+State persists across steps; `callout`, `pulse`, `effect` and packets end with their step. Cell refs are checked against the array length at that moment.
 
 ## Workflow
 
@@ -151,5 +152,5 @@ Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide i
 * `nodes[]`: `{id,label,kind,group?,state?,hidden?,pos?}`; `edges[]`: `{id?,from,to,label?,arrow?,dashed?,hidden?}`.
 * `arrays[]`: `{id,label?,values,keys?,orientation?}`; `grids[]`: `{id,rows,rowLabels?,colLabels?}`; `tokens[]`: `{id,label?,at}`; `code[]`: `{id,title?,language,code,pos?}`.
 * `scenarios[]`: `{id,title,branchFrom?:{scenario,afterStep},steps:[{id,title,narration,actions,hold?}]}`.
-* Actions are `{"do":"send","from":"orch","to":"payment","label":"Charge"}`; the DSL verbs above map 1:1 (`"do":"state"`, `"do":"show"`, `"do":"hide"`, `"do":"label"`, `"do":"pulse"`, `"do":"focus"`, `"do":"callout"`, `"do":"send"`, `"do":"move"`, `"do":"swap"`, `"do":"values"`, `"do":"highlight"`) (`targets` arrays, `start:"with"`, `delay`, `dur`, `ease`).
+* Actions are `{"do":"send","from":"orch","to":"payment","label":"Charge"}`; the DSL verbs above map 1:1 (`"do":"state"`, `"do":"show"`, `"do":"hide"`, `"do":"label"`, `"do":"pulse"`, `"do":"effect"`, `"do":"focus"`, `"do":"callout"`, `"do":"send"`, `"do":"move"`, `"do":"swap"`, `"do":"values"`, `"do":"highlight"`) (`targets` arrays, `start:"with"`, `delay`, `dur`, `ease`).
 * Closed objects only: extra keys are errors. The JSON Schema is served at `/schema/flow-2.1.json`.

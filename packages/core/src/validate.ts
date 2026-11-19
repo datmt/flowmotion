@@ -215,7 +215,7 @@ export function validate(input: unknown): ValidateResult {
     const multi = (types: EType[]) => a && "targets" in a && a.targets.forEach((t, n) => expectRef(t, [...p, "targets", n], { entity: types, cell: true, range: true }));
     switch (a.do) {
       case "state": return multi(["group", "node", "edge", "array", "grid", "token"]);
-      case "show": case "hide": case "pulse": case "focus": return multi(ANY);
+      case "show": case "hide": case "pulse": case "effect": case "focus": return multi(ANY);
       case "label": expectRef(a.target, [...p, "target"], { entity: ["node", "edge", "group"], cell: true }); return;
       case "callout": expectRef(a.target, [...p, "target"], { entity: ANY, cell: true }); return;
       case "send":

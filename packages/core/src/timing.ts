@@ -2,7 +2,7 @@ import type { Action, FlowDoc, Step } from "./schema.ts";
 
 export const DEFAULT_HOLD = 1.5;
 const DUR: Record<Action["do"], number> = {
-  send: 1.2, move: 0.6, swap: 0.6, focus: 0.6, pulse: 0.6, values: 0.5,
+  send: 1.2, move: 0.6, swap: 0.6, focus: 0.6, pulse: 0.6, effect: 0.6, values: 0.5,
   state: 0.3, show: 0.3, hide: 0.3, label: 0.3, highlight: 0.3, callout: 0.3,
 };
 

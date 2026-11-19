@@ -143,7 +143,7 @@ function compileScenario(doc: FlowDoc, lay: Layout, id: string): CompiledScenari
     return { id: e.id ?? `${e.from}-${e.to}`, reverse: !fwd };
   };
 
-  const packets: CompiledScenario["packets"] = [], pulses: CompiledScenario["pulses"] = [], callouts: CompiledScenario["callouts"] = [], camera: CompiledScenario["camera"] = [];
+  const packets: CompiledScenario["packets"] = [], pulses: CompiledScenario["pulses"] = [], effects: CompiledScenario["effects"] = [], callouts: CompiledScenario["callouts"] = [], camera: CompiledScenario["camera"] = [];
   const entityIds = [...kind.keys()];
 
   // — actions —
@@ -155,6 +155,7 @@ function compileScenario(doc: FlowDoc, lay: Layout, id: string): CompiledScenari
         case "show": case "hide": for (const t of targets(a.targets)) key(t, "visible", t0, t1, ease, a.do === "show"); break;
         case "label": for (const t of targets([a.target])) key(t, "label", t0, t1, ease, a.text); break;
         case "pulse": for (const t of targets(a.targets)) pulses.push({ target: t, t0, t1 }); break;
+        case "effect": for (const t of targets(a.targets)) effects.push({ target: t, name: a.name, t0, t1 }); break;
         case "callout": for (const t of targets([a.target])) callouts.push({ target: t, text: a.text, t0, t1: st.end }); break;
         case "highlight": key(a.target, "lines", t0, t1, ease, a.lines); break;
         case "focus": {
@@ -224,5 +225,5 @@ function compileScenario(doc: FlowDoc, lay: Layout, id: string): CompiledScenari
     id: s.step.id, title: s.step.title, narration: s.step.narration, start: s.start, end: s.end, inherited: s.inherited, changes: changesIn(s.start, s.end),
     branches: doc.scenarios.filter((b) => b.id !== id && b.branchFrom?.scenario === s.scenario && b.branchFrom.afterStep === s.step.id).map((b) => ({ scenario: b.id, title: b.title })),
   }));
-  return { id, title: sc.title, duration, steps: stepsOut, cells, tracks: out, packets, pulses, callouts, camera };
+  return { id, title: sc.title, duration, steps: stepsOut, cells, tracks: out, packets, pulses, effects, callouts, camera };
 }

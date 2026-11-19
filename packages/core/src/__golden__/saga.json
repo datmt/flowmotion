@@ -272,6 +272,7 @@
     }
    ],
    "pulses": [],
+   "effects": [],
    "callouts": [],
    "camera": []
   },
@@ -450,6 +451,7 @@
     }
    ],
    "pulses": [],
+   "effects": [],
    "callouts": [
     {
      "target": "payment",

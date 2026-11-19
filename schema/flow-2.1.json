@@ -759,6 +759,64 @@
                         "properties": {
                           "do": {
                             "type": "string",
+                            "const": "effect"
+                          },
+                          "targets": {
+                            "maxItems": 64,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 90,
+                              "pattern": "^[a-z][a-z0-9-]{0,39}(#(\\d+(\\.\\.\\d+|\\.\\d+)?|[a-z][a-z0-9-]{0,39}))?$"
+                            }
+                          },
+                          "name": {
+                            "type": "string",
+                            "enum": [
+                              "shake",
+                              "grow",
+                              "fade",
+                              "flash"
+                            ]
+                          },
+                          "start": {
+                            "type": "string",
+                            "enum": [
+                              "after",
+                              "with"
+                            ]
+                          },
+                          "delay": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 30
+                          },
+                          "dur": {
+                            "type": "number",
+                            "minimum": 0.05,
+                            "maximum": 30
+                          },
+                          "ease": {
+                            "type": "string",
+                            "enum": [
+                              "linear",
+                              "inOut",
+                              "spring"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "do",
+                          "targets",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "do": {
+                            "type": "string",
                             "const": "focus"
                           },
                           "targets": {

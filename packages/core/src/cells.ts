@@ -88,7 +88,7 @@ export function applyValues(sim: CellSim, owner: string, values: string[]): Valu
 /** Every Ref an action reads, with its path inside the action (for cell-bound checks). */
 export function actionRefs(a: Action): { ref: string; path: (string | number)[] }[] {
   switch (a.do) {
-    case "state": case "show": case "hide": case "pulse": case "focus":
+    case "state": case "show": case "hide": case "pulse": case "effect": case "focus":
       return a.targets.map((ref, i) => ({ ref, path: ["targets", i] }));
     case "label": case "callout": return [{ ref: a.target, path: ["target"] }];
     case "move": return [{ ref: a.to, path: ["to"] }];

@@ -103,12 +103,13 @@ export function addScenarioOp(doc: FlowDoc): { op: Op; id: string } {
   const id = uniqueId(doc, "scenario"), sid = uniqueId(doc, "step");
   return { id, op: { op: "upsertScenario", value: { id, title: "New scenario", steps: [{ id: sid, title: "New step", narration: "Describe this step.", actions: [] }] } } };
 }
-export type SimpleAction = "state" | "show" | "hide" | "pulse" | "focus" | "label" | "callout";
-export const SIMPLE_ACTIONS: SimpleAction[] = ["state", "show", "hide", "pulse", "focus", "label", "callout"];
+export type SimpleAction = "state" | "show" | "hide" | "pulse" | "effect" | "focus" | "label" | "callout";
+export const SIMPLE_ACTIONS: SimpleAction[] = ["state", "show", "hide", "pulse", "effect", "focus", "label", "callout"];
 /** Default action on `target` (the selected entity). Others (send, move, swap, values, highlight) come from the DSL/agent for now. */
 export function newAction(what: SimpleAction, target: string): any {
   if (what === "state") return { do: "state", targets: [target], state: "active" };
   if (what === "label" || what === "callout") return { do: what, target, text: "Text" };
+  if (what === "effect") return { do: "effect", targets: [target], name: "shake" };
   return { do: what, targets: [target] };
 }
 

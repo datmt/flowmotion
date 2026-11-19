@@ -28,6 +28,7 @@ export interface CompiledScenario {
   tracks: Track[];
   packets: { edge: string; reverse: boolean; t0: number; t1: number; ease: Ease; label?: string }[];
   pulses: { target: string; t0: number; t1: number }[];
+  effects: { target: string; name: "shake" | "grow" | "fade" | "flash"; t0: number; t1: number }[];
   callouts: { target: string; text: string; t0: number; t1: number }[];
   camera: { t0: number; t1: number; ease: Ease; rect: Rect | null; dim: string[] }[]; // null = full view
 }

@@ -669,12 +669,13 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   and label only (no fill flood). Lint `tone_overuse` applies from 3 nodes up. Inspector has a Tone pick for nodes and groups; DSL `tone=`.
   *Commit:* `feat(core): F42 semantic tones`
 
-- [ ] **F43 Named effects**
+- [x] **F43 Named effects**
   *Depends:* F09
   New action `effect` with `{target(s), name: shake | grow | fade | flash}` (no numeric transforms, no
   rotation); timing keys like other actions; ends with its step if transient.
   *Done when:* each effect compiles to deterministic tracks (same output twice); player test; guide
   lists the four.
+  *Built (deviations):* compiled as `scenario.effects[{target,name,t0,t1}]` (like pulses), sampled as `FrameState.effects` with linear progress `k`; the player applies them to nodes and cells (shake = decaying x jitter, grow = scale bell, fade = opacity dip, flash = three blinks). Reduced motion skips them. DSL `effect <targets> <name>`; editor Steps has an Effect pick.
   *Commit:* `feat(core): F43 named effects`
 
 Dependency notes: A, B, C are independent lanes. F34 gates the visual quality pass; F35 gates all of B.

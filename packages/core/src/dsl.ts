@@ -10,7 +10,7 @@ class DslError extends Error {
   constructor(m: string, col: number, hint?: string) { super(m); this.col = col; this.hint = hint; }
 }
 
-const ACTIONS = ["state", "show", "hide", "label", "pulse", "focus", "callout", "send", "move", "swap", "values", "highlight"];
+const ACTIONS = ["state", "show", "hide", "label", "pulse", "effect", "focus", "callout", "send", "move", "swap", "values", "highlight"];
 const TOP = ["flow", "summary", "theme", "aspect", "layout", "group", "node", "edge", "array", "grid", "token", "code", "scenario"];
 const guess = (w: string, all: string[]) => { const b = all.map((x) => [x, lev(w, x)] as const).sort((p, q) => p[1] - q[1])[0]; return b && b[1] <= 2 ? `Did you mean '${b[0]}'?` : `Expected one of: ${all.join(", ")}.`; };
 
@@ -183,6 +183,7 @@ function action(toks: Tok[], eol: number): Record<string, unknown> {
   switch (verb.s) {
     case "state": return { do: "state", targets: list(at(1, "targets").s), state: at(2, "state").s, ...timing(toks.slice(3)).a };
     case "show": case "hide": case "pulse": return { do: verb.s, targets: list(at(1, "targets").s), ...timing(toks.slice(2)).a };
+    case "effect": return { do: "effect", targets: list(at(1, "targets").s), name: at(2, "effect name").s, ...timing(toks.slice(3)).a };
     case "focus": {
       const hasT = toks[1] && !toks[1].q && !/^(dim|with|after)$|=/.test(toks[1].s);
       const { a, f } = timing(toks.slice(hasT ? 2 : 1), [], ["dim"]);
@@ -245,6 +246,7 @@ function actionLine(a: FlowDoc["scenarios"][number]["steps"][number]["actions"][
   switch (a.do) {
     case "state": return j("state", a.targets.join(","), a.state, ...t);
     case "show": case "hide": case "pulse": return j(a.do, a.targets.join(","), ...t);
+    case "effect": return j("effect", a.targets.join(","), a.name, ...t);
     case "focus": return j("focus", a.targets.join(","), a.dim && "dim", ...t);
     case "label": case "callout": return j(a.do, a.target, q(a.text), ...t);
     case "send": return j("send", a.from, ">", a.to, a.label !== undefined && q(a.label), a.via && `via=${a.via}`, a.token && `token=${a.token}`, ...t);

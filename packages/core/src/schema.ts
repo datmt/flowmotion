@@ -12,6 +12,7 @@ export const Ref = z.string().max(90).regex(REF_RE);
 export const NodeKind = z.enum(["service", "state", "decision", "db", "queue", "actor", "external", "value"]);
 export const StateName = z.enum(["idle", "active", "success", "error", "warning", "pending", "disabled"]);
 export const Tone = z.enum(["primary", "muted", "danger"]);
+export const EffectName = z.enum(["shake", "grow", "fade", "flash"]);
 const Ease = z.enum(["linear", "inOut", "spring"]);
 const Pos = z.strictObject({ x: z.number(), y: z.number() });
 const Cell = z.string().max(40);
@@ -92,6 +93,7 @@ export const Action = z.discriminatedUnion("do", [
   z.strictObject({ do: z.literal("hide"), targets: Targets, ...timing }),
   z.strictObject({ do: z.literal("label"), target: Ref, text: z.string().max(60), ...timing }),
   z.strictObject({ do: z.literal("pulse"), targets: Targets, ...timing }),
+  z.strictObject({ do: z.literal("effect"), targets: Targets, name: EffectName, ...timing }),
   z.strictObject({ do: z.literal("focus"), targets: Targets, dim: z.boolean().optional(), ...timing }),
   z.strictObject({ do: z.literal("callout"), target: Ref, text: z.string().max(120), ...timing }),
   z.strictObject({
@@ -146,6 +148,7 @@ export type FlowDoc = z.infer<typeof FlowDoc>;
 export type Action = z.infer<typeof Action>;
 export type NodeKind = z.infer<typeof NodeKind>;
 export type Tone = z.infer<typeof Tone>;
+export type EffectName = z.infer<typeof EffectName>;
 export type StateName = z.infer<typeof StateName>;
 export type Node = z.infer<typeof Node>;
 export type Edge = z.infer<typeof Edge>;

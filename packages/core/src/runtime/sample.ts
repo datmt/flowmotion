@@ -14,6 +14,7 @@ export interface FrameState {
   lines: Map<string, string>; // code block id → highlighted line spec
   packets: { x: number; y: number; label?: string; opacity: number }[];
   pulses: { target: string; k: number }[];
+  effects: { target: string; name: "shake" | "grow" | "fade" | "flash"; k: number }[]; // k = linear progress 0..1 of the effect
   callouts: { target: string; text: string; opacity: number }[];
   camera: { rect: Rect; dim: Set<string>; dimK: number };
 }
@@ -113,6 +114,7 @@ export function sample(c: CompiledFlow, scenarioId: string, t: number, opts: { r
       packets.push({ ...pointOn(e.points, e.length, p.reverse ? 1 - f : f), ...(p.label ? { label: p.label } : {}), opacity: clamp01(Math.min((t - p.t0) / 0.1, (p.t1 - t) / 0.1)) });
     }
   const pulses = reduced ? [] : sc.pulses.filter((p) => t >= p.t0 && t <= p.t1).map((p) => ({ target: p.target, k: Math.sin(Math.PI * clamp01((t - p.t0) / Math.max(p.t1 - p.t0, 1e-6))) }));
+  const effects = reduced ? [] : sc.effects.filter((e) => t >= e.t0 && t <= e.t1).map((e) => ({ target: e.target, name: e.name, k: clamp01((t - e.t0) / Math.max(e.t1 - e.t0, 1e-6)) }));
   const callouts = sc.callouts.filter((x) => t >= x.t0 && t < x.t1).map((x) => ({ target: x.target, text: x.text, opacity: clamp01((t - x.t0) / 0.2) }));
 
   // camera: last focus with t0 <= t, easing from the previous one (or the full view)
@@ -130,7 +132,7 @@ export function sample(c: CompiledFlow, scenarioId: string, t: number, opts: { r
       dim: new Set(dim), dimK: cur.dim.length ? k : dim.length ? 1 - k : 0,
     };
   }
-  return { t, step, ents, lines, packets, pulses, callouts, camera };
+  return { t, step, ents, lines, packets, pulses, effects, callouts, camera };
 }
 
 /** Settled value of every track at the end of step `i` (what `sample` shows just before the next step starts). */
