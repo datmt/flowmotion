@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/write-through-back
 distributed-systems/zookeeper-election
 machine-learning/backprop
 security/oauth-pkce

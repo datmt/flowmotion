@@ -20,6 +20,7 @@ scenario write-through "Write-through: synchronous durability"
     state cache active
   step sync-db "Cache writes synchronously to DB"
     "Under **write-through**, the cache waits to persist `x=v1` in the database before acknowledging the client. Write latency includes the DB round trip."
+    detail "Write-through is commonly paired with **no-write-allocate** (write-around) on write misses so write-once keys do not pollute the cache. Because every cached entry stays clean and matches storage, evicting an entry never requires a flush."
     send cache > db "WRITE x=v1"
     label store#db "v1"
     state db success
@@ -33,6 +34,7 @@ scenario write-through "Write-through: synchronous durability"
 scenario crash-before-flush "Write-back: fast reply, lost on crash" from=write-through/write-req
   step fast-ack "Write-back replies OK before DB flush"
     "Under **write-back**, the cache marks `x=v1` as **dirty** and replies `OK` right away, planning to flush batches to the DB asynchronously for high write throughput."
+    detail "Write-back tracks modified entries with a **dirty bit** (`1` = modified, `0` = clean) and is typically paired with **write-allocate** so repeated writes to the same key coalesce in memory and issue only one backing-store write upon flush or eviction."
     state store#cache warning
     label store#cache "v1 (dirty)"
     send cache > client "OK (fast!)"
