@@ -20,6 +20,7 @@ array vals "Stored value@ver" keys=r1,r2,r3 = v1@1 v1@1 v1@1
 scenario quorum-rw "Strict quorum (W=2, R=2, N=3)"
   step write-w2 "Write succeeds after W=2 replicas ack"
     "Client writes `v2@2`. The coordinator sends it to all 3 replicas; R1 and R2 persist it while R3 is slow. Because `W=2` acks arrived, the write succeeds immediately."
+    detail "In Dynamo's quorum protocol, write latency is dictated by the slowest of the `W` responding replicas and read latency by the slowest of `R`. Setting `R` and `W` strictly less than `N` (commonly `N=3, R=2, W=2`) avoids waiting on the single slowest replica."
     send client > coord "PUT v2@2"
     state coord active
     send coord > r1 "v2@2"
@@ -38,6 +39,7 @@ scenario quorum-rw "Strict quorum (W=2, R=2, N=3)"
     send r3 > coord "v1@1" with
   step pick-latest "Higher version wins: return v2@2"
     "The coordinator compares versions (`2 > 1`), returns fresh `v2@2` to the client, and can repair R3 in the background."
+    detail "When a write descends directly from an earlier version, Dynamo overwrites the older copy automatically. When concurrent writers create causally unrelated versions (incomparable vector clocks), the coordinator returns all divergent versions so the application can reconcile them and write the merged value back."
     send coord > client "v2@2"
     state coord success
     focus r1,r2,r3 dim
