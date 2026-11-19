@@ -33,6 +33,7 @@ scenario write-read "Command appends event; projection updates read view"
     state store,events#1 success with
   step project "Projector updates read view asynchronously"
     "The Projector subscribes to the event stream and updates the denormalized Read View. Writes stay fast while reads get a tailor-made schema — at the cost of **eventual consistency**."
+    detail "Precomputing query views as events arrive—what Martin Fowler calls Eager Read Derivation—eliminates expensive runtime joins on the read path, but introduces a propagation lag during which readers can briefly observe older state than the write side."
     send store > proj "Deposited(50)"
     send proj > read-db "balance=$50"
     label view#balance "$50"
@@ -60,6 +61,7 @@ scenario rebuild "Rebuilding a corrupted or new projection" from=write-read/proj
     state proj active with
   step replay "Replay full event log to rebuild"
     "The Projector replays `Opened` then `Deposited(50)` in order and materializes a clean, exact Read View with zero data loss."
+    detail "During replay, gateways that send updates to external systems must be disabled so historical side effects are not triggered a second time. For long event logs, systems periodically save snapshots in parallel so rebuilds replay only events since the latest snapshot rather than from offset `0`."
     send store > proj "replay 0..1"
     state events#0..1 active with
     send proj > read-db "rebuild: $50"

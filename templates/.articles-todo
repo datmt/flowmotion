@@ -1,7 +1,6 @@
 # Flows still missing their article (<slug>.md). Remove a line when you add the article.
 algorithms/binary-search
 databases/database-deadlock
-distributed-systems/cqrs-event-sourcing
 distributed-systems/crdt-counter
 distributed-systems/distributed-lock-redlock
 distributed-systems/exactly-once-kafka
