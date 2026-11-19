@@ -37,11 +37,13 @@ scenario in-flight "In-flight transfer captured in channel state" from=clean-sna
     callout p1 "Sent $30 before Marker arrived"
   step p1-snap "P1 receives Marker and records $70"
     "P1 now receives P2's `Marker`, records its post-send state `$70`, and puts its own `Marker` onto FIFO channel `P1 -> P2` **behind** the `$30` transfer."
+    detail "FIFO ordering is essential here: because the channel cannot reorder messages, P1's `Marker` cannot overtake the `$30` transfer. Every message P1 sent before its local snapshot is guaranteed to reach P2 before P1's `Marker` closes recording."
     send p1 > snap "save P1=$70"
     label rec#p1 "$70"
     send p1 > p2 "Marker (after $30)"
   step log-channel "P2 logs in-flight $30 before P1's Marker closes channel"
     "Because P2 already snapshotted at `$100` and is recording channel `P1 -> P2`, it captures `$30` in `chan-12` before P1's `Marker` closes recording. Total = `$70 + $100 + $30 = $200`!"
+    detail "The result is a **consistent global state**: causality is preserved (no message is recorded as received without also being recorded as sent), even though P1 and P2 snapshotted at different wall-clock times. Apache Flink's checkpoint barriers adapt this exact mechanism for streaming recovery."
     label p2 "Process P2 ($130)"
     label rec#chan-12 "$30"
     state rec#chan-12 active with

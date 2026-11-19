@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/snapshot-chandy-lamport
 distributed-systems/strangler-fig
 distributed-systems/swim-membership
 distributed-systems/temporal-replay
