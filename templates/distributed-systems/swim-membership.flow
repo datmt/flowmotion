@@ -21,6 +21,7 @@ array view "N4 view (state/inc)" keys=n1,n2,n3,n4 = alive/1 alive/1 alive/1 aliv
 scenario probe-fail "Direct and indirect probe detect failure"
   step direct-ping "Direct ping to random target"
     "Each period, Node 1 picks one random peer (Node 4) and sends a `ping`. Probing one peer per tick keeps load `O(1)` regardless of cluster size."
+    detail "To bound worst-case detection time, SWIM Section 4.3 traverses the local membership list in round-robin order and shuffles the list after each full pass (inserting new joiners at a random position), guaranteeing every peer is probed within `2N` periods while keeping per-node load constant."
     state n1 active
     send n1 > n4 "ping"
   step direct-timeout "No ack: avoid premature eviction"
@@ -58,6 +59,7 @@ scenario false-suspicion "False suspicion refuted by incarnation" from=probe-fai
     callout n4 "I am still alive!"
   step refute "Bump incarnation number to refute"
     "Only Node 4 can increment its own incarnation number. It bumps `inc` from `1` to `2` and disseminates `alive(N4, inc=2)`."
+    detail "SWIM's precedence rules prevent old rumors from re-triggering suspicion: `Alive(i)` overrides `Suspect(j)` or `Alive(j)` only when `i > j`; `Suspect(i)` overrides `Alive(j)` when `i >= j` and `Suspect(j)` when `i > j`; `Confirm` overrides all `Alive` and `Suspect` messages."
     label view#n4 "alive/2"
     state view#n4 success with
     send n4 > n2 "alive(N4,2)"
