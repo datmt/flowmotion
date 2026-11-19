@@ -26,6 +26,7 @@ scenario joint-consensus "Two-phase joint consensus avoids split quorums"
     callout s1 "Direct switch risks 2 leaders"
   step enter-joint "Phase 1: append and replicate C_old,new"
     "To replace S1 with S4 (`C_new = {S2, S3, S4}`), leader S1 appends joint config `C_old,new`. Immediately on append, every commit and election requires a majority of **both** `C_old` AND `C_new`."
+    detail "Each server always adopts the latest configuration entry in its log immediately upon appending it, even before commit. Before starting reconfiguration, Raft lets brand-new servers join as non-voting members to catch up their logs without creating availability gaps."
     show s4,s1-s4,s2-s4,s3-s4
     state s4 active
     send s1 > s2 "Append C_old,new"
@@ -52,6 +53,7 @@ scenario remove-leader "Removing the current leader cleanly" from=joint-consensu
     callout s1 "S1 manages log until C_new commits"
   step step-down "C_new commits: S1 steps down"
     "S2, S3, and S4 acknowledge `C_new`. The instant `C_new` is committed, S1 steps down and leaves the cluster."
+    detail "Once removed, S1 stops receiving heartbeats and may time out and send `RequestVote` with higher terms. To prevent removed nodes from disrupting the live cluster, Raft servers ignore `RequestVote` RPCs received within the minimum election timeout of hearing from a current leader."
     send s2 > s1 "ack"
     send s3 > s1 "ack" with
     send s4 > s1 "ack" with
