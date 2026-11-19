@@ -25,6 +25,7 @@ scenario balanced "Matched throughput keeps latency flat"
 scenario overload "Producer outpaces consumer; backpressure engages" from=balanced/steady
   step lag "Consumer slows down; queue fills to 3/3"
     "A downstream DB slows the consumer down while the producer keeps bursting. Messages pile up until all 3 slots in the bounded queue are full."
+    detail "A bounded FIFO queue caps worst-case wait time according to `max latency = (transaction time / number of threads) * queue length`. Once the consumer's transaction time rises, messages accumulate until that ceiling is reached instead of growing latency indefinitely."
     state cons warning
     send prod > buf "m3, m4"
     values q = m2 m3 m4
@@ -32,6 +33,7 @@ scenario overload "Producer outpaces consumer; backpressure engages" from=balanc
     callout buf "Queue FULL (3/3): no more room"
   step pushback "Queue applies backpressure upstream"
     "An **unbounded** queue would keep accepting writes until the process crashed with OOM. Instead, the bounded queue blocks or rejects `m5` (`429 / demand=0`), pushing pressure back to the producer."
+    detail "Before an unbounded queue even exhausts RAM, outgrowing the CPU cache causes cache misses on consumer threads that are already falling behind; on Linux, memory overcommit lets allocations succeed until the OOM killer terminates processes. With a bounded queue, blocking the receiving thread fills TCP sender buffers upstream, or a gateway returns HTTP `503` on synchronous protocols."
     send prod > buf "m5"
     effect buf shake
     send buf > prod "PAUSE (full)"
