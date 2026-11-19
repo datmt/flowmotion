@@ -41,6 +41,7 @@ scenario read-miss "Lazy population on miss, then fast hit"
 scenario stale-cache "Stale read when DB changes without invalidation" from=read-miss/hit
   step db-updated "Database updates to Alice v2"
     "A write updates the database to `Alice v2`, but cache invalidation is skipped, delayed, or fails before completing."
+    detail "When invalidating on write, update the database first and delete the cache key second. Deleting the cache first opens a window where a concurrent reader misses, loads the old value from the database before the update completes, and writes stale data back into the cache."
     send app > db "UPDATE Alice v2"
     label data#db "Alice v2"
     state data#db active with
