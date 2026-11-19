@@ -268,3 +268,26 @@ test("F41 local icons: import in the editor, drawn locally; share falls back unl
   expect(errors).toEqual([]);
   await page.close();
 }, 120_000);
+
+test("F44 icon picker: search packs, preview, pick sets the node icon", async () => {
+  const doc = { version: "2.1", meta: { title: "Pick" }, nodes: [{ id: "a", label: "Store", kind: "db" }], edges: [],
+    scenarios: [{ id: "s", title: "s", steps: [{ id: "x", title: "x", narration: "n", actions: [] }] }] };
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  await page.goto(`${base}/`);
+  await page.evaluate((doc) => new Promise<void>((res, rej) => {
+    const o = indexedDB.open("flowmotion", 2);
+    o.onsuccess = () => { const t = o.result.transaction("flows", "readwrite"); t.objectStore("flows").put({ id: "t2", doc, updated: Date.now() }); t.oncomplete = () => res(); t.onerror = () => rej(t.error); };
+  }), doc);
+  await page.goto(`${base}/edit/t2`);
+  await page.waitForFunction(() => (window as any).__EDITOR__);
+  await page.evaluate(() => (window as any).__EDITOR__.store.select("a"));
+  await page.getByLabel("Search icons").fill("postgres");
+  const hit = page.getByRole("listitem", { name: "si:postgresql" });
+  await hit.waitFor({ timeout: 30_000 });
+  expect(await hit.locator("svg path").count()).toBeGreaterThan(0); // preview drawn
+  await hit.click();
+  expect(await page.evaluate(() => (window as any).__EDITOR__.store.get().doc.nodes[0].icon)).toBe("si:postgresql");
+  await page.getByLabel("Search icons").fill("zzzqqq");
+  await page.getByText("No icons match").waitFor({ timeout: 30_000 });
+  await page.close();
+}, 120_000);

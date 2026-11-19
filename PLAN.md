@@ -678,6 +678,14 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   *Built (deviations):* compiled as `scenario.effects[{target,name,t0,t1}]` (like pulses), sampled as `FrameState.effects` with linear progress `k`; the player applies them to nodes and cells (shake = decaying x jitter, grow = scale bell, fade = opacity dip, flash = three blinks). Reduced motion skips them. DSL `effect <targets> <name>`; editor Steps has an Effect pick.
   *Commit:* `feat(core): F43 named effects`
 
+- [x] **F44 Icon picker**
+  *Depends:* F39, F40, F41
+  Inspector "Find icon": search box + pack filter (all, lucide, si, carbon, devicon, local) over the bundled packs and this
+  browser's local icons; results are a grid of previewed tiles (mono icons follow text colour, logos keep colours); click sets `icon`.
+  *Done when:* Playwright: search `postgres` shows `si:postgresql` with a drawn preview, click sets the node icon; no match shows a message.
+  *Built:* client-side with lazy core `searchIcons` + `resolveIcons` (no server call); 200 ms debounce; max 30 tiles. `resolveIcons` now exported from core.
+  *Commit:* `feat(web): F44 icon picker with search and preview`
+
 Dependency notes: A, B, C are independent lanes. F34 gates the visual quality pass; F35 gates all of B.
 Icons and DSL syntax meet in F36/F37 (`icon=pack:name`, `tone=`, `effect` lines) — add them to the
 grammar when F39/F42/F43 land.

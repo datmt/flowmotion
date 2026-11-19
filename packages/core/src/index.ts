@@ -9,4 +9,4 @@ export * from "./lint.ts";
 export * from "./ops.ts";
 export * from "./outline.ts";
 export * from "./dsl.ts";
-export { searchIcons, iconPacks, sanitizeSvg, localIconName, MAX_ICON_BYTES, ICON_RE, type IconHit, type LocalIcon } from "./icons/index.ts";
+export { searchIcons, resolveIcons, iconPacks, sanitizeSvg, localIconName, MAX_ICON_BYTES, ICON_RE, type IconHit, type LocalIcon } from "./icons/index.ts";
