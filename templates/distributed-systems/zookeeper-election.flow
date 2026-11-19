@@ -18,6 +18,7 @@ array znodes "/election znodes" =
 scenario elect "Sequential ephemeral znodes pick a leader"
   step create "Each server creates an ephemeral sequential znode"
     "All three servers create an **ephemeral sequential** znode under `/election`. ZooKeeper assigns strictly increasing suffixes: `n_001` (S1), `n_002` (S2), `n_003` (S3)."
+    detail "The official ZooKeeper recipe prefixes the path with a client-generated GUID (`/election/<guid>-n_`). If a recoverable connection error drops the `create` response after the server already created the znode, the client can locate its own proposal via `getChildren` instead of creating a duplicate."
     send s1 > zk "create -e -s"
     send s2 > zk "create -e -s" with
     send s3 > zk "create -e -s" with
@@ -44,6 +45,7 @@ scenario session-expiry "Session expiry deletes znode and promotes S2" from=elec
     callout s3 "Not woken up (watches n_002)"
   step promote "Server 2 verifies lowest sequence and leads"
     "Server 2 calls `getChildren(/election)`, confirms `n_002` is now the smallest znode, and safely assumes leadership."
+    detail "Re-checking `getChildren` is mandatory: a watch event only proves the immediate predecessor disappeared, which can also happen if a non-leader standby crashes. If a smaller znode still exists, the woken server sets a new `exists` watch on the next-lower predecessor instead of taking leadership."
     send s2 > zk "getChildren"
     send zk > s2 "[n_002, n_003]"
     state s2,znodes#0 success
