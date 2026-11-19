@@ -5,7 +5,7 @@ import { scheduleScenario } from "./timing.ts";
 import { applySwap, applyValues, createCellSim, resolveCells, type CellSim } from "./cells.ts";
 import { lint } from "./lint.ts";
 import { parseRef } from "./ref.ts";
-import { resolveIcons } from "./icons/index.ts";
+import { resolveIcons, type LocalIcon } from "./icons/index.ts";
 import { aspects } from "./runtime/index.ts";
 import type { FlowDoc } from "./schema.ts";
 import type { CompiledFlow, CompiledScenario, Ease, Rect, StepChange, Track, TrackProp } from "./runtime/index.ts";
@@ -16,13 +16,14 @@ const BLINK = 0.15; // transient edge-active ramp
 let hl: Promise<Highlighter> | undefined;
 const highlighter = () => (hl ??= createHighlighter({ themes: ["github-light", "github-dark"], langs: [] }));
 
-export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow; issues: Issue[] }> {
+export async function compile(input: unknown, opts: { localIcons?: Record<string, LocalIcon> } = {}): Promise<{ compiled?: CompiledFlow; issues: Issue[] }> {
   const v = validate(input);
   if (!v.ok) return { issues: v.issues };
   const doc = v.doc, issues = [...v.issues];
-  const { icons, unknown } = await resolveIcons(doc.nodes.flatMap((n) => (n.icon ? [n.icon] : [])));
+  const { icons, unknown } = await resolveIcons(doc.nodes.flatMap((n) => (n.icon ? [n.icon] : [])), opts.localIcons);
   doc.nodes.forEach((n, i) => {
     const near = n.icon && unknown.get(n.icon);
+    if (n.icon?.startsWith("local:") && !icons[n.icon]) issues.push({ severity: "warning", code: "icon_unresolved", path: `/nodes/${i}/icon`, where: `node › ${n.id}`, message: `Local icon '${n.icon}' is not available here; showing the default glyph.` });
     if (near) issues.push({ severity: "error", code: "unknown_icon", path: `/nodes/${i}/icon`, where: `node › ${n.id}`, message: `Unknown icon '${n.icon}'.`, hint: `Nearest: ${near.join(", ")}.` });
   });
   if (unknown.size) return { issues };

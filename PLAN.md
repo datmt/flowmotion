@@ -643,7 +643,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   *Done when:* test: query "postgres" returns `si:postgresql`; MCP tool list schema still has no `$ref`.
   *Commit:* `feat(server): F40 icon search tool`
 
-- [ ] **F41 Local icon import**
+- [x] **F41 Local icon import**
   *Depends:* F39, F14
   `local:<name>` pack in IndexedDB (browser only). Import by file drop or pasted SVG; sanitize (strip
   script, foreignObject, event handlers, external hrefs/urls, `<style>` with imports), normalize to a
@@ -653,6 +653,11 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   snapshot". The stored doc keeps `local:` refs either way.
   *Done when:* tests: hostile SVG is sanitized to safe output; server compile of a `local:` ref warns
   and succeeds; Playwright: share without embed shows fallback, with embed shows the icon.
+  *Built (deviations):* sanitizer is a whitelist rebuild (`core/icons/sanitize.ts`), not a blacklist; gradient fills flatten to the
+  first stop colour; viewBox must start at `0 0`; bulk import = multi-select / drop of many `.svg` files (names from filenames,
+  `Arch_…_48.svg` → `local:…`), no zip. `compile(doc, {localIcons})` resolves `local:` refs; `POST /api/share {doc, icons?}`
+  re-sanitizes embedded icons (max 50). Importer is in the Inspector (flow and node panels); Share asks only when the flow uses
+  imported icons. Also added `carbon` and `devicon` packs (`gen:icons` skips icons using gradients/opacity/transforms/`<use>`).
   *Commit:* `feat(web): F41 local icon import and share rules`
 
 - [ ] **F42 Tones**

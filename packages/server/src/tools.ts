@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyOps, compile, iconPacks, outline, searchIcons, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
+import { applyOps, compile, iconPacks, outline, sanitizeSvg, searchIcons, type LocalIcon, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
 import type { BlobStore } from "./store.ts";
 
 export class ToolError extends Error {
@@ -24,9 +24,9 @@ const ID = /^[a-z2-7]{12}$/;
 const key = (id: string) => `flows/${id}.json`;
 
 /** Validates + compiles; throws 422 with every issue on error. */
-async function build(input: unknown) {
+async function build(input: unknown, localIcons?: Record<string, LocalIcon>) {
   const v = validate(input);
-  const { compiled, issues } = await compile(v.doc ?? input);
+  const { compiled, issues } = await compile(v.doc ?? input, { localIcons });
   if (!v.ok || !compiled || issues.some((i) => i.severity === "error")) throw new ToolError(422, { error: "invalid", issues: v.ok ? issues : v.issues });
   return { doc: v.doc, compiled, warnings: issues.filter((i) => i.severity === "warning") };
 }
@@ -64,8 +64,23 @@ export async function check(input: { doc?: unknown; dsl?: string }) {
   return { ok: v.ok && !errors.length, errors: v.ok ? errors : v.issues, warnings: issues.filter((i) => i.severity === "warning"), ...(v.ok && !errors.length ? { outline: outline(v.doc!) } : {}) };
 }
 
-export async function publish(c: Ctx, doc: unknown, from?: string) {
-  const b = await build(doc);
+/** Client-supplied `local:` icons to embed in a snapshot (F41). Never trusted: each is re-sanitized; capped at 50. */
+function embedded(raw: unknown): Record<string, LocalIcon> | undefined {
+  if (raw === undefined) return undefined;
+  const bad = (message: string) => new ToolError(422, { error: "invalid", message });
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw bad("icons must be an object of local:<name> → {body, w, h}.");
+  const e = Object.entries(raw as Record<string, any>);
+  if (e.length > 50) throw bad("At most 50 embedded icons.");
+  return Object.fromEntries(e.map(([ref, i]) => {
+    if (!/^local:[a-z0-9]+(-[a-z0-9]+)*$/.test(ref) || typeof i?.body !== "string" || !(i.w > 0) || !(i.h > 0)) throw bad(`Bad embedded icon '${ref}'.`);
+    const r = sanitizeSvg(`<svg viewBox="0 0 ${Number(i.w)} ${Number(i.h)}">${i.body}</svg>`);
+    if ("error" in r) throw bad(`Embedded icon '${ref}': ${r.error}.`);
+    return [ref, r];
+  }));
+}
+
+export async function publish(c: Ctx, doc: unknown, from?: string, icons?: unknown) {
+  const b = await build(doc, embedded(icons));
   const id = newId();
   await c.store.put(key(id), JSON.stringify({ doc: b.doc, compiled: b.compiled, ...(from ? { from } : {}) }));
   return { id, url: `${c.baseUrl ?? ""}/v/${id}`, warnings: b.warnings, outline: outline(b.doc) };

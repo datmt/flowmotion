@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useLocalIcons } from "./localIcons.ts";
 import { compile, printDsl, type FlowDoc, type NodeKind } from "@flowmotion/core";
 import type { CompiledFlow } from "@flowmotion/core/runtime";
 import { createPlayer, loadFonts, type Player } from "@flowmotion/player";
@@ -74,11 +75,12 @@ function Loaded({ id, rec }: { id: string; rec: db.LocalFlow }) {
   const scenario = st.doc.scenarios.find((x) => x.id === scn) ?? st.doc.scenarios[0]!, step = Math.min(stepIx, scenario.steps.length - 1);
 
   // live preview: latest compile wins. ponytail: main thread; move to a Worker if ELK stalls drags on big flows.
+  const localIcons = useLocalIcons();
   useEffect(() => {
     let live = true;
-    compile(st.doc).then((r) => { if (!live) return; if (r.compiled) { setCompiled(r.compiled); setBad(""); } else setBad(r.issues.map((i) => i.message).join("; ")); });
+    compile(st.doc, { localIcons }).then((r) => { if (!live) return; if (r.compiled) { setCompiled(r.compiled); setBad(""); } else setBad(r.issues.map((i) => i.message).join("; ")); });
     return () => { live = false; };
-  }, [st.doc]);
+  }, [st.doc, localIcons]);
   useEffect(() => { if (aiDoc.current !== st.doc) setChanged((c) => (c.size ? new Set() : c)); }, [st.doc]); // any later edit/undo clears the highlight
   // autosave doc + undo history + versions
   useEffect(() => { const t = setTimeout(() => void db.save(st.doc, id, { hist: store.hist(), versions }), 150); return () => clearTimeout(t); }, [st.doc, versions]);

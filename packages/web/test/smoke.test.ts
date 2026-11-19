@@ -226,3 +226,45 @@ test("F24 deep link, embed, standalone script, share card, remix", async () => {
   await expect.poll(() => page.getByRole("heading", { level: 1 }).textContent()).toBe(tpl.meta.title);
   expect(errors).toEqual([]);
 }, 120_000);
+
+test("F41 local icons: import in the editor, drawn locally; share falls back unless embedded", async () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" onload="x()"><script>x()</script><path fill="#f00" d="M0 0H48V48H0Z"/></svg>';
+  const doc = { version: "2.1", meta: { title: "Icons" }, nodes: [{ id: "a", label: "Store", kind: "db", icon: "local:mine" }, { id: "b", label: "API", kind: "service" }], edges: [{ from: "a", to: "b" }],
+    scenarios: [{ id: "s", title: "s", steps: [{ id: "x", title: "x", narration: "n", actions: [] }] }] };
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${base}/`);
+  await page.evaluate((doc) => new Promise<void>((res, rej) => {
+    const o = indexedDB.open("flowmotion", 2);
+    o.onsuccess = () => { const t = o.result.transaction("flows", "readwrite"); t.objectStore("flows").put({ id: "t1", doc, updated: Date.now() }); t.oncomplete = () => res(); t.onerror = () => rej(t.error); };
+  }), doc);
+
+  await page.goto(`${base}/edit/t1`);
+  await page.getByLabel("Import SVG icons").setInputFiles({ name: "Arch_Mine_48.svg", mimeType: "image/svg+xml", buffer: Buffer.from(svg) });
+  await page.getByText("Imported local:mine").waitFor({ timeout: 30_000 });
+
+  await page.goto(`${base}/local/t1`);
+  await page.locator("flow-player").waitFor();
+  await page.waitForFunction(() => (document.querySelector("flow-player") as any)?.player?.compiled?.icons?.["local:mine"], null, { timeout: 30_000 });
+
+  let last = "";
+  const shared = async (embed: boolean) => {
+    await page.getByRole("button", { name: "Share", exact: true }).first().click();
+    const dlg = page.getByRole("dialog", { name: "Share options" });
+    await dlg.waitFor();
+    expect(await dlg.textContent()).toContain("local:mine");
+    if (embed) await dlg.getByRole("checkbox").check();
+    await dlg.getByRole("button", { name: "Share", exact: true }).click();
+    await page.waitForFunction((l) => { const t = document.querySelector("[role=status]")?.textContent ?? ""; return t.includes("Link copied") && t !== l; }, last, { timeout: 30_000 });
+    const msg = last = (await page.locator("[role=status]").textContent())!;
+    const id = /\/v\/(\w+)/.exec(msg!)![1]!;
+    return (await (await fetch(`${base}/api/share/${id}`)).json() as any).compiled.icons;
+  };
+  expect(await shared(false)).toBeUndefined(); // fallback glyph
+  const icons = await shared(true);
+  expect(icons["local:mine"].paths[0].fill).toBe("#f00");
+  expect(JSON.stringify(icons)).not.toMatch(/script|onload/);
+  expect(errors).toEqual([]);
+  await page.close();
+}, 120_000);

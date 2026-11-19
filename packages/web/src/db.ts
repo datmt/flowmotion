@@ -2,14 +2,17 @@
 export interface LocalFlow { id: string; doc: any; updated: number; hist?: { undo: any[]; redo: any[] }; versions?: { t: number; label: string; doc: any; prompt?: string }[] }
 
 const open = () => new Promise<IDBDatabase>((res, rej) => {
-  const r = indexedDB.open("flowmotion", 1);
-  r.onupgradeneeded = () => r.result.createObjectStore("flows", { keyPath: "id" });
+  const r = indexedDB.open("flowmotion", 2);
+  r.onupgradeneeded = () => { // v2 adds the `local:` icon pack
+    if (!r.result.objectStoreNames.contains("flows")) r.result.createObjectStore("flows", { keyPath: "id" });
+    if (!r.result.objectStoreNames.contains("icons")) r.result.createObjectStore("icons", { keyPath: "name" });
+  };
   r.onsuccess = () => res(r.result);
   r.onerror = () => rej(r.error);
 });
-async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>, store = "flows"): Promise<T> {
   const db = await open();
-  return new Promise((res, rej) => { const r = f(db.transaction("flows", mode).objectStore("flows")); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  return new Promise((res, rej) => { const r = f(db.transaction(store, mode).objectStore(store)); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 }
 
 export const list = () => tx<LocalFlow[]>("readonly", (s) => s.getAll()).then((a) => a.sort((x, y) => y.updated - x.updated));
@@ -19,3 +22,9 @@ export async function save(doc: any, id: string = crypto.randomUUID(), extra: Pi
   await tx("readwrite", (s) => s.put({ ...extra, id, doc, updated: Date.now() }));
   return id;
 }
+
+/** The browser-only `local:` icon pack: `name` is the part after `local:`; body/w/h come from `sanitizeSvg`. */
+export interface LocalIconRec { name: string; body: string; w: number; h: number }
+export const listIcons = () => tx<LocalIconRec[]>("readonly", (s) => s.getAll(), "icons");
+export const putIcon = (i: LocalIconRec) => tx("readwrite", (s) => s.put(i), "icons");
+export const removeIcon = (name: string) => tx("readwrite", (s) => s.delete(name), "icons");

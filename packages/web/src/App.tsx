@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import * as db from "./db.ts";
+import { getLocalIcons, localRefs, refresh as refreshIcons } from "./editor/localIcons.ts";
 
 const templates = import.meta.glob<any>("../../../templates/*.flow.json", { eager: true, import: "default" });
 const Player = "flow-player" as any; // custom element, see packages/player
@@ -46,8 +47,8 @@ export function Shell({ children, side = true }: { children: React.ReactNode; si
 }
 
 /** Share = POST /api/share, then copy the /v/:id link. */
-async function share(doc: unknown): Promise<string> {
-  const r = await fetch("/api/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc }) });
+async function share(doc: unknown, icons?: Record<string, unknown>): Promise<string> {
+  const r = await fetch("/api/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ doc, icons }) });
   const b = await r.json();
   if (!r.ok) throw new Error(b.issues ? b.issues.map((i: any) => i.message).join("\n") : b.message ?? b.error);
   const url = `${location.origin}/v/${b.id}`;
@@ -199,7 +200,24 @@ function Local({ id }: { id: string }) {
   const [flow, setFlow] = useState<db.LocalFlow | null | undefined>();
   const [src, setSrc] = useState<string>();
   const [msg, setMsg] = useState("");
-  useEffect(() => { db.load(id).then((f) => { setFlow(f ?? null); if (f) setSrc(URL.createObjectURL(new Blob([JSON.stringify(f.doc)], { type: "application/json" }))); }); }, [id]);
+  const [ask, setAsk] = useState<string[]>(), [embed, setEmbed] = useState(false); // share dialog: local icons used by the flow
+  useEffect(() => {
+    // compile here (not in the player) so `local:` icons from this browser's library are drawn
+    void (async () => {
+      const f = await db.load(id);
+      setFlow(f ?? null);
+      if (!f) return;
+      await refreshIcons();
+      const { compile } = await import("@flowmotion/core");
+      const r = await compile(f.doc, { localIcons: getLocalIcons() });
+      setSrc(URL.createObjectURL(new Blob([JSON.stringify(r.compiled ?? f.doc)], { type: "application/json" })));
+    })();
+  }, [id]);
+  const doShare = (icons?: Record<string, unknown>) => share(flow!.doc, icons).then((u) => setMsg(`Link copied: ${u}`), (e) => setMsg(`Share failed: ${e.message}`));
+  const onShare = () => {
+    const have = localRefs(flow!.doc).filter((r) => getLocalIcons()[r]);
+    if (have.length) { setAsk(have); setEmbed(false); } else void doShare();
+  };
   if (flow === undefined) return <Shell>Loading…</Shell>;
   if (flow === null) return <Shell><p>Flow not found in this browser. <a className={link} href="/">Back</a></p></Shell>;
   return (
@@ -212,8 +230,16 @@ function Local({ id }: { id: string }) {
           const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([printDsl(flow.doc)], { type: "text/plain" })), download: `${flow.id}.flow` });
           a.click(); URL.revokeObjectURL(a.href);
         }}>Export .flow</button>
-        <button className={btn} onClick={() => share(flow.doc).then((u) => setMsg(`Link copied: ${u}`), (e) => setMsg(`Share failed: ${e.message}`))}>Share</button>
+        <button className={btn} onClick={onShare}>Share</button>
       </div>
+      {ask && (
+        <div role="dialog" aria-label="Share options" className="mb-2 rounded border border-stone-300 bg-white p-3 text-sm">
+          <p className="mb-1">This flow uses local icons: <b>{ask.join(", ")}</b>. They live only in this browser; viewers of the link see the default glyph unless you embed them.</p>
+          <label className="mb-2 block"><input type="checkbox" checked={embed} onChange={(e) => setEmbed(e.target.checked)} /> Embed these icons in the public snapshot</label>
+          <button className={btn} onClick={() => { const icons = embed ? Object.fromEntries(ask.map((r) => [r, getLocalIcons()[r]])) : undefined; setAsk(undefined); void doShare(icons); }}>Share</button>{" "}
+          <button className={btn} onClick={() => setAsk(undefined)}>Cancel</button>
+        </div>
+      )}
       {msg && <p role="status" className="mb-2 text-sm">{msg}</p>}
       {src && <div className="min-h-0 flex-1"><Player fill src={src} /></div>}
     </Shell>

@@ -1,4 +1,5 @@
-import type { FlowDoc } from "@flowmotion/core";
+import { ICON_RE, type FlowDoc } from "@flowmotion/core";
+import { IconImport } from "./IconImport.tsx";
 import { find, metaOp, setOp } from "./edits.ts";
 import { Check, Heading, mini, Pick, Text } from "./fields.tsx";
 import type { Store } from "./store.ts";
@@ -17,6 +18,7 @@ export function Inspector({ store, doc, sel }: { store: Store; doc: FlowDoc; sel
     return (
       <div>
         <Heading>Flow</Heading>
+        <IconImport />
         <Text label="Title" max={80} value={m.title} onCommit={(title) => store.dispatch([metaOp({ title })], "title")} />
         <Text label="Summary" multiline max={280} value={m.summary ?? ""} onCommit={(summary) => store.dispatch([metaOp({ summary })], "summary")} />
         <Pick label="Theme" value={m.theme ?? "light"} options={["light", "dark"]} onChange={(theme) => store.dispatch([metaOp({ theme: theme as "light" })], "theme")} />
@@ -39,6 +41,8 @@ export function Inspector({ store, doc, sel }: { store: Store; doc: FlowDoc; sel
       {f.entity === "node" && <>
         <Pick label="Kind" value={v.kind} options={KINDS} onChange={(kind) => set({ kind })} />
         <Pick label="Initial state" value={v.state ?? ""} options={STATES} onChange={(state) => set({ state: state || undefined })} />
+        <Text label="Icon (pack:name)" max={40} value={v.icon ?? ""} onCommit={(t) => { const icon = t.trim(); if (!icon || ICON_RE.test(icon)) set({ icon: icon || undefined }, "icon"); }} />
+        <IconImport current={v.icon} onPick={(icon) => set({ icon }, "icon")} />
       </>}
       {f.entity === "edge" && <>
         <Check label="Dashed" checked={!!v.dashed} onChange={(c) => set({ dashed: c || undefined })} />

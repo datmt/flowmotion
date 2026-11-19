@@ -1,4 +1,6 @@
 import { normalizeBody, type CompiledIcon } from "./svg.ts";
+import type { LocalIcon } from "./sanitize.ts";
+export { sanitizeSvg, localIconName, MAX_ICON_BYTES, type LocalIcon } from "./sanitize.ts";
 export type { CompiledIcon, IconPath } from "./svg.ts";
 
 /** `<pack>:<name>`; pack `local` is resolved in the browser only (F41). */
@@ -20,12 +22,13 @@ const lev = (a: string, b: string) => {
   return d[b.length]!;
 };
 
-/** Resolves refs to compiled icons. `unknown` maps each bad ref to its nearest names (`pack:name`). `local:` refs are skipped. */
-export async function resolveIcons(refs: Iterable<string>): Promise<{ icons: Record<string, CompiledIcon>; unknown: Map<string, string[]> }> {
+/** Resolves refs to compiled icons. `unknown` maps each bad ref to its nearest names (`pack:name`).
+ *  `local:` refs resolve only from `local` (browser library or embedded in a snapshot); otherwise they are skipped (kind glyph). */
+export async function resolveIcons(refs: Iterable<string>, local: Record<string, LocalIcon> = {}): Promise<{ icons: Record<string, CompiledIcon>; unknown: Map<string, string[]> }> {
   const icons: Record<string, CompiledIcon> = {}, unknown = new Map<string, string[]>();
   for (const ref of new Set(refs)) {
     const [pack, name] = ref.split(":") as [string, string];
-    if (pack === "local") continue;
+    if (pack === "local") { const l = local[ref]; if (l) icons[ref] = normalizeBody(l.body, l.w, l.h); continue; }
     const load = loaders[pack];
     if (!load) { unknown.set(ref, [`packs: ${iconPacks.join(", ")}, local`]); continue; }
     const { size, icons: set } = await load(), body = set[name];

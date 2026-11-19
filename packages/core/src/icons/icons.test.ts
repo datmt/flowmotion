@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { compile } from "../compile.ts";
 import { parseDsl, printDsl } from "../dsl.ts";
+import { localIconName, sanitizeSvg } from "./index.ts";
 import { normalizeBody } from "./svg.ts";
 
 const doc = (icon: string) => ({
@@ -56,4 +57,44 @@ test("carbon and devicon packs resolve", async () => {
   const r = await compile(doc("devicon:postgresql"));
   expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
   expect(r.compiled!.icons!["devicon:postgresql"]!.mono).toBe(false);
+});
+
+const HOSTILE = `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" onload="alert(1)">
+<script>alert(1)</script><style>@import url(http://evil/x.css);</style>
+<defs><linearGradient id="g"><stop offset="0" stop-color="#ff9900"/><stop offset="1" stop-color="#f00"/></linearGradient><path id="hid" d="M0 0"/></defs>
+<foreignObject><div onclick="x()">hi</div></foreignObject><image href="http://evil/p.png"/><use href="#hid"/>
+<g onclick="x()" fill="url(#g)"><path d="M0 0H48V48H0Z" onmouseover="x()" style="fill:red" fill="url(#g)"/>
+<path d="M1 1javascript:alert(1)" fill="red"/><a href="javascript:x()"><rect x="1" y="2" width="3" height="4" stroke="url(http://evil/)"/></a></g></svg>`;
+
+test("sanitizeSvg: hostile SVG becomes safe output (whitelist rebuild)", () => {
+  const r = sanitizeSvg(HOSTILE);
+  if ("error" in r) throw new Error(r.error);
+  expect(r).toMatchObject({ w: 48, h: 48 });
+  for (const bad of ["script", "style", "onload", "onclick", "onmouseover", "javascript", "http", "href", "foreignObject", "image", "use", "alert", "url("]) expect(r.body).not.toContain(bad);
+  expect(r.body).toContain('fill="#ff9900"'); // gradient → first stop
+  expect(r.body).toContain("<rect x=\"1\" y=\"2\" width=\"3\" height=\"4\"/>");
+  expect(normalizeBody(r.body, r.w, r.h).paths.length).toBeGreaterThanOrEqual(2);
+});
+
+test("sanitizeSvg: rejects non-svg, oversize, origin-shifted viewBox, empty", () => {
+  expect(sanitizeSvg("<html/>")).toHaveProperty("error");
+  expect(sanitizeSvg(`<svg viewBox="0 0 1 1"><path d="${"M0 0".repeat(6000)}"/></svg>`)).toHaveProperty("error");
+  expect(sanitizeSvg('<svg viewBox="5 5 10 10"><path d="M0 0"/></svg>')).toHaveProperty("error");
+  expect(sanitizeSvg('<svg viewBox="0 0 10 10"><script>x</script></svg>')).toHaveProperty("error");
+});
+
+test("localIconName strips AWS-style prefix and size", () => {
+  expect(localIconName("Arch_Amazon-Simple-Storage-Service_48.svg")).toBe("amazon-simple-storage-service");
+  expect(localIconName("dir/My Logo.SVG")).toBe("my-logo");
+  expect(localIconName("___.svg")).toBeUndefined();
+});
+
+test("local: icon resolves when supplied, warns and falls back when not", async () => {
+  const icon = sanitizeSvg('<svg viewBox="0 0 24 24"><path fill="#f00" d="M0 0H24V24Z"/></svg>') as { body: string; w: number; h: number };
+  const ok = await compile(doc("local:mine"), { localIcons: { "local:mine": icon } });
+  expect(ok.compiled!.icons!["local:mine"]).toMatchObject({ mono: false });
+  expect(ok.issues.some((i) => i.code === "icon_unresolved")).toBe(false);
+  const no = await compile(doc("local:mine"));
+  expect(no.compiled!.icons!["local:mine"]).toBeUndefined();
+  expect(no.issues).toContainEqual(expect.objectContaining({ code: "icon_unresolved", severity: "warning" }));
 });

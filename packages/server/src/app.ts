@@ -48,7 +48,7 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
   api.get("/icons", read, async (req, res) => void res.json(await tools.icons({ query: String(req.query.q ?? ""), pack: req.query.pack ? String(req.query.pack) : undefined, limit: req.query.limit ? Number(req.query.limit) : undefined })));
   api.post("/validate", write, async (req, res) => void res.json(await tools.check(req.body ?? {})));
   api.post("/ops", write, async (req, res) => void res.json(tools.applyToDoc(req.body?.doc, req.body?.ops)));
-  api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, tools.docOf(req.body ?? {}))));
+  api.post("/share", write, async (req, res) => void res.status(201).json(await tools.publish(c, tools.docOf(req.body ?? {}), undefined, req.body?.icons)));
   api.post("/share/:id/ops", write, async (req, res) => void res.status(201).json(await tools.edit(c, { id: String(req.params.id), ops: req.body?.ops, dsl: req.body?.dsl })));
   api.post("/share/:id/preview", render, async (req, res) => void res.type("png").send(Buffer.from((await tools.preview(c, { ...req.body, id: String(req.params.id) })).png)));
   api.post("/share/:id/export", render, async (req, res) => void res.status(202).json(await tools.startExport(c, { ...req.body, id: String(req.params.id) })));
