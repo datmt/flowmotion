@@ -20,6 +20,7 @@ array routes "Active route table" keys=orders,billing = Legacy Legacy
 scenario migrate "Migrate one slice at a time behind a facade"
   step intercept "Facade proxies all traffic to Legacy"
     "Instead of a risky big-bang rewrite, place a **routing facade** in front of the monolith. At first, 100% of routes still flow to Legacy untouched."
+    detail "The facade is **transitional architecture**: temporary glue that creates a clean seam so legacy and replacement components can coexist and be swapped independently, then disappears once the legacy host is retired."
     send client > facade "/orders + /billing"
     send facade > legacy "/orders + /billing"
     send legacy > db "R/W"
@@ -50,6 +51,7 @@ scenario rollback "Bug in new service triggers instant rollback" from=migrate/cu
     callout billing "Regression on /billing"
   step revert "Facade flips /billing back to Legacy in seconds"
     "Because Legacy is still live behind the facade, operators revert the `/billing` route instantly without a redeploy — cutting downtime to seconds while fixing the bug."
+    detail "Instant rollback only stays safe if data written by New Billing remains readable by Legacy (backward-compatible schema or synchronized store) until the new slice is fully proven in production."
     label routes#billing "Legacy (rollback)"
     state routes#billing warning with
     send client > facade "/billing"

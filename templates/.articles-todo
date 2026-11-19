@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/strangler-fig
 distributed-systems/swim-membership
 distributed-systems/temporal-replay
 distributed-systems/three-phase-commit
