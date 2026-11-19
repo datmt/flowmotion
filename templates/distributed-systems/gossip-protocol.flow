@@ -34,6 +34,7 @@ scenario disseminate "Epidemic dissemination"
     state n2,n3,version#n2,version#n3 active with
   step round-2 "Round 2: infected peers fan out"
     "Nodes 2 and 3 now gossip `v2` to their random picks, reaching Nodes 4 and 5. The whole cluster converges in `O(log N)` rounds with constant bandwidth per node."
+    detail "Gossip exchanges can be push, pull, or push-pull (push-pull converges fastest). Rumor-mongering spreads fresh updates quickly and tapers off once peers already know them, while background anti-entropy pairs compare state digests or Merkle trees to catch missed updates."
     send n2 > n4 "gossip v2"
     send n3 > n5 "gossip v2" with
     label version#n4 "v2"
@@ -49,6 +50,7 @@ scenario failure-detect "Node failure detection" from=disseminate/round-1
     state version#n4 error with
   step suspect "Peers notice stalled heartbeat"
     "As Node 2 and Node 5 exchange tables, Node 4's heartbeat remains stuck at `7` past the suspicion timeout. They mark Node 4 `suspect` rather than evicting it on a single missed ping."
+    detail "Instead of a rigid binary timeout that triggers false positives under GC pauses or jitter, systems such as Apache Cassandra use the Phi Accrual Failure Detector, scoring suspicion continuously from historical heartbeat arrival intervals and convicting once `Phi >= phi_convict_threshold` (default `8`)."
     send n2 > n3 "N4 hb=7 stale"
     send n3 > n5 "N4 suspect"
     state n2,n5 warning
