@@ -31,6 +31,7 @@ scenario isolated "Separate pools keep dependencies independent"
 scenario saturate "Slow Payments saturates its pool only" from=isolated/normal
   step pay-hangs "Payments API slows to a crawl"
     "Payments begins stalling for 30s per call. In-flight checkout requests quickly occupy all 4 slots in the Payments Pool."
+    detail "When a consumer calls a slow or unresponsive service, each in-flight call holds onto pool resources (threads or connections) until it finishes or times out. In a shared pool, continued requests to the failing dependency eventually exhaust the pool and block calls to every healthy dependency too."
     state pay error
     effect pay shake
     send api > p-pay "4 slow calls"
