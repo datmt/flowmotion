@@ -41,6 +41,7 @@ scenario one-divergent-leaf "One divergent leaf found in O(log N)" from=identica
     callout rb "Root differs: descend tree"
   step prune-left "Left branch matches -> prune entire left half"
     "They exchange child hashes (`Left`, `Right`). Both have `Left = hL`, so they **skip the entire left half** (`L0`, `L1`) without ever inspecting those keys!"
+    detail "In Amazon Dynamo, each node maintains a separate Merkle tree per shared key range so peers can check each branch independently—cutting both network transfers and disk reads during background anti-entropy. Decoupling the hash space into fixed equal-sized partitions (Section 6.2) keeps those key ranges stable so trees do not have to be rebuilt whenever nodes join or leave."
     send ra > rb "Left=hL, Right=hX1"
     state tree#1.0,tree#1.1,tree#3.0,tree#3.1,tree#4.0,tree#4.1 success
     state tree#2.0,tree#2.1 warning with

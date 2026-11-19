@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/merkle-tree-sync
 distributed-systems/multi-paxos
 distributed-systems/outbox-pattern
 distributed-systems/paxos
