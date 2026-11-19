@@ -21,6 +21,7 @@ edge proxy-b > app-b
 scenario mtls-route "Transparent mTLS and routing via sidecars"
   step config "Control plane pushes certs and policy"
     "The control plane issues short-lived workload certificates and routing rules to both sidecars. Application code stays free of TLS and retry libraries."
+    detail "In Istio, the control plane (`istiod`) acts as a Certificate Authority issuing SPIFFE-compliant X.509 certificates tied to service accounts and converts high-level traffic policies into Envoy configurations pushed to the C++ sidecar proxies at runtime."
     send cp > proxy-a "SPIFFE cert + routes"
     send cp > proxy-b "SPIFFE cert + policy" with
     state cp,proxy-a,proxy-b active
@@ -47,6 +48,7 @@ scenario retry-storm "Misconfigured retries amplify into a storm" from=mtls-rout
     callout proxy-b "9x load prevents recovery"
   step budget "Retry budget stops the amplification"
     "Enabling a **retry budget** (e.g., max 20% extra traffic) and disabling duplicate app-layer retries sheds excess retries so Payments can recover."
+    detail "Envoy's `retryBudget` (configured via an Istio `DestinationRule`) defaults to `percent: 20` of active and pending requests with `minRetryConcurrency: 3`. Once concurrent retries exceed the budget, Envoy skips further retries so the struggling upstream can drain and recover."
     state proxy-a warning
     send cp > proxy-a "retry-budget=20%"
     callout proxy-a "Cap retries at one layer only"
