@@ -37,6 +37,7 @@ scenario renew "Lease enables fast local reads"
 scenario clock-skew "Clock skew creates two leaders" from=renew/local-read
   step drift "L1's clock lags; store expires lease"
     "L1 suffers clock drift or a GC pause: its clock still reads `t=9`, while the store's clock reaches `t=11` and expires L1's lease."
+    detail "Measuring lease durations with a monotonic clock (such as `System.nanoTime()`) prevents NTP wall-clock steps from shifting local timers, yet separate machines' monotonic clocks can still tick at slightly different rates, and a process pause can still stall a leader past the store's expiry."
     label view#store "EXPIRED (t=11)"
     label view#l1 "lead (t=9!)" with
     label view#l2 "foll (t=11)" with
