@@ -22,6 +22,7 @@ scenario sliding "Weighted sliding window allows normal traffic"
     send limiter > store "read prev=2, curr=1"
   step check "Compute weighted count"
     "Instead of storing every request timestamp, the sliding-window counter estimates `prev * 0.75 + curr = 2*0.75 + 1 = 2.5`. That is under the limit of `4`."
+    detail "Unlike a sliding-window log that stores every request timestamp (`O(limit)` memory per client), the sliding-window counter keeps only two integers per key (`O(1)`). In Cloudflare's analysis of 400 million requests from 270,000 sources, only 0.003% of requests were misclassified, with zero false positives."
     pulse store
     callout limiter "2 * 0.75 + 1 = 2.5 < 4 -> allow"
   step allow "Increment current counter and forward"
