@@ -22,6 +22,7 @@ scenario process "First delivery executes once"
     state consumer active
   step atomic-tx "Record msg-9 and update balance atomically"
     "Inside a single DB transaction, the consumer inserts `msg-9` into `inbox` (unique key) and debits `balances` to `$70`. Both commit or neither does."
+    detail "Using a composite primary key `(subscriber_id, message_id)` lets multiple subscribers share one `PROCESSED_MESSAGES` table in a relational database. In NoSQL stores without multi-table transactions, consumers instead embed processed message IDs (or the highest monotonic event ID) inside the business entity itself via conditional updates."
     send consumer > inbox "INSERT msg-9"
     send consumer > ledger "balance -= 30" with
     label state#inbox "msg-9"
