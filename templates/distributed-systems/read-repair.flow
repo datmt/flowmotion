@@ -20,6 +20,7 @@ array vals "Value@timestamp" keys=r1,r2,r3 = v2@t5 v2@t5 v1@t2
 scenario repair "Read path detects and heals stale replica"
   step read-all "Coordinator reads data and digests"
     "R3 missed an earlier write and still holds stale `v1@t2`. On a read, the coordinator fetches full data from R1 and lightweight **hash digests** from R2 and R3 to save bandwidth."
+    detail "In Apache Cassandra, the coordinator sends a direct full-data read to the fastest replica (chosen by the dynamic snitch) and digest requests to the remaining replicas required by the read consistency level. At `ONE` or `LOCAL_ONE`, no digest requests are sent and read repair does not run."
     send client > coord "GET k"
     state coord active
     send coord > r1 "GET data"
@@ -34,6 +35,7 @@ scenario repair "Read path detects and heals stale replica"
     callout coord "Digest mismatch on R3"
   step respond-and-heal "Return latest value and repair R3"
     "The coordinator picks `v2@t5` (highest timestamp), returns it to the client, and sends a repair write `PUT v2@t5` to bring R3 up to date."
+    detail "Under Cassandra's default `read_repair = 'BLOCKING'` mode, the coordinator blocks the client response until repair writes reach the read consistency level. Blocking guarantees **monotonic quorum reads**, so a value seen once cannot disappear on the next quorum read even if the original write reached only a minority."
     send coord > client "v2@t5"
     send coord > r3 "repair v2@t5" with
     label vals#r3 "v2@t5"
