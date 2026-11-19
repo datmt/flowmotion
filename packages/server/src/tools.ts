@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyOps, compile, outline, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
+import { applyOps, compile, iconPacks, outline, searchIcons, parseDsl, printDsl, validate, type FlowDoc, type Issue } from "@flowmotion/core";
 import type { BlobStore } from "./store.ts";
 
 export class ToolError extends Error {
@@ -35,6 +35,12 @@ export async function snapshot(c: Ctx, id: string): Promise<{ doc: FlowDoc; comp
   const raw = ID.test(id) ? await c.store.get(key(id)) : null;
   if (!raw) throw new ToolError(404, { error: "not_found", message: `Flow '${id}' not found.` });
   return JSON.parse(raw);
+}
+
+/** Icon name search for agents/editors: `{ packs, icons: [{ref, tags}] }`. */
+export async function icons({ query, pack, limit }: { query?: string; pack?: string; limit?: number }) {
+  if (pack && !iconPacks.includes(pack)) throw new ToolError(422, { error: "invalid", message: `Unknown pack '${pack}'. Packs: ${iconPacks.join(", ")}.` });
+  return { packs: iconPacks, icons: await searchIcons(query ?? "", { pack, limit }) };
 }
 
 export const guide = () => readFileSync(new URL("docs/guide.md", ROOT), "utf8");

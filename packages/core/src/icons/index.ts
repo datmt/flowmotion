@@ -32,3 +32,22 @@ export async function resolveIcons(refs: Iterable<string>): Promise<{ icons: Rec
   }
   return { icons, unknown };
 }
+
+export type IconHit = { ref: string; tags: string[] };
+/** Name search over the bundled packs: every query word must be a substring of the name; exact/prefix hits first. Tags = name words. */
+export async function searchIcons(query: string, { pack, limit = 20 }: { pack?: string; limit?: number } = {}): Promise<IconHit[]> {
+  const words = query.toLowerCase().split(/[\s:_-]+/).filter(Boolean);
+  if (!words.length) return [];
+  const hits: { ref: string; score: number }[] = [];
+  for (const p of pack ? [pack] : iconPacks) {
+    const load = loaders[p];
+    if (!load) continue;
+    for (const name of Object.keys((await load()).icons)) {
+      if (!words.every((w) => name.includes(w))) continue;
+      const parts = name.split("-");
+      hits.push({ ref: `${p}:${name}`, score: name === words.join("-") ? 0 : parts[0] === words[0] ? 1 : parts.includes(words[0]!) ? 2 : 3 });
+    }
+  }
+  return hits.sort((a, b) => a.score - b.score || a.ref.length - b.ref.length || a.ref.localeCompare(b.ref)).slice(0, Math.min(Math.max(limit, 1), 50))
+    .map(({ ref }) => ({ ref, tags: ref.split(":")[1]!.split("-") }));
+}

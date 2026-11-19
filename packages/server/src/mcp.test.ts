@@ -62,3 +62,18 @@ test("mcp app: player resource + tool results carry compiled flow in _meta", asy
     expect(JSON.stringify(r.content)).not.toContain("tracks"); // model never sees the compiled flow
   } finally { server.close(); }
 });
+
+test("flow_icons: postgres → si:postgresql; REST route agrees", async () => {
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" } }).listen(0);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const client = new Client({ name: "t", version: "0" });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`)));
+    const r = (await client.callTool({ name: "flow_icons", arguments: { query: "postgres" } }) as any).structuredContent;
+    expect(r.icons.map((i: any) => i.ref)).toContain("si:postgresql");
+    const rest = await (await fetch(`${base}/api/icons?q=postgres&pack=si`)).json() as any;
+    expect(rest.icons[0].ref).toBe("si:postgresql");
+    expect(rest.icons.every((i: any) => i.ref.startsWith("si:"))).toBe(true);
+    expect((await fetch(`${base}/api/icons?q=x&pack=nope`)).status).toBe(422);
+  } finally { await client.close(); server.close(); }
+});

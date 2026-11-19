@@ -9,3 +9,4 @@ export * from "./lint.ts";
 export * from "./ops.ts";
 export * from "./outline.ts";
 export * from "./dsl.ts";
+export { searchIcons, iconPacks, type IconHit } from "./icons/index.ts";

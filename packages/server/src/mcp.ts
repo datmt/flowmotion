@@ -52,6 +52,8 @@ function buildServer(c: tools.Ctx) {
         return { isError: true, content: [{ type: "text" as const, text: wrap(e.body) }], structuredContent: e.body };
       }
     });
+  s.registerTool("flow_icons", { description: "Search bundled icons by name (e.g. \"postgres\"). Returns `pack:name` refs for a node's `icon` field, with tags.", inputSchema: { query: z.string().max(100), pack: z.string().optional(), limit: z.number().int().min(1).max(50).optional() }, outputSchema: out, annotations: hint(true) },
+    (a) => run(() => tools.icons(a))());
   s.registerTool("flow_export", { description: "Start a video export (mp4/webm/gif) job; returns a job id. Poll with flow_job until status is done (then `url` is the file).", inputSchema: { ...target, scenario: z.string().optional(), format: z.enum(["mp4", "webm", "gif"]).optional(), height: z.union([z.literal(720), z.literal(1080)]).optional(), fps: z.union([z.literal(30), z.literal(60)]).optional(), captions: z.boolean().optional(), webhookUrl: z.string().optional().describe("POSTed the final job JSON on completion") }, outputSchema: out, annotations: hint(false) },
     (a) => run(() => tools.startExport(c, a))());
   s.registerTool("flow_job", { description: "Status of an export job: queued|running|done|error, progress 0-1, and `url` when done.", inputSchema: { id: z.string() }, outputSchema: out, annotations: hint(true) },

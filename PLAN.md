@@ -636,7 +636,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   Actor with icon replaces the head glyph; icon nodes widen by icon+gap. Queue dividers overlap the icon (cosmetic).
   *Commit:* `feat(core): F39 icon packs and resolver`
 
-- [ ] **F40 Icon search for agents**
+- [x] **F40 Icon search for agents**
   *Depends:* F39
   `flow_icons {query, pack?, limit?}` MCP tool + `GET /api/icons?q=` returning `pack:name` and a tag
   list; guide lists packs and the naming rule only. Tool count stays ≤ 10.
