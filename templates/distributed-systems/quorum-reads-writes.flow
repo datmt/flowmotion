@@ -1,0 +1,58 @@
+flow "Quorum reads and writes (R + W > N)"
+summary "Overlapping read and write quorums guarantee reading the latest version, while R + W <= N allows stale reads."
+tags quorum replication consistency
+level intermediate
+source "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+related distributed-systems/hinted-handoff distributed-systems/read-repair
+
+node client "Client" actor
+node coord "Coordinator" service tone=primary
+group replicas "Replicas (N=3)"
+node r1 "Replica 1" db in=replicas
+node r2 "Replica 2" db in=replicas
+node r3 "Replica 3" db in=replicas
+edge client > coord
+edge coord > r1
+edge coord > r2
+edge coord > r3
+array vals "Stored value@ver" keys=r1,r2,r3 = v1@1 v1@1 v1@1
+
+scenario quorum-rw "Strict quorum (W=2, R=2, N=3)"
+  step write-w2 "Write succeeds after W=2 replicas ack"
+    "Client writes `v2@2`. The coordinator sends it to all 3 replicas; R1 and R2 persist it while R3 is slow. Because `W=2` acks arrived, the write succeeds immediately."
+    send client > coord "PUT v2@2"
+    state coord active
+    send coord > r1 "v2@2"
+    send coord > r2 "v2@2" with
+    label vals#r1 "v2@2"
+    label vals#r2 "v2@2" with
+    state r1,r2,vals#r1,vals#r2 success with
+    state r3 warning
+    send coord > client "OK (W=2)"
+  step read-r2 "Read queries R=2 replicas (R2 and R3)"
+    "Next, a client reads with `R=2`. Because `R + W = 4 > 3`, **any** 2 replicas must overlap with the write quorum — here R2 has `v2@2` while R3 still has `v1@1`."
+    send client > coord "GET k"
+    send coord > r2 "GET"
+    send coord > r3 "GET" with
+    send r2 > coord "v2@2"
+    send r3 > coord "v1@1" with
+  step pick-latest "Higher version wins: return v2@2"
+    "The coordinator compares versions (`2 > 1`), returns fresh `v2@2` to the client, and can repair R3 in the background."
+    send coord > client "v2@2"
+    state coord success
+    focus r1,r2,r3 dim
+    callout coord "R+W > N forces quorum overlap"
+
+scenario stale-read "Stale read when R + W <= N (W=2, R=1)" from=quorum-rw/write-w2
+  step weak-read "Read asks only R=1 replica (R3)"
+    "To cut read latency, the app lowers `R` to `1`. Now `R + W = 3 <= N`, so the read set no longer has to intersect the write quorum."
+    send client > coord "GET k (R=1)"
+    send coord > r3 "GET"
+    send r3 > coord "v1@1"
+  step stale-reply "Client receives stale v1@1"
+    "R3 missed the write and returns `v1@1`. Tuning `R` and `W` lets you trade latency and availability against freshness."
+    state r3 error
+    effect r3 shake
+    send coord > client "v1@1 (STALE)"
+    state vals#r3 error with
+    callout r3 "Missed write quorum: R+W <= N"

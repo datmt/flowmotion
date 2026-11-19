@@ -26,14 +26,14 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 - [x] cache-stampede
 - [x] cache-aside
 - [x] write-through-back
-- [ ] vector-clocks: causality (advanced) - concurrent writes
-- [ ] lamport-clocks: logical time (intermediate) - out-of-order events
-- [ ] crdt-counter: G-counter merge (advanced) - partition and merge
-- [ ] quorum-reads-writes: R+W>N (intermediate) - stale read when R+W<=N
-- [ ] hinted-handoff: Dynamo-style (advanced) - node down then recovery
-- [ ] read-repair: anti-entropy (advanced) - divergent replicas
-- [ ] merkle-tree-sync: replica diff (advanced) - one divergent leaf
-- [ ] bulkhead: isolation pools (intermediate) - one dependency saturates
+- [x] vector-clocks
+- [x] lamport-clocks
+- [x] crdt-counter
+- [x] quorum-reads-writes
+- [x] hinted-handoff
+- [x] read-repair
+- [x] merkle-tree-sync
+- [x] bulkhead
 - [ ] load-balancer-algorithms: RR, least-conn, hash (beginner) - slow backend
 - [ ] service-discovery: registry + health (intermediate) - stale instance
 - [ ] sidecar-service-mesh: mTLS + routing (intermediate) - retry storm

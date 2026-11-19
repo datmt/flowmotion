@@ -1,0 +1,56 @@
+flow "Merkle tree replica sync"
+summary "Compares hierarchical hash trees between replicas to locate a single divergent key range in O(log N) messages without scanning all data."
+tags anti-entropy replication hashing
+level advanced
+source "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+related distributed-systems/read-repair distributed-systems/quorum-reads-writes
+
+node ra "Replica A" db tone=primary
+node rb "Replica B" db
+edge ra > rb noarrow
+grid tree "Merkle tree hashes"
+  rowlabels Root Left Right L0 L1 L2 L3
+  collabels ReplicaA ReplicaB
+  row hR1 hR1
+  row hL hL
+  row hX1 hX1
+  row k0:a k0:a
+  row k1:b k1:b
+  row k2:c k2:c
+  row k3:d k3:d
+
+scenario identical "Identical replicas verify in one hash"
+  step root-check "Exchange only the root hash"
+    "Each replica hashes its keys into leaves, then hashes pairs up to a single **root hash**. To check millions of keys for drift, Replica A sends just its root hash `hR1`."
+    state ra,rb active
+    send ra > rb "root=hR1?"
+    pulse tree#0.0,tree#0.1
+  step match "Roots match: zero keys transferred"
+    "Both roots equal `hR1`, proving every key in both replicas is identical. Sync finishes in a single tiny message instead of streaming gigabytes."
+    state ra,rb,tree#0.0,tree#0.1 success
+    callout ra "Root match = 100% in sync"
+
+scenario one-divergent-leaf "One divergent leaf found in O(log N)" from=identical/root-check
+  step root-diff "Leaf L3 drifted; root hashes differ"
+    "Replica B missed an update to `k3` (`k3:old`). That single leaf change bubbles up through the Right branch to change B's root hash (`hR2 != hR1`)."
+    label tree#6.1 "k3:old"
+    label tree#2.1 "hX2" with
+    label tree#0.1 "hR2" with
+    state tree#0.1,tree#2.1,tree#6.1 error with
+    send rb > ra "mismatch: hR2"
+    callout rb "Root differs: descend tree"
+  step prune-left "Left branch matches -> prune entire left half"
+    "They exchange child hashes (`Left`, `Right`). Both have `Left = hL`, so they **skip the entire left half** (`L0`, `L1`) without ever inspecting those keys!"
+    send ra > rb "Left=hL, Right=hX1"
+    state tree#1.0,tree#1.1,tree#3.0,tree#3.1,tree#4.0,tree#4.1 success
+    state tree#2.0,tree#2.1 warning with
+    callout ra "Pruned Left subtree completely"
+  step pinpoint "Descend Right branch and sync only L3"
+    "Under Right, `L2` matches (`k2:c`) and only `L3` differs (`k3:d` vs `k3:old`). Replica A streams just `k3:d`, repairing B in `O(log N)` exchanges."
+    state tree#5.0,tree#5.1 success
+    send ra > rb "sync L3: k3:d"
+    label tree#6.1 "k3:d"
+    label tree#2.1 "hX1" with
+    label tree#0.1 "hR1" with
+    state ra,rb,tree#0.0,tree#0.1,tree#2.0,tree#2.1,tree#6.0,tree#6.1 success with
+    callout rb "Synced 1 leaf, not the whole DB"

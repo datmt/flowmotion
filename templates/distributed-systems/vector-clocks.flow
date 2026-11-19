@@ -1,0 +1,53 @@
+flow "Vector clocks"
+summary "Tracks per-node logical counters so replicas can tell when one version causally supersedes another versus when concurrent writes conflict."
+tags clocks causality consistency
+level advanced
+source "https://en.wikipedia.org/wiki/Vector_clock"
+related distributed-systems/lamport-clocks distributed-systems/crdt-counter
+layout algorithm=stress edges=straight
+
+group cluster "Replicas"
+node a "Node A" service in=cluster tone=primary
+node b "Node B" service in=cluster
+node c "Node C" service in=cluster
+edge a > b noarrow
+edge b > c noarrow
+edge a > c noarrow
+array vc "Vector clocks [A,B,C]" keys=a,b,c = [0,0,0] [0,0,0] [0,0,0]
+
+scenario causal "Causal ordering proves no conflict"
+  step a-write "Node A writes x=1"
+    "Each node maintains a vector of counters — one slot per node. Before recording `x=1`, Node A increments its own slot to `[1,0,0]`."
+    state a active
+    label vc#a "[1,0,0]"
+    state vc#a active with
+  step a-to-b "Node A replicates x=1 to Node B"
+    "Node A sends `x=1` tagged with `[1,0,0]`. On receipt, Node B merges element-wise `max([0,0,0], [1,0,0])` and increments its own slot to `[1,1,0]`."
+    send a > b "x=1 [1,0,0]"
+    label vc#b "[1,1,0]"
+    state b,vc#b active with
+  step b-update "Node B updates x=2"
+    "Node B writes `x=2` and increments its slot to `[1,2,0]`. Because every entry in `[1,0,0]` is `<=` `[1,2,0]` (and strictly smaller in slot B), `x=2` **causally descends** from `x=1`."
+    label vc#b "[1,2,0]"
+    send b > c "x=2 [1,2,0]"
+    label vc#c "[1,2,1]"
+    state c,vc#c success with
+    callout c "[1,0,0] < [1,2,0]: safe overwrite"
+
+scenario concurrent "Concurrent writes detected as conflict" from=causal/a-write
+  step b-independent "Node B writes x=9 without seeing A"
+    "Before A's message arrives, Node B independently accepts `x=9` and increments its own slot to `[0,1,0]`."
+    state b warning
+    label vc#b "[0,1,0]"
+    state vc#b warning with
+  step both-arrive "Node C receives both versions"
+    "Node C receives `x=1 [1,0,0]` from A and `x=9 [0,1,0]` from B. Now C compares the two vectors slot by slot."
+    send a > c "x=1 [1,0,0]"
+    send b > c "x=9 [0,1,0]" with
+    state c error
+    effect c shake
+  step conflict "Neither vector dominates: true conflict"
+    "In slot A, `1 > 0`; in slot B, `0 < 1`. Because neither clock dominates the other, the writes are **concurrent** — C keeps both siblings for application merge instead of silently losing a write."
+    label vc#c "[1,1,1] CONFLICT"
+    state vc#c error with
+    callout c "[1,0,0] || [0,1,0] -> keep siblings"

@@ -1,0 +1,53 @@
+flow "Read repair"
+summary "Detects divergent replicas on the read path and writes the latest version back to stale nodes so hot data self-heals."
+tags replication anti-entropy consistency
+level advanced
+source "https://docs.datastax.com/en/cassandra-oss/3.0/cassandra/operations/opsRepairNodesReadRepair.html"
+related distributed-systems/quorum-reads-writes distributed-systems/merkle-tree-sync
+
+node client "Client" actor
+node coord "Coordinator" service tone=primary
+group replicas "Replicas (N=3)"
+node r1 "Replica 1" db in=replicas
+node r2 "Replica 2" db in=replicas
+node r3 "Replica 3" db in=replicas
+edge client > coord
+edge coord > r1
+edge coord > r2
+edge coord > r3
+array vals "Value@timestamp" keys=r1,r2,r3 = v2@t5 v2@t5 v1@t2
+
+scenario repair "Read path detects and heals stale replica"
+  step read-all "Coordinator reads data and digests"
+    "R3 missed an earlier write and still holds stale `v1@t2`. On a read, the coordinator fetches full data from R1 and lightweight **hash digests** from R2 and R3 to save bandwidth."
+    send client > coord "GET k"
+    state coord active
+    send coord > r1 "GET data"
+    send coord > r2 "GET digest" with
+    send coord > r3 "GET digest" with
+  step detect "Digest mismatch exposes divergence"
+    "R1 and R2 match (`v2@t5`), but R3's digest disagrees. The coordinator requests full rows from all replicas to find the newest timestamp."
+    send r1 > coord "v2@t5"
+    send r2 > coord "hash(v2)" with
+    send r3 > coord "hash(v1)!" with
+    state r3,vals#r3 warning
+    callout coord "Digest mismatch on R3"
+  step respond-and-heal "Return latest value and repair R3"
+    "The coordinator picks `v2@t5` (highest timestamp), returns it to the client, and sends a repair write `PUT v2@t5` to bring R3 up to date."
+    send coord > client "v2@t5"
+    send coord > r3 "repair v2@t5" with
+    label vals#r3 "v2@t5"
+    state r1,r2,r3,coord,vals success with
+    callout r3 "Healed to v2@t5"
+
+scenario cold-data "Unread keys stay divergent without anti-entropy" from=repair/detect
+  step never-read "Cold key k-archive is never queried"
+    "Read repair only fixes keys that clients actually read. If `k-archive` sits cold for months, R3 silently keeps its stale `v1@t2`."
+    state r3 error
+    effect r3 shake
+    label vals#r3 "v1@t2 (stale)"
+    callout r3 "No reads = no read repair"
+  step needs-bg "Background anti-entropy is still required"
+    "If R1 and R2 later fail or lose disks, stale R3 would resurrect old data. Production stores pair read repair with scheduled **Merkle tree** anti-entropy sweeps."
+    focus r3 dim
+    callout coord "Pair with background Merkle sync"

@@ -1,0 +1,52 @@
+flow "Bulkhead isolation"
+summary "Partitions concurrency into separate pools per dependency so one slow downstream service cannot starve unrelated traffic."
+tags resilience fault-tolerance concurrency
+level intermediate
+source "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+related distributed-systems/circuit-breaker distributed-systems/retry-backoff-dlq
+
+node client "Clients" actor
+node api "API Gateway" service tone=primary
+group pools "Isolated thread pools"
+node p-pay "Payments Pool (1/4)" state in=pools
+node p-cat "Catalog Pool (1/4)" state in=pools
+node pay "Payments API" service
+node cat "Catalog API" service
+edge client > api
+edge api > p-pay
+edge api > p-cat
+edge p-pay > pay
+edge p-cat > cat
+
+scenario isolated "Separate pools keep dependencies independent"
+  step normal "Traffic flows through dedicated pools"
+    "Like watertight compartments in a ship's hull, the gateway assigns separate bounded thread pools (4 slots each) to Payments and Catalog."
+    send client > api "checkout + browse"
+    send api > p-pay "charge"
+    send api > p-cat "list items" with
+    send p-pay > pay "charge"
+    send p-cat > cat "list" with
+    state p-pay,p-cat,pay,cat success
+
+scenario saturate "Slow Payments saturates its pool only" from=isolated/normal
+  step pay-hangs "Payments API slows to a crawl"
+    "Payments begins stalling for 30s per call. In-flight checkout requests quickly occupy all 4 slots in the Payments Pool."
+    state pay error
+    effect pay shake
+    send api > p-pay "4 slow calls"
+    label p-pay "Payments Pool (4/4 FULL)"
+    state p-pay error with
+    callout p-pay "Pool exhausted: 4/4 busy"
+  step reject-pay "Extra Payments calls fast-fail"
+    "A fifth checkout request arrives, finds no free slot in the Payments Pool, and is rejected immediately with `503` instead of piling up memory and threads."
+    send client > api "checkout #5"
+    send api > client "503 Payments busy"
+    callout api "Bounded blast radius"
+  step cat-healthy "Catalog traffic stays completely healthy"
+    "Because Catalog has its own isolated pool, browse requests still execute with normal latency. Without bulkheads, slow Payments calls would have drained a shared pool and taken down the entire site."
+    send client > api "browse catalog"
+    send api > p-cat "list items"
+    send p-cat > cat "list"
+    state p-cat,cat success
+    focus p-cat,cat dim
+    callout cat "Unaffected by Payments outage"

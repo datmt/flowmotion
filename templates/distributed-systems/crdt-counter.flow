@@ -1,0 +1,56 @@
+flow "CRDT grow-only counter (G-Counter)"
+summary "Replicas increment only their own slot and merge via element-wise max so partitioned counters converge identically without coordination."
+tags crdt eventual-consistency replication
+level advanced
+source "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Counter_(Grow-only_Counter)"
+related distributed-systems/vector-clocks distributed-systems/gossip-protocol
+layout algorithm=stress edges=straight
+
+group replicas "Replicas"
+node r1 "Replica A" db in=replicas tone=primary
+node r2 "Replica B" db in=replicas
+node r3 "Replica C" db in=replicas
+edge r1 > r2 noarrow
+edge r2 > r3 noarrow
+edge r1 > r3 noarrow
+array vec "State [A,B,C] (sum)" keys=r1,r2,r3 = [0,0,0]=0 [0,0,0]=0 [0,0,0]=0
+
+scenario merge "Local increments and semilattice merge"
+  step local-inc "Each replica increments only its own slot"
+    "Every replica owns one slot in the vector, so increments never conflict. Replica A counts 2 clicks (`[2,0,0]`) and Replica B counts 1 (`[0,1,0]`) with zero locking."
+    state r1,r2 active
+    label vec#r1 "[2,0,0]=2"
+    label vec#r2 "[0,1,0]=1" with
+    state vec#r1,vec#r2 active with
+  step sync-ab "Merge takes element-wise max"
+    "A and B exchange states and compute `max` per slot: `max([2,0,0], [0,1,0]) = [2,1,0]` (total `3`). Because `max` is commutative, associative, and idempotent, order and duplicates never matter."
+    send r1 > r2 "[2,0,0]"
+    send r2 > r1 "[0,1,0]" with
+    label vec#r1 "[2,1,0]=3"
+    label vec#r2 "[2,1,0]=3" with
+    state r1,r2,vec#r1,vec#r2 success with
+    callout r1 "Merge = element-wise max"
+
+scenario partition-merge "Partition heals and converges cleanly" from=merge/local-inc
+  step partition "Partition isolates Replica C"
+    "A network partition cuts off Replica C. Both sides stay fully writable: A takes another click (`[3,0,0]`) while C counts 4 clicks (`[0,0,4]`) on its own."
+    state r1-r3,r2-r3 error
+    label vec#r1 "[3,0,0]=3"
+    label vec#r3 "[0,0,4]=4" with
+    state r3 warning
+    callout r3 "Partitioned: still accepts writes!"
+  step heal "Partition heals and replicas gossip"
+    "Links recover. Replicas exchange their vectors — even if a message arrives twice, `max(x, x) = x` prevents double-counting."
+    state r1-r3,r2-r3 active
+    send r1 > r2 "[3,0,0]"
+    send r2 > r3 "[3,1,0]"
+    send r3 > r1 "[0,0,4]" with
+  step converge "All replicas reach [3,1,4] = 8"
+    "Every replica merges to the exact same vector `[3,1,4]` (total `8`). CRDTs guarantee **strong eventual consistency** without consensus or a leader."
+    send r1 > r2 "[3,1,4]"
+    send r2 > r3 "[3,1,4]" with
+    label vec#r1 "[3,1,4]=8"
+    label vec#r2 "[3,1,4]=8" with
+    label vec#r3 "[3,1,4]=8" with
+    state r1,r2,r3,vec success with
+    callout r2 "Identical total (8) with zero locks"

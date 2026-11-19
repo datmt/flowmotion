@@ -1,0 +1,49 @@
+flow "Lamport logical clocks"
+summary "Orders causally linked events across machines with a single integer counter, while illustrating why timestamps alone cannot detect concurrency."
+tags clocks causality ordering
+level intermediate
+source "https://lamport.azurewebsites.net/pubs/time-clocks.pdf"
+related distributed-systems/vector-clocks
+
+node a "Node A" service tone=primary
+node b "Node B" service
+node c "Node C" service
+edge a > b
+edge b > c
+edge a > c
+array clk "Lamport counter L" keys=a,b,c = 0 0 0
+
+scenario order "Happens-before guarantees L(a) < L(b)"
+  step a-event "Node A performs local event e1"
+    "Physical wall clocks drift, so Lamport clocks count **events** instead of seconds. Before any local event or send, Node A increments its counter: `L(A) = 1`."
+    state a active
+    label clk#a "1"
+    state clk#a active with
+  step a-to-b "Node A sends (m1, t=1) to Node B"
+    "Every message carries the sender's timestamp. On receipt, Node B applies `L = max(L, t) + 1 = max(0, 1) + 1 = 2`."
+    send a > b "m1 (t=1)"
+    label clk#b "2"
+    state b,clk#b active with
+  step b-to-c "Node B sends (m2, t=2) to Node C"
+    "Node B forwards its causal successor `m2 (t=2)`. Node C jumps to `max(0, 2) + 1 = 3`, preserving `e1 -> e2 -> e3 => 1 < 2 < 3`."
+    send b > c "m2 (t=2)"
+    label clk#c "3"
+    state a,b,c,clk success with
+    callout c "Causal chain: 1 < 2 < 3"
+
+scenario out-of-order "Out-of-order message and concurrency limit" from=order/a-event
+  step b-runs-ahead "Node B executes 4 local events first"
+    "While A's message `(t=1)` is delayed in the network, Node B processes four local events, advancing its clock to `L(B) = 4`."
+    state b active
+    label clk#b "4"
+    state clk#b active with
+  step late-msg "Delayed message (t=1) arrives at Node B"
+    "A's delayed message `(t=1)` finally reaches B. Using `max(4, 1) + 1 = 5`, Node B never moves its clock backwards."
+    send a > b "late m1 (t=1)"
+    label clk#b "5"
+    state b,clk#b warning with
+    callout b "max(4, 1) + 1 = 5 (monotonic)"
+  step no-converse "L(a) < L(b) does NOT prove causality"
+    "Notice that `L(e1)=1 < L(B's 4th event)=4`, even though those two events were completely independent! Lamport clocks give a partial order only one way; use **vector clocks** to detect concurrency."
+    focus a,b dim
+    callout a "1 < 4, yet A and B were concurrent"
