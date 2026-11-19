@@ -618,7 +618,7 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
 
 **Track C — Vocabulary and icons**
 
-- [ ] **F39 Icon field, packs, resolver**
+- [x] **F39 Icon field, packs, resolver**
   *Depends:* F09, F13
   Optional `icon: "<pack>:<name>"` on nodes (regex-validated). Open-source packs only, from Iconify
   JSON: `lucide` (ISC), `simple-icons` (CC0), plus open infra/dev packs after a license check recorded
@@ -630,6 +630,10 @@ new fields are optional and additive (schema stays `2.1`, run `gen:schema`).
   with nearest names as `hint`.
   *Done when:* test: `icon: "si:postgresql"` compiles with exactly one `icons` entry; unknown name
   errors with a suggestion; snapshot renders identically with the pack data absent (self-contained).
+  *Built (deviations):* packs = `lucide` and `si` (Simple Icons, CC0) only; no extra infra packs. `compiled.icons[ref]` is
+  `{w, h, mono, paths[]}` (body normalised to path records by `icons/svg.ts`, so the player has no SVG parser) instead of raw `body`.
+  `si` pack data is 4.7 MB JSON (server/editor only, lazy `import()`). `local:` refs pass schema and are skipped (F41). DSL `icon=` added.
+  Actor with icon replaces the head glyph; icon nodes widen by icon+gap. Queue dividers overlap the icon (cosmetic).
   *Commit:* `feat(core): F39 icon packs and resolver`
 
 - [ ] **F40 Icon search for agents**

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ICON_RE } from "./icons/index.ts";
 
 export const ID_RE = /^[a-z][a-z0-9-]{0,39}$/;
 // entity | id#3 | id#2..5 | id#key | id#1.2   (PRD §3.2)
@@ -21,6 +22,7 @@ export const Node = z.strictObject({
   id: Id,
   label: z.string().min(1).max(40),
   kind: NodeKind,
+  icon: z.string().regex(ICON_RE).optional(), // "<pack>:<name>", e.g. "si:postgresql"
   group: Id.optional(),
   state: StateName.optional(),
   hidden: z.boolean().optional(),

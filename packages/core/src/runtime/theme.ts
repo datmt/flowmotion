@@ -55,7 +55,7 @@ export const kinds: Record<NodeKind, { shape: Shape; minW: number; minH: number 
 
 export const metrics = {
   fonts: { ui: "Inter", mono: "JetBrains Mono" },
-  labelSize: 14, labelLineHeight: 18, nodePadX: 16, nodePadY: 10,
+  iconSize: 20, iconGap: 8, labelSize: 14, labelLineHeight: 18, nodePadX: 16, nodePadY: 10,
   cell: { w: 56, h: 44, gap: 4 }, codeLineHeight: 20, codeSize: 13, codePad: 12,
   edgeLabelSize: 12, groupPad: 24,
 } as const;

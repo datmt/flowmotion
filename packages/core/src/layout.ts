@@ -12,7 +12,7 @@ export interface Layout {
   bounds: Rect;
   shift: { x: number; y: number }; // compiled = ELK space + shift; `pos` pins live in ELK space
   groups: { id: string; label: string; rect: Rect }[];
-  nodes: { id: string; kind: NodeKind; rect: Rect }[];
+  nodes: { id: string; kind: NodeKind; rect: Rect; icon?: string }[];
   edges: { id: string; from: string; to: string; arrow: boolean; dashed: boolean; points: number[]; length: number; labelAt: { x: number; y: number } }[];
   arrays: { id: string; label?: string; rect: Rect; orientation: "row" | "column"; keys?: string[]; slots: Rect[] }[];
   grids: { id: string; label?: string; rect: Rect; rows: number; cols: number; rowLabels?: string[]; colLabels?: string[]; slots: Rect[] }[];
@@ -26,13 +26,13 @@ const KEYS_H = 16; // index/key labels below array slots
 const NODE_MAX_W = 200;
 
 
-function nodeSize(label: string, kind: NodeKind) {
+function nodeSize(label: string, kind: NodeKind, icon?: string) {
   const k = kinds[kind];
   const { lines } = wrap(label, NODE_MAX_W - 2 * metrics.nodePadX, "inter", metrics.labelSize, 2);
   const tw = Math.max(...lines.map((l) => measure(l, "inter", metrics.labelSize)));
   const diamond = k.shape === "diamond" ? 1.6 : 1; // text must fit inside the inscribed rectangle
   return {
-    w: Math.ceil(Math.max(k.minW, (tw + 2 * metrics.nodePadX) * diamond)),
+    w: Math.ceil(Math.max(k.minW, (tw + 2 * metrics.nodePadX + (icon && kind !== "actor" ? metrics.iconSize + metrics.iconGap : 0)) * diamond)),
     h: Math.ceil(Math.max(k.minH, (lines.length * metrics.labelLineHeight + 2 * metrics.nodePadY) * diamond)),
   };
 }
@@ -99,7 +99,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
   const leaves: Leaf[] = [];
   const sizes = new Map<string, { w: number; h: number }>();
   const put = (l: Leaf) => (leaves.push(l), sizes.set(l.id, l));
-  doc.nodes.forEach((n) => put({ id: n.id, ...nodeSize(n.label, n.kind), group: n.group, pos: n.pos }));
+  doc.nodes.forEach((n) => put({ id: n.id, ...nodeSize(n.label, n.kind, n.icon), group: n.group, pos: n.pos }));
   doc.arrays?.forEach((a) => put({ id: a.id, ...arrayBox(lens.get(a.id) ?? a.values.length, a.orientation ?? "row", !!a.label), group: a.group, pos: a.pos }));
   doc.grids?.forEach((g) => {
     const cols = g.rows[0]!.length, rows = g.rows.length;
@@ -231,7 +231,7 @@ export async function layout(doc: FlowDoc): Promise<Layout> {
     shift: { x: dx, y: dy },
     bounds: { x: 0, y: 0, w: bounds.x + bounds.w + M, h: bounds.y + bounds.h + M },
     groups: g2,
-    nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id) })),
+    nodes: doc.nodes.map((n) => ({ id: n.id, kind: n.kind, rect: R(n.id), ...(n.icon ? { icon: n.icon } : {}) })),
     edges, arrays, grids,
     lifelines: lifelines.map((l) => ({ ...l, x: l.x + dx, y0: l.y0 + dy, y1: l.y1 + dy })),
     code: (doc.code ?? []).map((c) => ({ id: c.id, ...(c.title ? { title: c.title } : {}), rect: R(c.id), lineCount: c.code.split("\n").length })),

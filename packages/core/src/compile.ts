@@ -5,6 +5,7 @@ import { scheduleScenario } from "./timing.ts";
 import { applySwap, applyValues, createCellSim, resolveCells, type CellSim } from "./cells.ts";
 import { lint } from "./lint.ts";
 import { parseRef } from "./ref.ts";
+import { resolveIcons } from "./icons/index.ts";
 import { aspects } from "./runtime/index.ts";
 import type { FlowDoc } from "./schema.ts";
 import type { CompiledFlow, CompiledScenario, Ease, Rect, StepChange, Track, TrackProp } from "./runtime/index.ts";
@@ -19,6 +20,12 @@ export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow
   const v = validate(input);
   if (!v.ok) return { issues: v.issues };
   const doc = v.doc, issues = [...v.issues];
+  const { icons, unknown } = await resolveIcons(doc.nodes.flatMap((n) => (n.icon ? [n.icon] : [])));
+  doc.nodes.forEach((n, i) => {
+    const near = n.icon && unknown.get(n.icon);
+    if (near) issues.push({ severity: "error", code: "unknown_icon", path: `/nodes/${i}/icon`, where: `node › ${n.id}`, message: `Unknown icon '${n.icon}'.`, hint: `Nearest: ${near.join(", ")}.` });
+  });
+  if (unknown.size) return { issues };
   const lay = await layout(doc);
   const theme = doc.meta.theme ?? "light";
 
@@ -44,6 +51,7 @@ export async function compile(input: unknown): Promise<{ compiled?: CompiledFlow
     groups: lay.groups, nodes: lay.nodes, edges: lay.edges,
     ...(lay.lifelines.length ? { lifelines: lay.lifelines } : {}),
     arrays: lay.arrays, grids: lay.grids, code,
+    ...(Object.keys(icons).length ? { icons } : {}),
     tokens: (doc.tokens ?? []).map((t) => ({ id: t.id, ...(t.label ? { label: t.label } : {}) })),
     scenarios: doc.scenarios.map((s) => compileScenario(doc, lay, s.id)),
   };

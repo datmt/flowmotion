@@ -1,6 +1,6 @@
 import Konva from "konva";
 import { measure, wrap, themes, kinds, metrics, sample } from "@flowmotion/core/runtime";
-import type { CompiledFlow, FrameState, EntFrame, Rect, StateName, Theme } from "@flowmotion/core/runtime";
+import type { CompiledFlow, CompiledIcon, FrameState, EntFrame, Rect, StateName, Theme } from "@flowmotion/core/runtime";
 
 const SANS = metrics.fonts.ui, MONO = metrics.fonts.mono;
 
@@ -77,15 +77,29 @@ export function buildScene(c: CompiledFlow, scenarioId: string, stage: Konva.Sta
     else fills.push(new Konva.Rect({ width: w, height: h, cornerRadius: shape === "pill" ? h / 2 : 10, dash: shape === "dashed" ? [7, 4] : undefined, ...sk }));
     const extra = shape === "queue" ? [w / 3, (2 * w) / 3].map((x) => new Konva.Line({ points: [x, 0, x, h], strokeWidth: 1.5 })) : [];
     gr.add(...fills, ...extra);
-    if (shape === "actor") gr.add(new Konva.Circle({ x: w / 2, y: 16, radius: 8, strokeWidth: 2, name: "head" }));
-    const lab = labelPair(gr, { x: 8, y: shape === "actor" ? 30 : 0, width: w - 16, height: shape === "actor" ? h - 30 : h, align: "center", verticalAlign: "middle" });
+    const icon = n.icon ? c.icons?.[n.icon] : undefined; // unresolved/absent icon → kind glyph
+    if (shape === "actor" && !icon) gr.add(new Konva.Circle({ x: w / 2, y: 16, radius: 8, strokeWidth: 2, name: "head" }));
+    const { iconSize: IS, iconGap: IG } = metrics, side = icon && shape !== "actor" ? IS + IG : 0;
+    const iconPaths: { s: Konva.Path; p: CompiledIcon["paths"][number] }[] = [];
+    if (icon) {
+      const ig = new Konva.Group(), k = IS / Math.max(icon.w, icon.h);
+      ig.setAttrs(shape === "actor" ? { x: w / 2 - IS / 2 - 2, y: 6, scale: { x: k * 1.2, y: k * 1.2 } } : { x: 12, y: (h - IS) / 2, scale: { x: k, y: k } });
+      for (const p of icon.paths) { const sh = new Konva.Path({ data: p.d, lineCap: (p.cap as "round") ?? "butt", lineJoin: (p.join as "round") ?? "miter", strokeWidth: p.sw ?? 1 }); iconPaths.push({ s: sh, p }); ig.add(sh); }
+      gr.add(ig);
+    }
+    const labH = shape === "actor" ? h - (icon ? 34 : 30) : h, labY = shape === "actor" ? (icon ? 34 : 30) : 0;
+    const lab = labelPair(gr, { x: 8 + side, y: labY, width: w - 16 - side, height: labH, align: "center", verticalAlign: "middle" });
     gr.offset({ x: -0, y: 0 });
     add(n.id, gr, (f, t, dim) => {
       const p = statePaint(f);
       fills.forEach((s) => { s.stroke(p.stroke); if (s.fillEnabled()) s.fill(p.fill); });
       extra.forEach((s) => s.stroke(p.stroke));
       gr.findOne(".head")?.setAttrs({ stroke: p.stroke, fill: p.fill });
-      lab(f, p.text, w - 16);
+      lab(f, p.text, w - 16 - side);
+      for (const { s: sh, p: ip } of iconPaths) { // mono icons follow the node's text colour; coloured logos keep theirs
+        const col = (v: string | undefined) => (v === undefined || v === "none" ? undefined : v === "currentColor" ? p.text : v);
+        sh.fill(col(ip.fill) ?? ""); sh.stroke(col(ip.stroke) ?? ""); sh.strokeEnabled(!!ip.stroke && ip.stroke !== "none");
+      }
       gr.opacity(f.opacity * dim);
     });
     pulseTargets.set(n.id, gr);

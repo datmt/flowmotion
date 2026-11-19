@@ -94,8 +94,8 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
           case "layout": { const { o } = opts(rest, ["algorithm", "direction", "edges"], []); doc.layout = o; at.set("/layout", n); break; }
           case "group": push("groups", { id: need(1, "id").s, label: need(2, "label").s }); break;
           case "node": {
-            const { o, f } = opts(toks.slice(4), ["in", "state", "pos"], ["hidden"]);
-            push("nodes", { id: need(1, "id").s, label: need(2, "label").s, kind: need(3, "kind").s, ...(o.in && { group: o.in }), ...(o.state && { state: o.state }), ...(o.pos && { pos: pos(o.pos, verb.col) }), ...(f.has("hidden") && { hidden: true }) });
+            const { o, f } = opts(toks.slice(4), ["in", "state", "pos", "icon"], ["hidden"]);
+            push("nodes", { id: need(1, "id").s, label: need(2, "label").s, kind: need(3, "kind").s, ...(o.in && { group: o.in }), ...(o.icon && { icon: o.icon }), ...(o.state && { state: o.state }), ...(o.pos && { pos: pos(o.pos, verb.col) }), ...(f.has("hidden") && { hidden: true }) });
             break;
           }
           case "edge": {
@@ -215,7 +215,7 @@ export function printDsl(doc: FlowDoc): string {
   const join = (...p: (string | false | undefined)[]) => p.filter(Boolean).join(" ");
   L.push("");
   for (const g of doc.groups ?? []) L.push(`group ${g.id} ${q(g.label)}`);
-  for (const x of doc.nodes) L.push(join("node", x.id, q(x.label), x.kind, x.group && `in=${x.group}`, x.state && `state=${x.state}`, x.pos && px(x.pos).trim(), x.hidden && "hidden"));
+  for (const x of doc.nodes) L.push(join("node", x.id, q(x.label), x.kind, x.group && `in=${x.group}`, x.icon && `icon=${x.icon}`, x.state && `state=${x.state}`, x.pos && px(x.pos).trim(), x.hidden && "hidden"));
   for (const e of doc.edges) L.push(join("edge", e.from, ">", e.to, e.label !== undefined && q(e.label), e.id && `id=${e.id}`, e.arrow === true && "arrow", e.arrow === false && "noarrow", e.dashed && "dashed", e.hidden && "hidden"));
   for (const a of doc.arrays ?? []) L.push(join("array", a.id, a.label !== undefined && q(a.label), a.keys && `keys=${a.keys.join(",")}`, a.orientation && `orientation=${a.orientation}`, a.group && `in=${a.group}`, a.pos && px(a.pos).trim(), a.hidden && "hidden", "=", ...a.values.map(cell)));
   for (const g of doc.grids ?? []) {

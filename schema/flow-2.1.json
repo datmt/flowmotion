@@ -118,6 +118,10 @@
               "value"
             ]
           },
+          "icon": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{0,15}:[a-z0-9]+(-[a-z0-9]+)*$"
+          },
           "group": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]{0,39}$"
