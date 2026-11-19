@@ -35,6 +35,7 @@ scenario coord-crash "Coordinator crashes; highest survivor bullies into lead" f
     send n2 > n4 "ELECTION (lost)" with
   step n3-bullies "Node 3 replies OK and takes over election"
     "Node 3 is alive and has a higher ID (`3 > 2`), so it replies `OK` — bullying Node 2 to step back — and starts its own election against higher IDs (N4)."
+    detail "When a low-ID process initiates an election, every higher-ID survivor replies and launches its own round to all nodes above it, creating `O(N^2)` `ELECTION` and `OK` messages in the worst case before the highest live node wins."
     send n3 > n2 "OK (step back)"
     state n2 pending
     state n3 active
@@ -42,6 +43,7 @@ scenario coord-crash "Coordinator crashes; highest survivor bullies into lead" f
     callout n3 "Higher ID takes over election"
   step n3-wins "No reply from N4 -> Node 3 declares victory"
     "Nobody above Node 3 answers before timeout. Node 3 crowns itself coordinator and broadcasts `COORDINATOR(N3)` to all lower-ID peers."
+    detail "The Bully algorithm assumes a synchronous network with bounded message delays and reliable delivery. Under a network partition, each isolated side times out waiting for higher-ID peers on the other side and elects its own local coordinator, creating dual leaders."
     label n3 "Node 3 (Leader)"
     state n3 success
     send n3 > n2 "COORDINATOR(N3)"
