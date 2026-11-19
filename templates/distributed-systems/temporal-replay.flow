@@ -39,11 +39,13 @@ scenario crash "Worker crashes, workflow resumes"
     send server > worker-b "task"
   step replay "Replay history"
     "Worker B **replays** the workflow code against the recorded events. `ChargeCard` is not run again; its recorded result is returned instead."
+    detail "During replay, the Worker verifies that every Command emitted by workflow code matches Event History; any divergence (from `time.Now()`, direct I/O, or unversioned code edits) triggers a non-determinism error. Normally, **Sticky Execution** keeps state in an in-memory LRU **Workflow Cache** so full replay runs only on crash or cache eviction."
     show history-worker-b
     send history > worker-b "events"
     state events#0..1 success
     state worker-b active
   step resume "Continue where it stopped"
     "Replay catches Worker B up to the crash point, and then it executes new work, appending to the same history."
+    detail "A single Workflow Run has a default hard limit of **51,200 events** (or **50 MB**, warning at 10,240 events). Long-running loops use **Continue-As-New** to close the current run and start a fresh Event History under the same Workflow ID."
     values events = Started "ChargeCard done" "ShipOrder done"
     state worker-b success

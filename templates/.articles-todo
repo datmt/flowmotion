@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/temporal-replay
 distributed-systems/three-phase-commit
 distributed-systems/timeouts-deadline-propagation
 distributed-systems/two-phase-commit
