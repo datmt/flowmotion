@@ -12,7 +12,7 @@ theme dark
 
 group services "Services"
 node client "Client" actor
-# node options: in= state= pos= icon= hidden   (icon=<pack>:<name>, packs: lucide, si; find names with flow_icons; e.g. icon=si:postgresql, icon=lucide:server)
+# node options: in= state= pos= icon= hidden   (icon=<pack>:<name>, packs: lucide, si, carbon, devicon; find names with flow_icons; e.g. icon=si:postgresql, icon=lucide:server)
 node payment "Payment" service in=services state=idle
 # edge options: id= hidden dashed noarrow
 edge client > payment "Charge" dashed

@@ -5,10 +5,12 @@ export type { CompiledIcon, IconPath } from "./svg.ts";
 export const ICON_RE = /^[a-z][a-z0-9]{0,15}:[a-z0-9]+(-[a-z0-9]+)*$/;
 
 type Pack = { size: number; icons: Record<string, string> };
-// Lazy: pack data (~5 MB) is only loaded by compile/search on the server or editor, never by the player.
+// Lazy: pack data (~10 MB) is only loaded by compile/search on the server or editor, never by the player.
 const loaders: Record<string, () => Promise<Pack>> = {
   lucide: () => import("./lucide.json", { with: { type: "json" } }).then((m) => m.default),
   si: () => import("./si.json", { with: { type: "json" } }).then((m) => m.default),
+  carbon: () => import("./carbon.json", { with: { type: "json" } }).then((m) => m.default),
+  devicon: () => import("./devicon.json", { with: { type: "json" } }).then((m) => m.default),
 };
 export const iconPacks = Object.keys(loaders);
 

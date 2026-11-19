@@ -48,3 +48,12 @@ test("DSL round-trips icon=", () => {
   expect(text).toContain("icon=si:postgresql");
   expect(parseDsl(text).doc?.nodes[0]?.icon).toBe("si:postgresql");
 });
+
+test("carbon and devicon packs resolve", async () => {
+  const { searchIcons } = await import("./index.ts");
+  expect((await searchIcons("postgres", { pack: "devicon" })).map((h) => h.ref)).toContain("devicon:postgresql");
+  expect((await searchIcons("load balancer", { pack: "carbon" })).length).toBeGreaterThan(0);
+  const r = await compile(doc("devicon:postgresql"));
+  expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
+  expect(r.compiled!.icons!["devicon:postgresql"]!.mono).toBe(false);
+});

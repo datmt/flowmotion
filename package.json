@@ -13,6 +13,8 @@
     "gen:icons": "node --experimental-strip-types scripts/gen-icons.ts"
   },
   "devDependencies": {
+    "@iconify-json/carbon": "^1.2.30",
+    "@iconify-json/devicon": "^1.2.82",
     "@iconify-json/lucide": "^1.2.156",
     "@iconify-json/simple-icons": "^1.2.103",
     "@types/fontkit": "^2.0.9",
