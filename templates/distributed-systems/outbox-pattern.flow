@@ -31,6 +31,7 @@ scenario publish "Atomic write and relay publish"
     state orders,outbox success with
   step poll "Relay reads unpublished rows"
     "A separate relay process (polling or reading the DB WAL via CDC) picks up unpublished rows from `outbox`."
+    detail "Message relays use either the **Polling Publisher** pattern—querying the `outbox` table periodically, which is database-agnostic but adds polling queries—or **Transaction Log Tailing**, which tails the database commit log (WAL/binlog) for low-latency streaming without extra read load on the outbox table."
     send outbox > relay "row #42 (pending)"
     state relay active
   step emit "Publish event to broker"
