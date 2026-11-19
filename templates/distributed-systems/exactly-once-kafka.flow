@@ -22,6 +22,7 @@ array log "Partition log (PID=7)" = seq0:m1
 scenario txn-write "Idempotent atomic transaction commits"
   step begin "Producer opens a transaction"
     "The producer registers `PID=7` with a monotonic epoch and asks the Transaction Coordinator to begin a transaction covering its output partitions."
+    detail "Configuring a stable `transactional.id` ties a producer across restarts to a Producer ID and a monotonically increasing epoch. If a new instance starts with the same `transactional.id`, the Transaction Coordinator bumps the epoch and fences off any older zombie producer."
     state prod active
     send prod > coord "BeginTxn(PID=7)"
     state coord active
@@ -33,6 +34,7 @@ scenario txn-write "Idempotent atomic transaction commits"
     state log#1 pending with
   step commit "Coordinator writes COMMIT marker"
     "The producer finishes and commits. The coordinator appends a `COMMIT` marker across involved partitions, atomically making `seq1:m2` visible to `read_committed` consumers."
+    detail "Downstream consumers must explicitly set `isolation.level=read_committed` (the default is `read_uncommitted`) so the client buffers uncommitted records and drops aborted transactions. In read-process-write pipelines, `sendOffsetsToTransaction` commits input consumer offsets in the same atomic transaction."
     send prod > coord "CommitTxn"
     send coord > prod "Committed"
     state log#1 success

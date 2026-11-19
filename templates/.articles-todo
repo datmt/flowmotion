@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/exactly-once-kafka
 distributed-systems/gossip-protocol
 distributed-systems/ha-failover-split-brain
 distributed-systems/hedged-requests
