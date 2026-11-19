@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/raft-consensus
 distributed-systems/raft-membership-change
 distributed-systems/rate-limiter-sliding-window
 distributed-systems/rate-limiter-token-bucket

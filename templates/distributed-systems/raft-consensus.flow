@@ -108,6 +108,7 @@ scenario main "Election, then replication"
     state log-s3#0,log-s4#0,log-s5#0 pending with
   step quorum "Quorum acknowledges" hold=1
     "S2, S3 and S4 acknowledge. With the leader that is a majority, so the entry is committed. Any future leader's election quorum must overlap this one, so it will see the entry."
+    detail "Raft only commits entries from the leader's current term by counting replicas; entries from earlier terms are committed indirectly by the Log Matching Property once a current-term entry commits. To learn its commit index promptly after election, each new leader commits a blank `no-op` entry at the start of its term."
     send s2 > s1 "ack"
     send s3 > s1 "ack" with
     send s4 > s1 "ack" with
@@ -231,6 +232,7 @@ scenario partition "What if the network partitions?" from=main/commit
     send s3 > s2 "heartbeat t2" with
   step stepdown "The old leader steps down"
     "S1 sees a higher term, so it drops to follower (line 3 of the handler). Its entry y=9 does not match S3's log, so the conflict check removes it and S1 and S2 copy the committed log. Nothing the client was told is lost, because y=9 was never acknowledged."
+    detail "Because a partitioned leader like S1 cannot know it was deposed until messages return, Raft protects linearizable read-only queries by having the leader exchange heartbeats with a majority before answering (or using a leader lease bounded by clock drift)."
     highlight rpc "3,7-8"
     state s1 idle
     label roles#s1 "Foll" with
