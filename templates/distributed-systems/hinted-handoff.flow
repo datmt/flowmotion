@@ -40,6 +40,7 @@ scenario node-down "R2 goes down, standby holds hint, then hands off" from=norma
     label store#r2 "DOWN (v1)" with
   step sloppy-write "Write to R1 and hinted standby R3"
     "To stay **always writable** (sloppy quorum), the coordinator writes `v2` to R1 and sends a hinted copy to standby R3 tagged `hint: for R2`, then returns `OK`."
+    detail "In Dynamo's sloppy quorum, operations target the first `N` healthy nodes in the key's preference list rather than failing when a primary owner is unreachable. Standby R3 stores the hinted replica in a separate local database that is scanned periodically."
     send coord > r1 "PUT v2"
     send coord > r3 "PUT v2 [hint:R2]" with
     label store#r1 "v2"
@@ -50,6 +51,7 @@ scenario node-down "R2 goes down, standby holds hint, then hands off" from=norma
     callout r3 "Holding write until R2 returns"
   step recover "R2 recovers; R3 replays the hint"
     "R3 periodically checks R2's health. Once R2 comes back online, R3 forwards `k=v2` to R2 and deletes the local hint once acknowledged."
+    detail "Hinted handoff assumes transient outages and low membership churn. If standby R3 itself fails before delivering the hint to R2, the hint is lost and the cluster relies on background Merkle-tree anti-entropy to detect and synchronize missing replicas."
     state r2 active
     send r3 > r2 "handoff k=v2"
     label store#r2 "v2"

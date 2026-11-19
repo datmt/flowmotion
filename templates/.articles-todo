@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/hinted-handoff
 distributed-systems/inbox-idempotency
 distributed-systems/kafka-consumer-groups
 distributed-systems/lamport-clocks
