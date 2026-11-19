@@ -36,6 +36,7 @@ scenario inventory-fails "What if inventory fails?" from=happy/charge
     send inventory > orch "OutOfStock"
   step refund "Compensate"
     "There is no distributed rollback. The saga runs **compensations** in reverse order: refund the charge."
+    detail "Because `Charge` already committed locally, sagas lack ACID isolation: other requests can observe intermediate state until compensation finishes. Production sagas classify earlier steps as **compensatable**, the go/no-go step as the **pivot**, and post-pivot steps as **retriable**, pairing them with semantic locks (like `PENDING` status) and idempotent handlers."
     send orch > payment "Refund"
     state payment warning
     callout payment "Compensation is a new transaction, not an undo" with
