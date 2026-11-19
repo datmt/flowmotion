@@ -72,6 +72,7 @@ scenario leader-change "Leader crashes; L2 recovers slot 3" from=steady/slot-3-p
     callout a1 "Reports uncommitted s3=z=3"
   step adopt-value "L2 adopts and commits z=3"
     "Paxos safety requires L2 to re-propose `z=3` at `b=2` instead of overwriting slot 3, because it cannot know whether `z=3` had already been chosen. Once a quorum accepts, L2 resumes 1-RTT writes."
+    detail "Lamport's safety invariant P2c requires a proposer collecting a majority of promises to propose the value of the highest-numbered proposal already accepted in that quorum (here `z=3` from A1). For any earlier uncommitted gap where no acceptor reports an accepted value, the new leader can fill the slot with a `no-op` command."
     send l2 > a1 "Accept(b=2, s3, z=3)"
     send l2 > a2 "Accept(b=2, s3, z=3)" with
     state l2,a1,a2 success
