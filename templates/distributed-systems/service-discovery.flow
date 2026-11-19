@@ -1,0 +1,54 @@
+flow "Service discovery and health checks"
+summary "Instances register in a dynamic registry with health heartbeats so callers find live endpoints and recover when cached entries go stale."
+tags microservices service-discovery routing
+level intermediate
+source "https://microservices.io/patterns/client-side-discovery.html"
+related distributed-systems/load-balancer-algorithms distributed-systems/sidecar-service-mesh
+
+node caller "Order Service" service tone=primary
+node reg "Service Registry" db
+group inst "Payments instances"
+node p1 "Payments A (10.0.1.1)" service in=inst
+node p2 "Payments B (10.0.1.2)" service in=inst
+edge caller > reg
+edge caller > p1
+edge caller > p2
+edge p1 > reg dashed
+edge p2 > reg dashed
+array healthy "Registry: payments" = 10.0.1.1 10.0.1.2
+
+scenario discover "Register, discover, and call"
+  step register "Instances register and send heartbeats"
+    "In elastic clusters, IP addresses come and go constantly. On startup, Payments A and B register their addresses and renew periodic health heartbeats."
+    send p1 > reg "register + heartbeat"
+    send p2 > reg "register + heartbeat" with
+    state p1,p2,reg success
+  step lookup "Caller queries registry for healthy endpoints"
+    "Order Service asks the registry for `payments` and caches the returned healthy address list locally to avoid a registry hop on every request."
+    send caller > reg "lookup payments"
+    send reg > caller "[10.0.1.1, 10.0.1.2]"
+    state caller active
+  step route "Caller sends request directly"
+    "Order Service load-balances directly across the discovered endpoints with no central proxy bottleneck."
+    send caller > p1 "POST /charge"
+    send p1 > caller "200 OK"
+    state caller success
+
+scenario stale-instance "Stale registry entry causes failover" from=discover/route
+  step crash "Payments B crashes before TTL expires"
+    "Payments B dies unexpectedly. Until its heartbeat TTL expires — and until callers refresh their local caches — `10.0.1.2` remains listed as healthy."
+    state p2 error
+    effect p2 shake
+    callout reg "Still cached until TTL expires"
+  step stale-hit "Caller hits stale endpoint and fails"
+    "Order Service routes the next call to cached `10.0.1.2` and hits `connection refused`. Discovery is always eventually consistent, so callers must handle stale endpoints."
+    send caller > p2 "POST /charge"
+    send p2 > caller "ECONNREFUSED"
+    state caller warning
+  step evict "Registry evicts B; caller retries on A"
+    "Health checks fail and the registry drops `10.0.1.2`. Order Service marks B unhealthy locally and fails over to Payments A."
+    values healthy = 10.0.1.1
+    send caller > p1 "retry /charge"
+    send p1 > caller "200 OK"
+    state caller,p1 success
+    callout caller "Retries mask brief stale-cache window"

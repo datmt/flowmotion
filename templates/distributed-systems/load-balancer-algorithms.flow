@@ -1,0 +1,60 @@
+flow "Load balancer algorithms"
+summary "Distributes requests across backends via round-robin, hashing, or least-connections, adapting when one backend slows down."
+tags load-balancing routing traffic
+level beginner
+source "https://www.nginx.com/resources/glossary/load-balancing/"
+related distributed-systems/consistent-hashing distributed-systems/service-discovery
+
+node client "Clients" actor
+node lb "Load Balancer" service tone=primary
+group pool "Backend pool"
+node b1 "Backend 1" service in=pool
+node b2 "Backend 2" service in=pool
+node b3 "Backend 3" service in=pool
+edge client > lb
+edge lb > b1
+edge lb > b2
+edge lb > b3
+array conns "Active connections" keys=b1,b2,b3 = 0 0 0
+
+scenario algorithms "Round-robin and hash routing"
+  step round-robin "Round-robin rotates evenly"
+    "**Round-robin** hands requests to B1, B2, and B3 in turn. When all backends are identical and requests cost the same, every server gets an equal share."
+    send client > lb "req 1, 2, 3"
+    state lb active
+    send lb > b1 "req 1"
+    send lb > b2 "req 2" with
+    send lb > b3 "req 3" with
+    label conns#b1 "1"
+    label conns#b2 "1" with
+    label conns#b3 "1" with
+    state b1,b2,b3 success with
+  step hash-route "IP/key hash pins a client to one backend"
+    "**Consistent/IP hashing** maps a key (`user-7`) deterministically to the same backend (B2) so session state or local caches stay warm."
+    send client > lb "user-7"
+    send lb > b2 "hash(user-7)"
+    pulse b2
+    callout b2 "Sticky routing keeps cache warm"
+
+scenario slow-backend "Slow backend: round-robin vs least-connections" from=algorithms/round-robin
+  step b2-slows "Backend 2 stalls on heavy work"
+    "Backend 2 hits GC or a slow disk, so its requests pile up to 8 active connections while B1 and B3 stay at 1."
+    state b2 error
+    effect b2 shake
+    label conns#b2 "8 (slow!)"
+    state conns#b2 error with
+    callout b2 "Queue backing up"
+  step rr-hurts "Naive round-robin keeps feeding B2"
+    "Round-robin does not measure latency or in-flight work — it blindly sends another third of incoming traffic straight into overloaded B2."
+    send client > lb "req 4"
+    send lb > b2 "req 4 (RR!)"
+    label conns#b2 "9 (worse)"
+  step least-conn "Least-connections routes around slow B2"
+    "Switching to **least-connections** inspects live in-flight counts (`B1=1, B2=9, B3=1`) and steers new traffic to B1 and B3 until B2 drains and recovers."
+    send client > lb "req 5, 6"
+    send lb > b1 "req 5"
+    send lb > b3 "req 6" with
+    label conns#b1 "2"
+    label conns#b3 "2" with
+    state lb,b1,b3 success
+    callout lb "Avoids B2 automatically"

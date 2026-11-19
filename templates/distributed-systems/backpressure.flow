@@ -1,0 +1,48 @@
+flow "Backpressure with a bounded queue"
+summary "Uses a fixed-capacity buffer to signal a fast producer to slow down when a consumer lags, preventing unbounded memory growth."
+tags streaming resilience queues
+level intermediate
+source "https://mechanical-sympathy.blogspot.com/2012/05/apply-back-pressure-when-overloaded.html"
+related distributed-systems/rate-limiter-token-bucket distributed-systems/bulkhead
+
+node prod "Fast Producer" service tone=primary
+node buf "Bounded Queue (cap=3)" queue
+node cons "Slow Consumer" service
+edge prod > buf
+edge buf > cons
+array q "Queue buffer (cap=3)" = m1
+
+scenario balanced "Matched throughput keeps latency flat"
+  step steady "Producer and consumer run at the same pace"
+    "When the consumer drains items as fast as the producer emits them, the bounded queue stays shallow and end-to-end latency stays low."
+    state prod,cons active
+    send prod > buf "m2"
+    values q = m1 m2
+    send buf > cons "m1"
+    values q = m2
+    state prod,buf,cons success
+
+scenario overload "Producer outpaces consumer; backpressure engages" from=balanced/steady
+  step lag "Consumer slows down; queue fills to 3/3"
+    "A downstream DB slows the consumer down while the producer keeps bursting. Messages pile up until all 3 slots in the bounded queue are full."
+    state cons warning
+    send prod > buf "m3, m4"
+    values q = m2 m3 m4
+    state buf,q error
+    callout buf "Queue FULL (3/3): no more room"
+  step pushback "Queue applies backpressure upstream"
+    "An **unbounded** queue would keep accepting writes until the process crashed with OOM. Instead, the bounded queue blocks or rejects `m5` (`429 / demand=0`), pushing pressure back to the producer."
+    send prod > buf "m5"
+    effect buf shake
+    send buf > prod "PAUSE (full)"
+    state prod warning
+    callout prod "Producer slows or sheds load"
+  step drain "Consumer catches up and resumes demand"
+    "Once the consumer finishes `m2` and frees a slot, the queue signals `demand=1` so the producer resumes safely at the consumer's true capacity."
+    send buf > cons "m2"
+    values q = m3 m4
+    state buf,cons active
+    send buf > prod "RESUME (1 slot)"
+    send prod > buf "m5"
+    values q = m3 m4 m5
+    state prod success

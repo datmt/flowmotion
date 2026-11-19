@@ -1,0 +1,50 @@
+flow "ZooKeeper leader election"
+summary "Servers create ephemeral sequential znodes and watch only their predecessor so leadership transfers cleanly on session expiry without a herd effect."
+tags leader-election coordination zookeeper
+level advanced
+source "https://zookeeper.apache.org/doc/current/recipes.html#sc_leaderElection"
+related distributed-systems/leader-lease distributed-systems/raft-consensus
+
+group nodes "Candidate servers"
+node s1 "Server 1" service in=nodes tone=primary
+node s2 "Server 2" service in=nodes
+node s3 "Server 3" service in=nodes
+node zk "ZooKeeper Ensemble" db
+edge s1 > zk
+edge s2 > zk
+edge s3 > zk
+array znodes "/election znodes" =
+
+scenario elect "Sequential ephemeral znodes pick a leader"
+  step create "Each server creates an ephemeral sequential znode"
+    "All three servers create an **ephemeral sequential** znode under `/election`. ZooKeeper assigns strictly increasing suffixes: `n_001` (S1), `n_002` (S2), `n_003` (S3)."
+    send s1 > zk "create -e -s"
+    send s2 > zk "create -e -s" with
+    send s3 > zk "create -e -s" with
+    values znodes = n_001:S1 n_002:S2 n_003:S3
+    state zk active
+  step watch "Lowest sequence leads; others watch predecessor"
+    "Server 1 owns the smallest znode (`n_001`), so it is leader. Rather than everyone watching `n_001` (which causes a **herd effect**), S2 watches `n_001` and S3 watches `n_002`."
+    state s1,znodes#0 success
+    state s2,s3 pending
+    callout s2 "Watches n_001 only"
+    callout s3 "Watches n_002 only" with
+
+scenario session-expiry "Session expiry deletes znode and promotes S2" from=elect/watch
+  step expire "Server 1 crashes; session expires"
+    "Server 1 loses connectivity and misses ZooKeeper heartbeats. When its session expires, ZooKeeper automatically deletes its **ephemeral** znode `n_001`."
+    state s1 error
+    effect s1 shake
+    values znodes = n_002:S2 n_003:S3
+    callout zk "Ephemeral n_001 auto-deleted"
+  step notify-s2 "Only Server 2 is notified (no herd effect)"
+    "ZooKeeper fires the watch event to **Server 2 only** — Server 3 stays undisturbed because its predecessor `n_002` is still alive."
+    send zk > s2 "n_001 deleted!"
+    state s2 active
+    callout s3 "Not woken up (watches n_002)"
+  step promote "Server 2 verifies lowest sequence and leads"
+    "Server 2 calls `getChildren(/election)`, confirms `n_002` is now the smallest znode, and safely assumes leadership."
+    send s2 > zk "getChildren"
+    send zk > s2 "[n_002, n_003]"
+    state s2,znodes#0 success
+    callout s2 "New leader: owns smallest znode"

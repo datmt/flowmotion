@@ -1,0 +1,62 @@
+flow "Exactly-once semantics in Kafka"
+summary "Combines idempotent producer sequence numbers with atomic transactions so retries across broker failovers never duplicate or partially expose records."
+tags kafka streaming transactions
+level advanced
+source "https://kafka.apache.org/documentation/#semantics"
+related distributed-systems/outbox-pattern distributed-systems/inbox-idempotency
+
+node prod "Producer (PID=7)" service tone=primary
+node coord "Txn Coordinator" service
+group brokers "Partition replicas"
+node b1 "Broker 1 (Leader)" queue in=brokers
+node b2 "Broker 2 (Follower)" queue in=brokers
+node cons "Consumer (read_committed)" service
+edge prod > coord
+edge prod > b1
+edge prod > b2 hidden
+edge b1 > b2
+edge b1 > cons
+edge b2 > cons hidden
+array log "Partition log (PID=7)" = seq0:m1
+
+scenario txn-write "Idempotent atomic transaction commits"
+  step begin "Producer opens a transaction"
+    "The producer registers `PID=7` with a monotonic epoch and asks the Transaction Coordinator to begin a transaction covering its output partitions."
+    state prod active
+    send prod > coord "BeginTxn(PID=7)"
+    state coord active
+  step write-msg "Append seq1:m2 and replicate to follower"
+    "The producer writes `m2` tagged with `(PID=7, seq=1)` to leader Broker 1, which replicates it to follower Broker 2. Until committed, `read_committed` consumers cannot see it."
+    send prod > b1 "Produce(seq=1, m2)"
+    send b1 > b2 "replicate seq1:m2"
+    values log = seq0:m1 seq1:m2
+    state log#1 pending with
+  step commit "Coordinator writes COMMIT marker"
+    "The producer finishes and commits. The coordinator appends a `COMMIT` marker across involved partitions, atomically making `seq1:m2` visible to `read_committed` consumers."
+    send prod > coord "CommitTxn"
+    send coord > prod "Committed"
+    state log#1 success
+    send b1 > cons "seq1:m2 (committed)"
+    state prod,coord,b1,cons success
+
+scenario broker-failover "Broker failover deduplicates retried write" from=txn-write/write-msg
+  step leader-dies "Broker 1 crashes before ACK reaches producer"
+    "Broker 1 already replicated `seq1:m2` to Broker 2, then crashes before sending `ACK` back to the producer. Broker 2 takes over as the new leader."
+    state b1 error
+    effect b1 shake
+    label b2 "Broker 2 (New Leader)"
+    state b2 active
+    show prod-b2,b2-cons
+    callout prod "Timed out: did m2 land?"
+  step dedup "Producer retries seq=1; Broker 2 deduplicates"
+    "The producer retries the exact same `(PID=7, seq=1, m2)` against Broker 2. Broker 2 sees `seq=1` is already stored for `PID=7`, drops the duplicate without appending twice, and returns `OK`."
+    send prod > b2 "Retry(PID=7, seq=1)"
+    send b2 > prod "OK (deduplicated)"
+    state b2 success
+    callout b2 "seq=1 already seen -> no duplicate!"
+  step finish "Transaction commits cleanly once"
+    "The coordinator commits the transaction and the `read_committed` consumer reads `m2` **exactly once** despite the leader crash and retry."
+    send prod > coord "CommitTxn"
+    state log#1 success
+    send b2 > cons "seq1:m2 (once)"
+    state prod,coord,cons success

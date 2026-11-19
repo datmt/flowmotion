@@ -1,0 +1,54 @@
+flow "Distributed lock with TTL and fencing tokens"
+summary "Lease-based distributed locks prevent deadlocks on crash, but require monotonic fencing tokens checked by storage to survive GC pauses."
+tags locking concurrency consistency
+level advanced
+source "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+related distributed-systems/leader-lease
+
+node c1 "Client 1" service tone=primary
+node c2 "Client 2" service
+node lock "Lock Service (TTL)" db
+node store "Storage" db
+edge c1 > lock
+edge c2 > lock
+edge c1 > store
+edge c2 > store
+array meta "Lock & fencing state" keys=holder,token,max-seen = none 0 0
+
+scenario lock-write "Acquire lock with fencing token and write"
+  step acquire "Client 1 acquires lock (TTL=10s, token=33)"
+    "Client 1 acquires the distributed lock with a 10s lease so a crashed holder cannot lock out others forever. The lock service returns monotonic fencing token `33`."
+    send c1 > lock "Acquire(TTL=10s)"
+    send lock > c1 "Granted (tok=33)"
+    label meta#holder "Client 1"
+    label meta#token "33" with
+    state c1,lock active with
+  step safe-write "Storage verifies token 33 and writes"
+    "Client 1 attaches `tok=33` to its write. Storage checks `33 >= max_seen(0)`, updates `max_seen=33`, and commits safely."
+    send c1 > store "PUT x=A (tok=33)"
+    label meta#max-seen "33"
+    state store,c1 success
+    send store > c1 "OK"
+
+scenario gc-pause "GC pause breaks TTL lock; fencing token saves storage" from=lock-write/acquire
+  step pause "Client 1 hits a 15s GC pause; lease expires"
+    "Right after acquiring `tok=33`, Client 1 freezes in a 15s stop-the-world GC pause. Its 10s TTL expires on the lock service without Client 1 knowing."
+    state c1 warning
+    label meta#holder "EXPIRED"
+    callout c1 "Frozen in 15s GC pause!"
+  step c2-acquires "Client 2 acquires lock with token 34 and writes"
+    "Client 2 sees the lock is free, acquires it with higher token `34`, and writes `x=B (tok=34)`. Storage records `max_seen = 34`."
+    send c2 > lock "Acquire(TTL=10s)"
+    send lock > c2 "Granted (tok=34)"
+    label meta#holder "Client 2"
+    label meta#token "34" with
+    send c2 > store "PUT x=B (tok=34)"
+    label meta#max-seen "34"
+    state c2,store success with
+  step zombie-blocked "Client 1 wakes up; storage rejects stale token 33"
+    "Client 1 resumes, still believing it holds the lock, and sends `PUT x=A (tok=33)`. Storage checks `33 < max_seen(34)` and **rejects** the zombie write! TTL locks alone are unsafe without fencing."
+    send c1 > store "PUT x=A (tok=33)"
+    state c1 error
+    effect c1 shake
+    send store > c1 "REJECT (33 < 34)"
+    callout store "Fencing token prevents corruption"

@@ -1,0 +1,53 @@
+flow "Kafka consumer groups and rebalance"
+summary "Assigns each partition to one consumer in a group for parallel ordered processing, and rebalances ownership when a consumer crashes."
+tags kafka streaming partitioning
+level intermediate
+source "https://kafka.apache.org/documentation/#intro_consumers"
+related distributed-systems/exactly-once-kafka
+
+group topic "Topic: orders (3 partitions)"
+node p0 "Partition 0" queue in=topic
+node p1 "Partition 1" queue in=topic
+node p2 "Partition 2" queue in=topic
+group grp "Consumer Group A"
+node c1 "Consumer 1" service in=grp tone=primary
+node c2 "Consumer 2" service in=grp
+node c3 "Consumer 3" service in=grp
+edge p0 > c1
+edge p1 > c2
+edge p2 > c3
+edge p2 > c1 hidden
+array owners "Partition owner" keys=p0,p1,p2 = C1 C2 C3
+
+scenario parallel "One consumer per partition in a group"
+  step consume "Parallel consumption with per-partition order"
+    "Each partition is assigned to **at most one** consumer in the group (`P0->C1, P1->C2, P2->C3`). This scales throughput horizontally while preserving strict message order inside each partition."
+    send p0 > c1 "off 10..12"
+    send p1 > c2 "off 20..22" with
+    send p2 > c3 "off 30..32" with
+    state c1,c2,c3 success
+  step commit-off "Consumers commit processed offsets"
+    "After processing, each consumer commits its latest offset to `__consumer_offsets` so a future takeover knows exactly where to resume."
+    pulse c1,c2,c3
+    callout c3 "Committed P2 offset = 32"
+
+scenario consumer-crash "Consumer crash triggers group rebalance" from=parallel/commit-off
+  step c3-dies "Consumer 3 crashes and misses heartbeats"
+    "Consumer 3 dies while reading offset 33. When its heartbeat misses `session.timeout.ms`, the group coordinator marks C3 dead and triggers a **rebalance**."
+    state c3 error
+    effect c3 shake
+    label owners#p2 "UNASSIGNED"
+    state owners#p2 error with
+    callout c3 "Heartbeat timeout -> rebalance"
+  step reassign "Coordinator reassigns Partition 2 to Consumer 1"
+    "Remaining members join the new generation. The assignor hands Partition 2 to Consumer 1 (cooperative rebalance avoids stopping P0 and P1 unnecessarily)."
+    show p2-c1
+    label owners#p2 "C1"
+    state owners#p2 warning with
+    state c1 active
+    callout c1 "Now owns P0 and P2"
+  step resume "Consumer 1 resumes P2 from offset 32"
+    "Consumer 1 reads P2's last committed offset (`32`) and continues from `33`. Any uncommitted records since offset 32 are reprocessed (at-least-once)."
+    send p0 > c1 "off 13"
+    send p2 > c1 "off 33 (resumed)" with
+    state c1,c2,owners success

@@ -34,14 +34,14 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 - [x] read-repair
 - [x] merkle-tree-sync
 - [x] bulkhead
-- [ ] load-balancer-algorithms: RR, least-conn, hash (beginner) - slow backend
-- [ ] service-discovery: registry + health (intermediate) - stale instance
-- [ ] sidecar-service-mesh: mTLS + routing (intermediate) - retry storm
-- [ ] backpressure: bounded queue (intermediate) - producer faster than consumer
-- [ ] exactly-once-kafka: idempotent producer + txn (advanced) - broker failover
-- [ ] kafka-consumer-groups: partitions, rebalance (intermediate) - consumer crash
-- [ ] distributed-lock-redlock: lock with TTL (advanced) - GC pause, fencing token
-- [ ] zookeeper-election: ephemeral nodes (advanced) - session expiry
+- [x] load-balancer-algorithms
+- [x] service-discovery
+- [x] sidecar-service-mesh
+- [x] backpressure
+- [x] exactly-once-kafka
+- [x] kafka-consumer-groups
+- [x] distributed-lock-redlock
+- [x] zookeeper-election
 - [ ] hedged-requests: tail latency (intermediate) - duplicate load
 - [ ] timeouts-deadline-propagation: deadlines (intermediate) - cascading timeout
 - [ ] strangler-fig: incremental migration (beginner) - rollback route

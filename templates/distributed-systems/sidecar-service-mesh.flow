@@ -1,0 +1,52 @@
+flow "Sidecar service mesh"
+summary "Co-located proxies handle mTLS encryption, identity, and traffic policies transparently, unless layered retries trigger a retry storm."
+tags service-mesh networking microservices
+level intermediate
+source "https://istio.io/latest/docs/ops/deployment/architecture/"
+related distributed-systems/circuit-breaker distributed-systems/retry-backoff-dlq
+
+node cp "Control Plane" service
+group pod-a "Pod A"
+node app-a "Orders App" service in=pod-a
+node proxy-a "Sidecar A" service in=pod-a tone=primary
+group pod-b "Pod B"
+node proxy-b "Sidecar B" service in=pod-b
+node app-b "Payments App" service in=pod-b
+edge cp > proxy-a dashed
+edge cp > proxy-b dashed
+edge app-a > proxy-a
+edge proxy-a > proxy-b
+edge proxy-b > app-b
+
+scenario mtls-route "Transparent mTLS and routing via sidecars"
+  step config "Control plane pushes certs and policy"
+    "The control plane issues short-lived workload certificates and routing rules to both sidecars. Application code stays free of TLS and retry libraries."
+    send cp > proxy-a "SPIFFE cert + routes"
+    send cp > proxy-b "SPIFFE cert + policy" with
+    state cp,proxy-a,proxy-b active
+  step mtls-call "Sidecars wrap plain traffic in mTLS"
+    "Orders App calls `payments` over plain localhost HTTP. Sidecar A intercepts it, establishes **mutual TLS** with Sidecar B, verifies both identities, and Sidecar B forwards locally to Payments App."
+    send app-a > proxy-a "HTTP /charge"
+    send proxy-a > proxy-b "mTLS /charge"
+    send proxy-b > app-b "HTTP /charge"
+    state app-a,proxy-a,proxy-b,app-b success
+    callout proxy-a "mTLS + telemetry transparent to app"
+
+scenario retry-storm "Misconfigured retries amplify into a storm" from=mtls-route/mtls-call
+  step slow-b "Payments App degrades and times out"
+    "Payments App slows down past the 500ms timeout. If both the app SDK and Sidecar A (and upstream gateways) each retry 3 times, load multiplies exponentially."
+    state app-b error
+    effect app-b shake
+    send proxy-b > proxy-a "504 Timeout"
+  step amplify "Layered retries flood Payments"
+    "Sidecar A fires 3 retries while Orders App also retries 3 times — turning 1 failing call into **9x traffic** and burying Payments under a **retry storm**."
+    send app-a > proxy-a "3x app retries"
+    send proxy-a > proxy-b "9x mesh retries!"
+    state proxy-a,proxy-b error
+    effect proxy-b shake
+    callout proxy-b "9x load prevents recovery"
+  step budget "Retry budget stops the amplification"
+    "Enabling a **retry budget** (e.g., max 20% extra traffic) and disabling duplicate app-layer retries sheds excess retries so Payments can recover."
+    state proxy-a warning
+    send cp > proxy-a "retry-budget=20%"
+    callout proxy-a "Cap retries at one layer only"
