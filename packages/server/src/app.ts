@@ -5,6 +5,8 @@ import type { BlobStore } from "./store.ts";
 import { mcpHandler } from "./mcp.ts";
 import * as tools from "./tools.ts";
 import { cardMeta, playerScript } from "./embed.ts";
+import { flowPage, sitemap } from "./page.ts";
+import { catalog } from "./catalog.ts";
 import { anthropicModel, editWithAI, generate, type Model } from "./generate.ts";
 
 export type Env = Record<string, string | undefined>;
@@ -40,6 +42,24 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
   app.get("/flow-player.js", async (_req, res) => void res.type("js").set("cache-control", "public, max-age=3600").send(await playerScript()));
   app.use("/assets/fonts", express.static(fileURLToPath(new URL("../../../assets/fonts", import.meta.url)), { maxAge: "1d" }));
   app.get("/llms.txt", (_req, res) => void res.type("text/plain").send(tools.guide()));
+
+  // Lesson pages: /f/<domain>/<slug> (server-rendered, indexable), /f/<domain>/<slug>.md (raw article), sitemap, robots.
+  const baseOf = (req: express.Request) => c.baseUrl ?? `${req.protocol}://${req.get("host")}`;
+  app.get("/sitemap.xml", read, (req, res) => void res.type("xml").send(sitemap(baseOf(req), catalog().map((t) => t.path))));
+  app.get("/robots.txt", (req, res) => void res.type("text/plain").send(`User-agent: *\nAllow: /\nSitemap: ${baseOf(req)}/sitemap.xml\n`));
+  app.get("/f/:domain/:slug", read, (req, res, next) => {
+    const raw = String(req.params.slug), md = raw.endsWith(".md"), slug = md ? raw.slice(0, -3) : raw, domain = String(req.params.domain);
+    const all = catalog(), t = all.find((x) => x.path === `${domain}/${slug}`);
+    if (!t) return next();
+    if (md) return void res.type("text/markdown").send(t.article ?? `# ${t.doc.meta.title}\n\n${t.doc.meta.summary ?? ""}\n`);
+    const related = (t.doc.meta.related ?? []).flatMap((p) => all.filter((x) => x.path === p).map((x) => ({ path: x.path, title: x.doc.meta.title })));
+    res.type("html").send(flowPage({ base: baseOf(req), domain, slug, doc: t.doc, article: t.article, related }));
+  });
+  app.get("/api/catalog/:domain/:slug", read, async (req, res) => {
+    const p = `${req.params.domain}/${req.params.slug}`;
+    if (!catalog().some((x) => x.path === p)) return void res.status(404).json({ error: "not_found" });
+    res.set("access-control-allow-origin", "*").json(await tools.catalogSnapshot(p));
+  });
 
   const api = express.Router();
   api.get("/share/:id", read, async (req, res) => void res.json(await tools.snapshot(c, String(req.params.id))));
@@ -93,7 +113,7 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
         res.type("html").send(readFileSync(`${dist}/index.html`, "utf8").replace("<title>Flowmotion</title>", () => meta));
       } catch (e) { if (e instanceof tools.ToolError && e.status === 404) return next(); next(e); }
     });
-    app.get(/^\/(?!api\/|mcp|schema\/|llms\.txt|flow-player\.js|assets\/).*/, (_req, res) => void res.sendFile(`${dist}/index.html`));
+    app.get(/^\/(?!api\/|mcp|schema\/|f\/|sitemap\.xml|robots\.txt|llms\.txt|flow-player\.js|assets\/).*/, (_req, res) => void res.sendFile(`${dist}/index.html`));
   }
 
   app.use(((err, _req, res, _next) => {

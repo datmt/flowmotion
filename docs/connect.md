@@ -20,6 +20,10 @@ Any client supporting Streamable HTTP: `{ "mcpServers": { "flowmotion": { "url":
 
 Fetch `GET <base>/llms.txt` (the authoring guide) and use the REST API under `/api`.
 
+## Writing lesson articles
+
+Each catalog flow has a sibling article (`templates/<domain>/<slug>.md`). An agent writing one calls `flow_guide` with `topic:"article"`, reads the flow with `flow_get` (`view:"dsl"`) and a finished neighbour with `flow_get` (`view:"article"`), then writes the file in the repo (the MCP server never writes files; git does). Published pages: `/f/<domain>/<slug>` (HTML), `/f/<domain>/<slug>.md` (raw), `/sitemap.xml`.
+
 ## Using it
 
 Tell the agent: "Use the flowmotion MCP: call `flow_guide`, then make an explainer of X." The MCP prompt `explain` (topic, audience) does this for you. The agent's workflow and DSL reference are in [guide.md](guide.md).

@@ -243,6 +243,7 @@ function Template({ domain, slug }: { domain: string; slug: string }) {
     <Shell>
       <div className="flex items-center gap-2">
         <h1 className="mr-auto text-xl font-bold">{t.title} <span className="text-sm font-normal text-stone-500">{domainName(domain)}</span></h1>
+        <a className={btn} href={`/f/${domain}/${slug}`}>Read the lesson</a>
         <button className={btn} onClick={async () => { location.href = `/edit/${await db.save(await tplDoc(t))}`; }}>Make a copy</button>
       </div>
       {err && <p role="alert" className="text-red-600">{err}</p>}

@@ -31,3 +31,15 @@ test("flow_get reads a catalog template by <domain>/<slug>; unknown path is an e
     expect(bad.isError).toBe(true);
   } finally { await client.close(); server.close(); }
 });
+
+test("flow_guide topic=article and flow_get view=article", async () => {
+  const server = createApp({ store: memoryStore(), env: { PUBLIC_URL: "http://x" } }).listen(0);
+  const client = new Client({ name: "t", version: "0" });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`)));
+    expect(JSON.stringify(await client.callTool({ name: "flow_guide", arguments: { topic: "article" } }))).toContain("Why it exists");
+    const g = (await client.callTool({ name: "flow_get", arguments: { id: "algorithms/binary-search", view: "article" } })) as any;
+    expect(g.isError).toBeFalsy();
+    expect(g.structuredContent).toHaveProperty("article"); // null until the .md exists
+  } finally { await client.close(); server.close(); }
+});

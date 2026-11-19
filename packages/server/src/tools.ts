@@ -47,7 +47,8 @@ export async function icons({ query, pack, limit, preview }: { query?: string; p
   return { packs: iconPacks, icons: hits.map((h) => ({ ...h, icon: icons[h.ref] })) };
 }
 
-export const guide = () => {
+export const guide = (topic: "authoring" | "article" = "authoring") => {
+  if (topic === "article") return readFileSync(new URL("docs/article-guide.md", ROOT), "utf8");
   const by = new Map<string, string[]>();
   for (const t of catalog()) by.set(t.domain, [...(by.get(t.domain) ?? []), t.path.split("/")[1]!]);
   const list = [...by].map(([d, s]) => `* \`${d}/\`: ${s.join(", ")}`).join("\n");
@@ -95,13 +96,26 @@ export async function publish(c: Ctx, doc: unknown, from?: string, icons?: unkno
   return { id, url: `${c.baseUrl ?? ""}/v/${id}`, warnings: b.warnings, outline: outline(b.doc) };
 }
 
+/** `{doc, compiled}` for a catalog flow, compiled once per process (the folder only changes on redeploy). */
+const compiledCache = new Map<string, Promise<{ doc: FlowDoc; compiled: unknown }>>();
+export const catalogSnapshot = (path: string) => {
+  let p = compiledCache.get(path);
+  if (!p) compiledCache.set(path, (p = build(catalogDoc(path)).then(({ doc, compiled }) => ({ doc, compiled }))));
+  return p;
+};
+
 function catalogDoc(path: string) {
   const t = catalog().find((x) => x.path === path);
   if (!t) throw new ToolError(404, { error: "not_found", message: `No template '${path}'. Templates are listed in flow_guide.` });
   return t.doc;
 }
 
-export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; view?: "outline" | "full" | "dsl"; ids?: string[] }) {
+export async function get(c: Ctx, { id, view = "outline", ids }: { id: string; view?: "outline" | "full" | "dsl" | "article"; ids?: string[] }) {
+  if (view === "article") { // the lesson text of a catalog flow, e.g. as a style reference when writing another
+    const t = catalog().find((x) => x.path === id);
+    if (!t) throw new ToolError(404, { error: "not_found", message: `No template '${id}'.` });
+    return { id, article: t.article ?? null };
+  }
   const { doc } = id.includes("/") ? { doc: catalogDoc(id) } : await snapshot(c, id); // `<domain>/<slug>` = catalog template
   if (ids?.length) {
     const d: any = doc, items: Record<string, unknown> = {};

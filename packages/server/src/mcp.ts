@@ -33,12 +33,12 @@ function buildServer(c: tools.Ctx) {
   const out = z.looseObject({});
   const hint = (readOnly: boolean) => ({ readOnlyHint: readOnly, destructiveHint: false, idempotentHint: readOnly, openWorldHint: false });
 
-  s.registerTool("flow_guide", { description: "Call before creating. Authoring guide (Markdown) for FlowDoc explainer animations.", annotations: hint(true) }, run(() => tools.guide()));
+  s.registerTool("flow_guide", { description: "Call before creating. Authoring guide (Markdown) for FlowDoc explainer animations. `topic:\"article\"` returns the guide for writing a flow's lesson article instead.", inputSchema: { topic: z.enum(["authoring", "article"]).optional() }, annotations: hint(true) }, (a) => run(() => tools.guide(a.topic))());
   s.registerTool("flow_create", { description: "Validate a flow (`dsl` text, preferred, or `doc` JSON) and store an immutable shareable snapshot. Returns id, url, outline, warnings. On errors returns all issues; fix them in one call.", inputSchema: { doc: doc.optional(), dsl: dsl.optional() }, outputSchema: out, annotations: hint(false), _meta: ui },
     (a) => run(() => tools.publish(c, tools.docOf(a)), true)());
   s.registerTool("flow_edit", { description: "Edit flow `id` with ID-addressed `ops`, or replace it wholesale with `dsl`; publishes a NEW id (old one stays intact).", inputSchema: { id: z.string(), ops: ops.optional(), dsl: dsl.optional() }, outputSchema: out, annotations: hint(false), _meta: ui },
     (a) => run(() => tools.edit(c, a), true)());
-  s.registerTool("flow_get", { description: "Read a flow by `id` (or a catalog template as `<domain>/<slug>`, e.g. `security/oauth-pkce`): outline (compact), full doc, `dsl` text, or only the entities/steps in `ids`.", inputSchema: { id: z.string(), view: z.enum(["outline", "full", "dsl"]).optional(), ids: z.array(z.string()).optional() }, outputSchema: out, annotations: hint(true) },
+  s.registerTool("flow_get", { description: "Read a flow by `id` (or a catalog template as `<domain>/<slug>`, e.g. `security/oauth-pkce`): outline (compact), full doc, `dsl` text, or only the entities/steps in `ids`. `view:\"article\"` (catalog templates only) returns the lesson article Markdown, or null if not written yet.", inputSchema: { id: z.string(), view: z.enum(["outline", "full", "dsl", "article"]).optional(), ids: z.array(z.string()).optional() }, outputSchema: out, annotations: hint(true) },
     (a) => run(() => tools.get(c, a))());
 
   const target = { id: z.string().optional(), doc: doc.optional(), dsl: dsl.optional() }; // an existing id, or a new flow to snapshot first
