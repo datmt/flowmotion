@@ -28,6 +28,7 @@ scenario causal "Causal ordering proves no conflict"
     state b,vc#b active with
   step b-update "Node B updates x=2"
     "Node B writes `x=2` and increments its slot to `[1,2,0]`. Because every entry in `[1,0,0]` is `<=` `[1,2,0]` (and strictly smaller in slot B), `x=2` **causally descends** from `x=1`."
+    detail "Formally, `U < V` if and only if `U[i] <= V[i]` for every slot `i` and `U[j] < V[j]` for at least one `j`. Unlike scalar Lamport clocks (where `L(a) < L(b)` does not guarantee causality), vector clock comparison is an exact isomorphism of the causal partial order."
     label vc#b "[1,2,0]"
     send b > c "x=2 [1,2,0]"
     label vc#c "[1,2,1]"
@@ -48,6 +49,7 @@ scenario concurrent "Concurrent writes detected as conflict" from=causal/a-write
     effect c shake
   step conflict "Neither vector dominates: true conflict"
     "In slot A, `1 > 0`; in slot B, `0 < 1`. Because neither clock dominates the other, the writes are **concurrent** — C keeps both siblings for application merge instead of silently losing a write."
+    detail "Leaderless stores such as Amazon Dynamo and Riak use version vectors to surface concurrent **siblings** to the application (for example, merging shopping-cart items). The trade-off is `O(N)` metadata growth with the number of distinct writers."
     label vc#c "[1,1,1] CONFLICT"
     state vc#c error with
     callout c "[1,0,0] || [0,1,0] -> keep siblings"
