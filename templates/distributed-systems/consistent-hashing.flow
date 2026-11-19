@@ -19,6 +19,7 @@ array owners "Key -> clockwise owner" keys=k30,k150,k200,k300 = Node-B Node-C No
 scenario join-leave "Route, join, and leave on the ring"
   step route "Keys walk clockwise to next node"
     "Each key hashes to an angle on the ring and routes clockwise to the first node at or after it: `k30 -> Node B`, `k150` and `k200 -> Node C`, `k300 -> Node A`."
+    detail "Routers store node ring positions in a sorted array or balanced binary search tree and binary-search for the smallest position greater than or equal to `hash(key)` in `O(log N)` time, wrapping around to the first node on the ring if `hash(key)` exceeds the largest node position."
     state router active
     send router > n-b "k30"
     send router > n-c "k150, k200" with
@@ -51,6 +52,7 @@ scenario hot-node "Hot node solved with virtual nodes" from=join-leave/route
     callout n-c "Hot spot from skewed arc"
   step vnodes "Virtual nodes balance the ring"
     "Giving each physical node multiple virtual positions (`A#1..A#100`, `B#1..B#100`, `C#1..C#100`) splits the ring into many small arcs, evening out load and spreading failover across all survivors."
+    detail "Virtual nodes reduce key-distribution variance and also handle heterogeneous hardware: a machine with twice the capacity receives twice as many virtual positions. When a physical server leaves, its scattered small arcs shift to many different survivors rather than overloading one clockwise neighbor."
     label n-a "Node A (33% · 100 vnodes)"
     label n-b "Node B (33% · 100 vnodes)" with
     label n-c "Node C (33% · 100 vnodes)" with
