@@ -24,3 +24,12 @@ test("theme covers every state and kind", () => {
     for (const s of StateName.options) expect(themes[t].state[s].fill).toMatch(/^#/);
   for (const k of NodeKind.options) expect(kinds[k].shape).toBeTruthy();
 });
+
+test("parseMarkdown: article subset, links only http(s)", async () => {
+  const { parseMarkdown } = await import("./markdown.ts");
+  const b = parseMarkdown("## H\n\nA `c` **b** [x](https://e.com) [y](javascript:1).\n\n- one\n- two\n\n```\n<raw>\n```");
+  expect(b.map((x) => x.t)).toEqual(["h", "p", "ul", "pre"]);
+  const p = b[1] as { inl: { t: string }[] };
+  expect(p.inl.filter((i) => i.t === "a").length).toBe(1);
+  expect((b[3] as { s: string }).s).toBe("<raw>");
+});

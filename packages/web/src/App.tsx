@@ -9,6 +9,7 @@ const catalog: Tpl[] = Object.entries(raw).map(([p, dsl]) => {
   const [domain, file] = p.split("/").slice(-2);
   return { domain: domain!, slug: file!.replace(/\.flow$/, ""), title: JSON.parse(/^flow\s+("(?:[^"\\]|\\.)*")/m.exec(dsl)?.[1] ?? '""') || file!, dsl };
 }).sort((a, b) => a.domain.localeCompare(b.domain) || a.title.localeCompare(b.title));
+const articles = import.meta.glob<string>("../../../templates/*/*.md", { eager: true, query: "?raw", import: "default" }); // lesson text, shown in the player's Lesson tab
 const domains = new Map<string, Tpl[]>();
 for (const t of catalog) domains.set(t.domain, [...(domains.get(t.domain) ?? []), t]);
 const domainName = (d: string) => d.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -234,7 +235,7 @@ function Template({ domain, slug }: { domain: string; slug: string }) {
       try {
         const { compile } = await import("@flowmotion/core");
         const r = await compile(await tplDoc(t));
-        setSrc(URL.createObjectURL(new Blob([JSON.stringify(r.compiled)], { type: "application/json" })));
+        setSrc(URL.createObjectURL(new Blob([JSON.stringify({ compiled: r.compiled, article: articles[`../../../templates/${domain}/${slug}.md`] })], { type: "application/json" })));
       } catch (e) { setErr(String((e as Error).message)); }
     })();
   }, [t]);
@@ -243,7 +244,7 @@ function Template({ domain, slug }: { domain: string; slug: string }) {
     <Shell>
       <div className="flex items-center gap-2">
         <h1 className="mr-auto text-xl font-bold">{t.title} <span className="text-sm font-normal text-stone-500">{domainName(domain)}</span></h1>
-        <a className={btn} href={`/f/${domain}/${slug}`}>Read the lesson</a>
+        <a className={btn} href={`/f/${domain}/${slug}`}>Public page</a>
         <button className={btn} onClick={async () => { location.href = `/edit/${await db.save(await tplDoc(t))}`; }}>Make a copy</button>
       </div>
       {err && <p role="alert" className="text-red-600">{err}</p>}

@@ -58,7 +58,8 @@ export function createApp({ store, env, renderer, model }: { store: BlobStore; e
   app.get("/api/catalog/:domain/:slug", read, async (req, res) => {
     const p = `${req.params.domain}/${req.params.slug}`;
     if (!catalog().some((x) => x.path === p)) return void res.status(404).json({ error: "not_found" });
-    res.set("access-control-allow-origin", "*").json(await tools.catalogSnapshot(p));
+    const snap = await tools.catalogSnapshot(p), article = req.query.article === "1" ? catalog().find((x) => x.path === p)!.article : undefined;
+    res.set("access-control-allow-origin", "*").json(article ? { ...snap, article } : snap); // ?article=1 adds the Lesson tab to an embedded player
   });
 
   const api = express.Router();

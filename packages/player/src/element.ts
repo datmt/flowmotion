@@ -1,4 +1,4 @@
-import { stateAt, type CompiledFlow } from "@flowmotion/core/runtime";
+import { parseMarkdown, stateAt, type CompiledFlow, type Inline } from "@flowmotion/core/runtime";
 import { createPlayer, type Player } from "./player.ts";
 
 const fonts: [string, string, string][] = [
@@ -32,6 +32,9 @@ ol.steps button{border:0;padding:2px 4px;text-align:left;width:100%}
 .more{position:relative}.more summary{cursor:pointer;list-style:none;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .more div{position:absolute;right:0;top:100%;z-index:6;display:flex;flex-direction:column;gap:6px;margin-top:4px;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
 .now{border-left:1px solid var(--line);padding:12px 16px;overflow:auto;max-height:640px}
+.tabs[hidden]{display:none}.tabs{display:flex;gap:4px;margin:-4px 0 10px;border-bottom:1px solid var(--line)}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:4px 10px;opacity:.7}.tabs button[aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent);opacity:1;font-weight:700}
+.lesson{font-size:15px;line-height:1.6}.lesson h2{font-size:17px;margin:1.2em 0 .3em}.lesson h3{font-size:15px;margin:1em 0 .2em}.lesson p{margin:.5em 0}.lesson ul{margin:.4em 0;padding-left:20px}.lesson a{color:var(--accent)}
+.lesson code{font-family:'JetBrains Mono',monospace;background:color-mix(in srgb,var(--fg) 10%,transparent);padding:0 .25em;border-radius:3px;font-size:13px}.lesson pre{background:color-mix(in srgb,var(--fg) 8%,transparent);padding:8px 10px;border-radius:6px;overflow:auto}.lesson pre code{background:none;padding:0}
 .now h2{margin:0 0 6px;font-size:20px;line-height:1.25}
 .narr{font-size:15px;line-height:1.55}
 .narr details{margin-top:.6em}.narr summary{cursor:pointer;color:var(--accent,#2563eb);font-size:13px}.narr details div{margin-top:.4em;color:color-mix(in srgb,var(--fg) 85%,transparent)}
@@ -77,6 +80,16 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEle
   Object.assign(e, rest); e.append(...kids); return e;
 };
 
+/** Article Markdown → DOM (textContent only, never innerHTML). */
+function lessonDom(md: string): Node[] {
+  const inl = (xs: Inline[]) => xs.map((x) => x.t === "text" ? document.createTextNode(x.s) : x.t === "a" ? h("a", { href: x.href, textContent: x.s, rel: "noopener", target: "_blank" }) : h(x.t === "b" ? "strong" : "code", { textContent: x.s }));
+  return parseMarkdown(md).map((b) =>
+    b.t === "h" ? h(b.l === 2 ? "h2" : "h3", {}, ...inl(b.inl))
+    : b.t === "p" ? h("p", {}, ...inl(b.inl))
+    : b.t === "ul" ? h("ul", {}, ...b.items.map((i) => h("li", {}, ...inl(i))))
+    : h("pre", {}, h("code", { textContent: b.s })));
+}
+
 export class FlowPlayerElement extends HTMLElement {
   player?: Player;
   ready: Promise<Player>;
@@ -99,9 +112,15 @@ export class FlowPlayerElement extends HTMLElement {
     this.#build(root, compiled);
   }
 
+  #article?: string;
+  /** Lesson article (Markdown). Settable before connect; also read from `{compiled, article}` JSON. Adds a "Lesson" tab. */
+  set article(md: string | undefined) { this.#article = md; }
+  get article() { return this.#article; }
+
   async #load(src: string): Promise<CompiledFlow> {
     const json = await (await fetch(src)).json();
-    if (json.compiled) return json.compiled; // shared snapshot {doc, compiled}
+    if (typeof json.article === "string" && !this.#article) this.#article = json.article;
+    if (json.compiled) return json.compiled; // snapshot {doc, compiled, article?}
     if (json.scenarios?.[0]?.tracks) return json; // already compiled
     const { compile } = await import("@flowmotion/core"); // lazy: keeps zod/elk/shiki out of the embed bundle
     const r = await compile(json);
@@ -127,7 +146,17 @@ export class FlowPlayerElement extends HTMLElement {
     const narrow = matchMedia("(max-width:720px)");
     rail.open = !narrow.matches; narrow.onchange = () => (rail.open = !narrow.matches);
     const hint = h("div", { class: "hint" });
-    const now = h("div", { class: "now" }, title, narr, hint, h("h3", { textContent: "What changed" }), changes, stateH, state);
+    const stepPane = h("div", {}, title, narr, hint, h("h3", { textContent: "What changed" }), changes, stateH, state);
+    const lesson = h("div", { class: "lesson" }, ...(this.#article ? lessonDom(this.#article) : []));
+    const tab = (label: string, pane: HTMLElement, other: () => HTMLElement) => {
+      const b = h("button", { textContent: label, role: "tab" } as object);
+      b.onclick = () => { for (const x of [tabStep, tabLesson]) x.ariaSelected = String(x === b); pane.hidden = false; other().hidden = true; now.scrollTop = 0; };
+      return b;
+    };
+    const tabStep: HTMLElement = tab("Step", stepPane, () => lesson), tabLesson: HTMLElement = tab("Lesson", lesson, () => stepPane);
+    tabStep.ariaSelected = "true"; tabLesson.ariaSelected = "false"; lesson.hidden = true;
+    const tabs = h("div", { class: "tabs", role: "tablist" } as object, tabStep, tabLesson); tabs.hidden = !this.#article;
+    const now = h("div", { class: "now" }, tabs, stepPane, lesson);
     const tables = h("div", { class: "sr" });
     // drag a column edge to resize rail / right panel
     const grip = (v: string, dir: 1 | -1, panel: HTMLElement) => {
