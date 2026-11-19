@@ -1,0 +1,59 @@
+flow "Consistent hashing"
+summary "Maps keys and nodes onto a hash ring so joins and leaves remap only a small fraction of keys, using virtual nodes to avoid hot spots."
+tags partitioning load-balancing caching
+level intermediate
+source "https://en.wikipedia.org/wiki/Consistent_hashing"
+
+node router "Hash Router" service tone=primary
+group ring "Hash ring (0..359 deg)"
+node n-a "Node A (0 deg)" db in=ring
+node n-b "Node B (120 deg)" db in=ring
+node n-c "Node C (240 deg)" db in=ring
+node n-d "Node D (180 deg)" db in=ring hidden
+edge router > n-a
+edge router > n-b
+edge router > n-c
+edge router > n-d hidden
+array owners "Key -> clockwise owner" keys=k30,k150,k200,k300 = Node-B Node-C Node-C Node-A
+
+scenario join-leave "Route, join, and leave on the ring"
+  step route "Keys walk clockwise to next node"
+    "Each key hashes to an angle on the ring and routes clockwise to the first node at or after it: `k30 -> Node B`, `k150` and `k200 -> Node C`, `k300 -> Node A`."
+    state router active
+    send router > n-b "k30"
+    send router > n-c "k150, k200" with
+    send router > n-a "k300" with
+    state n-a,n-b,n-c success
+  step join "Node D joins at 180 deg"
+    "Adding Node D splits only Node C's arc `(120, 240]`. Only `k150` migrates from C to D; every other key stays right where it is."
+    show n-d,router-n-d
+    state n-d active
+    label owners#k150 "Node-D"
+    state owners#k150 warning with
+    send router > n-d "k150"
+    callout n-d "Only 1 of 4 keys moved"
+  step leave "Node B fails and leaves"
+    "When Node B dies, only keys in its arc (`k30`) walk clockwise to the next live node (Node D). Roughly `1/N` of keys move instead of nearly all keys under `hash(k) % N`."
+    state n-b error
+    effect n-b shake
+    label owners#k30 "Node-D"
+    state owners#k30 warning with
+    send router > n-d "k30"
+    callout n-c "Node A and C are unaffected"
+
+scenario hot-node "Hot node solved with virtual nodes" from=join-leave/route
+  step skew "Uneven placement creates a hot node"
+    "With few physical servers, random hash positions leave Node C owning a huge arc. Traffic piles onto Node C while Node A sits lightly loaded."
+    state n-c error
+    effect n-c shake
+    label n-c "Node C (60% load)" with
+    label n-a "Node A (15% load)" with
+    callout n-c "Hot spot from skewed arc"
+  step vnodes "Virtual nodes balance the ring"
+    "Giving each physical node multiple virtual positions (`A#1..A#100`, `B#1..B#100`, `C#1..C#100`) splits the ring into many small arcs, evening out load and spreading failover across all survivors."
+    label n-a "Node A (33% · 100 vnodes)"
+    label n-b "Node B (33% · 100 vnodes)" with
+    label n-c "Node C (33% · 100 vnodes)" with
+    state n-a,n-b,n-c success
+    label owners#k200 "Node-A" with
+    callout router "Smaller arcs = balanced load"

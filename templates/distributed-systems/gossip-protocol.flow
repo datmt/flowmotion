@@ -1,0 +1,61 @@
+flow "Gossip protocol"
+summary "Peers exchange state with random neighbors each round so updates spread in O(log N) rounds and stalled heartbeats expose failed nodes."
+tags membership gossip fault-tolerance
+level intermediate
+source "https://martinfowler.com/articles/patterns-of-distributed-systems/gossip-dissemination.html"
+layout algorithm=stress edges=straight
+
+group cluster "Peer cluster"
+node n1 "Node 1" service in=cluster tone=primary
+node n2 "Node 2" service in=cluster
+node n3 "Node 3" service in=cluster
+node n4 "Node 4" service in=cluster
+node n5 "Node 5" service in=cluster
+edge n1 > n2 noarrow
+edge n1 > n3 noarrow
+edge n2 > n3 noarrow
+edge n2 > n4 noarrow
+edge n3 > n5 noarrow
+edge n4 > n5 noarrow
+array version "Known config" keys=n1,n2,n3,n4,n5 = v2 v1 v1 v1 v1
+
+scenario disseminate "Epidemic dissemination"
+  step seed "Node 1 receives config v2"
+    "Node 1 learns a new config `v2`. Instead of broadcasting to every peer — which creates `O(N)` fan-out bursts — each node gossips to a few random peers per tick."
+    state n1 active
+    state version#n1 active with
+    callout n1 "Fan-out k=2 per round"
+  step round-1 "Round 1: infect two peers"
+    "Node 1 pushes `v2` to two random neighbors, Nodes 2 and 3. The informed set grows from 1 to 3."
+    send n1 > n2 "gossip v2"
+    send n1 > n3 "gossip v2" with
+    label version#n2 "v2"
+    label version#n3 "v2" with
+    state n2,n3,version#n2,version#n3 active with
+  step round-2 "Round 2: infected peers fan out"
+    "Nodes 2 and 3 now gossip `v2` to their random picks, reaching Nodes 4 and 5. The whole cluster converges in `O(log N)` rounds with constant bandwidth per node."
+    send n2 > n4 "gossip v2"
+    send n3 > n5 "gossip v2" with
+    label version#n4 "v2"
+    label version#n5 "v2" with
+    state n1,n2,n3,n4,n5,version success
+
+scenario failure-detect "Node failure detection" from=disseminate/round-1
+  step n4-crashes "Node 4 crashes"
+    "Node 4 stops running, so its heartbeat counter in other nodes' membership tables stops advancing."
+    state n4 error
+    effect n4 shake
+    label version#n4 "hb=7 (stalled)" with
+    state version#n4 error with
+  step suspect "Peers notice stalled heartbeat"
+    "As Node 2 and Node 5 exchange tables, Node 4's heartbeat remains stuck at `7` past the suspicion timeout. They mark Node 4 `suspect` rather than evicting it on a single missed ping."
+    send n2 > n3 "N4 hb=7 stale"
+    send n3 > n5 "N4 suspect"
+    state n2,n5 warning
+    callout n4 "Suspected after timeout"
+  step dead "Confirmed dead and gossiped"
+    "After the grace period passes without a fresh heartbeat from Node 4, peers mark it `dead` and gossip the removal across the cluster."
+    send n5 > n3 "N4 dead"
+    send n3 > n1 "N4 dead" with
+    label version#n4 "DEAD"
+    callout n1 "Cluster converges on N4 removal"

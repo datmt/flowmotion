@@ -1,0 +1,74 @@
+flow "Single-decree Paxos"
+summary "Proposers and acceptors choose a single immutable value using ballot numbers and overlapping quorums, and livelock when proposers duel."
+tags consensus quorum fault-tolerance
+level advanced
+source "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf"
+related distributed-systems/raft-consensus
+
+group proposers "Proposers"
+node p1 "Proposer P1" service in=proposers tone=primary
+node p2 "Proposer P2" service in=proposers hidden
+group acceptors "Acceptors (quorum = 2)"
+node a1 "Acceptor A1" db in=acceptors
+node a2 "Acceptor A2" db in=acceptors
+node a3 "Acceptor A3" db in=acceptors
+edge p1 > a1
+edge p1 > a2
+edge p1 > a3
+edge p2 > a2 hidden
+edge p2 > a3 hidden
+array promised "Promised ballot" keys=a1,a2,a3 = 0 0 0
+array accepted "Accepted value" keys=a1,a2,a3 = - - -
+
+scenario decide "Single proposer chooses a value"
+  step prepare "Phase 1a: Prepare(n=1)"
+    "P1 picks unique ballot `1` and sends `Prepare(1)` to a majority (A1, A2) to block older ballots and learn any already-accepted value."
+    state p1 active
+    send p1 > a1 "Prepare(1)"
+    send p1 > a2 "Prepare(1)" with
+  step promise "Phase 1b: Promise"
+    "A1 and A2 have not seen a higher ballot, so they promise to reject any ballot `< 1` and return `Promise(none)`."
+    label promised#a1 "1"
+    label promised#a2 "1" with
+    state a1,a2 pending
+    send a1 > p1 "Promise(none)"
+    send a2 > p1 "Promise(none)" with
+  step accept "Phase 2a: Accept(1, X)"
+    "No prior value came back in the promises, so P1 is free to propose its own value `X` under ballot `1`."
+    send p1 > a1 "Accept(1, X)"
+    send p1 > a2 "Accept(1, X)" with
+  step chosen "Phase 2b: Value X is chosen"
+    "A1 and A2 check `1 >= promised`, record `(1, X)`, and reply `Accepted`. Once a majority accepts, `X` is chosen; any future quorum overlaps here and must adopt `X`."
+    label accepted#a1 "1:X"
+    label accepted#a2 "1:X" with
+    state a1,a2,p1 success
+    send a1 > p1 "Accepted"
+    send a2 > p1 "Accepted" with
+    callout p1 "Majority (2 of 3) accepted X"
+
+scenario competing "Competing proposers livelock" from=decide/promise
+  step p2-preempts "P2 sends higher Prepare(2)"
+    "Before P1's `Accept(1, X)` arrives, P2 enters with ballot `2` and sends `Prepare(2)` to A2 and A3, raising their promised ballot to `2`."
+    show p2,p2-a2,p2-a3
+    state p2 active
+    send p2 > a2 "Prepare(2)"
+    send p2 > a3 "Prepare(2)" with
+    label promised#a2 "2" with
+    label promised#a3 "2" with
+    state a3 pending
+  step p1-rejected "P1's Accept(1, X) is rejected"
+    "A1 accepts `(1, X)`, but A2 rejects ballot `1` because it already promised `2`. P1 fails to reach a majority."
+    send p1 > a1 "Accept(1, X)"
+    send p1 > a2 "Accept(1, X)" with
+    label accepted#a1 "1:X"
+    send a2 > p1 "NACK (b=2)"
+    state p1 error
+    effect p1 shake
+  step duel "Dueling proposers can livelock"
+    "P1 retries with `Prepare(3)`, which preempts P2's `Accept(2, Y)`. Without randomized backoff or a stable leader (Multi-Paxos), proposers can preempt each other indefinitely."
+    send p1 > a2 "Prepare(3)"
+    send p1 > a3 "Prepare(3)" with
+    label promised#a2 "3" with
+    label promised#a3 "3" with
+    state p2 warning
+    callout p2 "P2's Accept(2) will now be rejected"

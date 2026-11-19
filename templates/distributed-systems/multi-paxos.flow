@@ -1,0 +1,80 @@
+flow "Multi-Paxos"
+summary "A stable leader runs Phase 1 once for all log slots so steady-state writes commit in one round trip, and a new leader recovers in-flight slots."
+tags consensus replication leader-election
+level advanced
+source "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf"
+related distributed-systems/paxos distributed-systems/raft-consensus
+
+node client "Client" actor
+node l1 "Leader L1 (b=1)" service tone=primary
+node l2 "Replica L2" service hidden
+group acceptors "Acceptors (quorum = 2)"
+node a1 "Acceptor A1" db in=acceptors
+node a2 "Acceptor A2" db in=acceptors
+node a3 "Acceptor A3" db in=acceptors
+edge client > l1
+edge l1 > a1
+edge l1 > a2
+edge l1 > a3
+edge l2 > a1 hidden
+edge l2 > a2 hidden
+array log "Committed log" keys=s1,s2,s3 = - - -
+
+scenario steady "Stable leader commits in 1 RTT"
+  step elect "Run Phase 1 once for all future slots"
+    "L1 runs `Prepare(b=1)` once across the acceptors. Their promise covers every future log slot, eliminating Phase 1 while L1 remains leader."
+    state l1 active
+    send l1 > a1 "Prepare(b=1)"
+    send l1 > a2 "Prepare(b=1)" with
+    send a1 > l1 "Promise"
+    send a2 > l1 "Promise" with
+    state l1 success
+  step slot-1 "Slot 1: skip Prepare, send Accept"
+    "The client writes `x=1`. L1 skips Phase 1 and goes straight to `Accept(b=1, s1, x=1)` — consensus in a single round trip."
+    send client > l1 "SET x=1"
+    send l1 > a1 "Accept(s1, x=1)"
+    send l1 > a2 "Accept(s1, x=1)" with
+    send a1 > l1 "Accepted"
+    send a2 > l1 "Accepted" with
+    label log#s1 "x=1"
+    state log#s1 success with
+    send l1 > client "OK"
+  step slot-2 "Slot 2: steady-state replication"
+    "The next write `y=2` also takes 1 RTT. Amortizing Phase 1 across thousands of commands is what makes Multi-Paxos practical."
+    send client > l1 "SET y=2"
+    send l1 > a1 "Accept(s2, y=2)"
+    send l1 > a2 "Accept(s2, y=2)" with
+    label log#s2 "y=2"
+    state log#s2 success with
+    send l1 > client "OK"
+  step slot-3-partial "Slot 3 only reaches A1"
+    "Client sends `z=3`. L1 writes `Accept(b=1, s3, z=3)` to A1, while A2 and A3 have not received it yet."
+    send client > l1 "SET z=3"
+    send l1 > a1 "Accept(s3, z=3)"
+    state a1 pending
+    label log#s3 "z=3?" with
+    state log#s3 pending with
+
+scenario leader-change "Leader crashes; L2 recovers slot 3" from=steady/slot-3-partial
+  step l1-dies "L1 crashes mid-replication"
+    "L1 fails before slot 3 reaches a majority. L2 detects the missed heartbeats and steps up with a higher ballot `b=2`."
+    state l1 error
+    effect l1 shake
+    show l2,l2-a1,l2-a2
+    label l2 "Leader L2 (b=2)"
+    state l2 active
+  step recover-prepare "L2 runs Phase 1 with b=2"
+    "L2 sends `Prepare(b=2)` to A1 and A2. A1 replies with the highest accepted entry it holds for slot 3: `(b=1, z=3)`."
+    send l2 > a1 "Prepare(b=2)"
+    send l2 > a2 "Prepare(b=2)" with
+    send a1 > l2 "Promise(s3: z=3)"
+    send a2 > l2 "Promise(none)" with
+    callout a1 "Reports uncommitted s3=z=3"
+  step adopt-value "L2 adopts and commits z=3"
+    "Paxos safety requires L2 to re-propose `z=3` at `b=2` instead of overwriting slot 3, because it cannot know whether `z=3` had already been chosen. Once a quorum accepts, L2 resumes 1-RTT writes."
+    send l2 > a1 "Accept(b=2, s3, z=3)"
+    send l2 > a2 "Accept(b=2, s3, z=3)" with
+    state l2,a1,a2 success
+    label log#s3 "z=3"
+    state log#s3 success with
+    callout l2 "Safe takeover; 1-RTT resumes for s4+"

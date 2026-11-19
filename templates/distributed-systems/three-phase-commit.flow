@@ -1,0 +1,69 @@
+flow "Three-phase commit (3PC)"
+summary "Adds a PreCommit phase to avoid 2PC blocking on timeouts, but loses safety under a network partition."
+tags transactions consensus partitions
+level advanced
+source "https://en.wikipedia.org/wiki/Three-phase_commit_protocol"
+related distributed-systems/two-phase-commit
+
+node coord "Coordinator" service tone=primary
+group cohort "Participants"
+node p1 "Node A" db in=cohort
+node p2 "Node B" db in=cohort
+edge coord > p1
+edge coord > p2
+array phase "State" keys=coord,p1,p2 = init init init
+
+scenario commit "Three non-blocking phases"
+  step can-commit "Phase 1: CanCommit"
+    "The coordinator asks whether participants can execute the transaction. Unlike 2PC, timing out here is always safe to abort."
+    state coord active
+    send coord > p1 "CanCommit"
+    send coord > p2 "CanCommit" with
+    state p1,p2 pending
+  step vote-yes "Participants vote Yes"
+    "Both participants acquire locks, write undo/redo logs, and reply `Yes`. Neither is allowed to commit yet."
+    send p1 > coord "Yes"
+    send p2 > coord "Yes" with
+    label phase#p1 "waiting" with
+    label phase#p2 "waiting" with
+  step pre-commit "Phase 2: PreCommit"
+    "Because everyone voted Yes, the coordinator broadcasts `PreCommit`. This extra round ensures no node can commit while another is still in `init`."
+    send coord > p1 "PreCommit"
+    send coord > p2 "PreCommit" with
+    label phase#coord "pre-commit" with
+  step ack-pre "Participants enter pre-committed state"
+    "Both nodes acknowledge `PreCommit`. Once a node reaches `pre-commit`, it knows everyone voted Yes and can safely commit on a later timeout."
+    send p1 > coord "ACK"
+    send p2 > coord "ACK" with
+    state p1,p2 active
+    label phase#p1 "pre-commit" with
+    label phase#p2 "pre-commit" with
+  step do-commit "Phase 3: DoCommit"
+    "The coordinator sends `DoCommit`. Both participants finalize the write and release their locks."
+    send coord > p1 "DoCommit"
+    send coord > p2 "DoCommit" with
+    state coord,p1,p2 success
+    label phase#coord "committed" with
+    label phase#p1 "committed" with
+    label phase#p2 "committed" with
+
+scenario partition "Network partition breaks safety" from=commit/vote-yes
+  step split "Partition isolates Node B"
+    "`PreCommit` reaches Node A, but a network partition drops messages to Node B and cuts Node B off from the coordinator."
+    send coord > p1 "PreCommit"
+    state p1 active
+    label phase#p1 "pre-commit" with
+    state coord-p2 error
+    callout p2 "Partitioned: never sees PreCommit"
+  step diverge "Timeouts choose opposite outcomes"
+    "Both nodes time out. Node A is in `pre-commit`, so 3PC tells it to **commit**. Node B is still in `waiting`, so 3PC tells it to **abort**."
+    state p1 success
+    label phase#p1 "COMMITTED" with
+    state p2 error
+    effect p2 shake
+    label phase#p2 "ABORTED" with
+  step inconsistent "Split-brain inconsistency"
+    "Node A committed while Node B aborted. Without a quorum intersection like Paxos or Raft, timeouts cannot distinguish a dead peer from a partition."
+    focus p1,p2 dim
+    callout p1 "Committed"
+    callout p2 "Aborted — data diverged" with

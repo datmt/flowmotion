@@ -1,0 +1,61 @@
+flow "Leader lease"
+summary "A time-bound lease lets a leader serve linearizable local reads without a quorum round trip, until clock skew or pauses break the guarantee."
+tags leader-election clocks consistency
+level advanced
+source "https://martinfowler.com/articles/patterns-of-distributed-systems/time-bound-lease.html"
+related distributed-systems/raft-consensus
+
+node client "Client" actor
+node l1 "Leader L1" service tone=primary
+node l2 "Node L2" service
+node store "Lease Store" db
+edge client > l1
+edge client > l2 hidden
+edge l1 > store
+edge l2 > store
+array view "Lease & clock view" keys=store,l1,l2 = "L1 <= t10" "lead (t=2)" "foll (t=2)"
+
+scenario renew "Lease enables fast local reads"
+  step acquire "L1 acquires a 10s lease"
+    "L1 writes a time-bound lease to the quorum store. Until `t=10`, the store promises not to grant leadership to any other node."
+    send l1 > store "Acquire(10s)"
+    send store > l1 "Granted <= t10"
+    state l1,store success
+  step local-read "Serve reads locally without quorum"
+    "At local time `t=5`, L1 knows its lease has 5s left. It answers the client read locally with linearizable freshness — zero extra network hops."
+    label view#l1 "lead (t=5)"
+    send client > l1 "GET x"
+    send l1 > client "x=1"
+    callout l1 "No quorum read needed while lease holds"
+  step renew-lease "Renew before expiry"
+    "Before `t=10`, L1 extends the lease to `t=20`. Steady renewals keep leadership stable without triggering an election."
+    send l1 > store "Renew(10s)"
+    label view#store "L1 <= t20"
+    label view#l1 "lead (t=8)" with
+    send store > l1 "Granted <= t20"
+
+scenario clock-skew "Clock skew creates two leaders" from=renew/local-read
+  step drift "L1's clock lags; store expires lease"
+    "L1 suffers clock drift or a GC pause: its clock still reads `t=9`, while the store's clock reaches `t=11` and expires L1's lease."
+    label view#store "EXPIRED (t=11)"
+    label view#l1 "lead (t=9!)" with
+    label view#l2 "foll (t=11)" with
+    state store warning
+    callout l1 "Slow clock: thinks 1s remains"
+  step l2-takes-over "L2 acquires the new lease"
+    "L2 requests the lease at `t=11`. The store sees L1's lease expired and grants leadership to L2, which accepts a new write `x=2`."
+    send l2 > store "Acquire(10s)"
+    send store > l2 "Granted <= t21"
+    state l2 success
+    label view#store "L2 <= t21" with
+    label view#l2 "lead (t=11)" with
+    show client-l2
+    send client > l2 "SET x=2"
+  step dual-leaders "L1 serves stale state as a zombie leader"
+    "Because L1's local clock still says `t=9 < 10`, it keeps serving stale `x=1` (or accepting writes). Leases depend on bounded clock drift and pause time — or fencing tokens on storage."
+    state l1 error
+    effect l1 shake
+    send client > l1 "GET x"
+    send l1 > client "stale x=1"
+    focus l1,l2 dim
+    callout l1 "Zombie leader: clock skew broke safety"

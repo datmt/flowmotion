@@ -1,0 +1,71 @@
+flow "SWIM membership"
+summary "Detects failed peers with O(1) randomized direct and indirect probes, using incarnation numbers to refute false suspicions."
+tags membership failure-detector gossip
+level advanced
+source "https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/SWIM.pdf"
+related distributed-systems/gossip-protocol
+layout algorithm=stress edges=straight
+
+group members "SWIM cluster"
+node n1 "Node 1 (Prober)" service in=members tone=primary
+node n2 "Node 2 (Helper)" service in=members
+node n3 "Node 3 (Helper)" service in=members
+node n4 "Node 4 (Target)" service in=members
+edge n1 > n4 noarrow
+edge n1 > n2 noarrow
+edge n1 > n3 noarrow
+edge n2 > n4 noarrow
+edge n3 > n4 noarrow
+array view "N4 view (state/inc)" keys=n1,n2,n3,n4 = alive/1 alive/1 alive/1 alive/1
+
+scenario probe-fail "Direct and indirect probe detect failure"
+  step direct-ping "Direct ping to random target"
+    "Each period, Node 1 picks one random peer (Node 4) and sends a `ping`. Probing one peer per tick keeps load `O(1)` regardless of cluster size."
+    state n1 active
+    send n1 > n4 "ping"
+  step direct-timeout "No ack: avoid premature eviction"
+    "No `ack` arrives before the timeout. A direct link could just be congested, so SWIM does not declare Node 4 dead yet — it asks random helpers to probe via alternate paths."
+    state n4 warning
+    callout n1 "Direct ping timed out"
+  step indirect-probe "Indirect ping-req through k helpers"
+    "Node 1 asks Nodes 2 and 3 to ping Node 4 on its behalf. If either helper gets an `ack` and forwards it back, Node 4 stays `alive`."
+    send n1 > n2 "ping-req(N4)"
+    send n1 > n3 "ping-req(N4)" with
+    send n2 > n4 "ping"
+    send n3 > n4 "ping" with
+  step suspect "Mark Suspect and piggyback update"
+    "Neither helper gets an `ack`. Node 1 marks Node 4 `suspect` at incarnation `1` and piggybacks the update onto regular protocol messages — no separate gossip channel needed."
+    label view#n1 "suspect/1"
+    label view#n2 "suspect/1" with
+    label view#n3 "suspect/1" with
+    state view#n1,view#n2,view#n3 warning with
+    send n1 > n2 "gossip: suspect(N4,1)"
+    send n1 > n3 "gossip: suspect(N4,1)" with
+  step confirm-dead "Suspicion timeout -> Confirmed Dead"
+    "Node 4 never refutes before the suspicion timer expires, so Node 1 promotes it to `dead` and removes it from membership."
+    state n4 error
+    effect n4 shake
+    label view#n1 "dead/1"
+    label view#n2 "dead/1" with
+    label view#n3 "dead/1" with
+    state view#n1,view#n2,view#n3 error with
+
+scenario false-suspicion "False suspicion refuted by incarnation" from=probe-fail/suspect
+  step pause-ends "Node 4 recovers from brief pause"
+    "Node 4 was only paused by GC, not crashed. It receives a gossiped `suspect(N4, inc=1)` message from a peer."
+    send n2 > n4 "suspect(N4,1)"
+    state n4 active
+    callout n4 "I am still alive!"
+  step refute "Bump incarnation number to refute"
+    "Only Node 4 can increment its own incarnation number. It bumps `inc` from `1` to `2` and disseminates `alive(N4, inc=2)`."
+    label view#n4 "alive/2"
+    state view#n4 success with
+    send n4 > n2 "alive(N4,2)"
+    send n4 > n1 "alive(N4,2)" with
+  step cleared "Higher incarnation overrides suspicion"
+    "Every peer compares `inc=2 > inc=1`, discards the stale suspicion, and restores Node 4 to `alive` without a false eviction."
+    label view#n1 "alive/2"
+    label view#n2 "alive/2" with
+    label view#n3 "alive/2" with
+    state n1,n2,n3,n4,view#n1,view#n2,view#n3 success with
+    callout n1 "inc=2 overrides suspect/1"

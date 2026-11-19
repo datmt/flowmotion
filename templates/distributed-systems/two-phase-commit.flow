@@ -1,0 +1,63 @@
+flow "Two-phase commit (2PC)"
+summary "A coordinator commits a distributed transaction in prepare and commit phases, and blocks if it crashes mid-protocol."
+tags transactions consensus consistency
+level intermediate
+source "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+related distributed-systems/saga-compensation
+
+node client "Client" actor
+node coord "Coordinator" service tone=primary
+group participants "Participants"
+node db-a "Accounts DB" db in=participants
+node db-b "Ledger DB" db in=participants
+edge client > coord
+edge coord > db-a
+edge coord > db-b
+array state "TX state" keys=coord,db-a,db-b = init init init
+
+scenario commit "Two-phase commit succeeds"
+  step begin "Client starts transaction"
+    "The client requests an atomic transfer across two databases. The coordinator opens a transaction and records `BEGIN` in its log."
+    send client > coord "Transfer $100"
+    state coord active
+    label state#coord "active" with
+  step prepare "Phase 1: Prepare"
+    "The coordinator asks every participant to prepare. Each database must execute the write and promise it can commit even after a crash."
+    send coord > db-a "Prepare"
+    send coord > db-b "Prepare" with
+    state db-a,db-b pending
+  step vote-yes "Participants flush WAL and vote Yes"
+    "Both databases write the changes to their write-ahead logs, hold row locks, and reply `Vote-Yes`. Once a participant votes Yes, it can no longer abort on its own."
+    send db-a > coord "Vote-Yes"
+    send db-b > coord "Vote-Yes" with
+    label state#db-a "prepared" with
+    label state#db-b "prepared" with
+    callout db-a "Locks held until decision"
+  step decide "Coordinator logs the commit point"
+    "Every participant voted Yes, so the coordinator fsyncs `COMMIT` to its own log. This single write is the atomic point of no return."
+    state coord success
+    label state#coord "COMMIT" with
+    pulse coord
+    callout coord "Point of no return"
+  step apply "Phase 2: Commit and release locks"
+    "The coordinator sends `Commit` to both databases. Each finalizes the transaction, releases its locks, and acknowledges; the client gets `OK`."
+    send coord > db-a "Commit"
+    send coord > db-b "Commit" with
+    state db-a,db-b success
+    label state#db-a "committed" with
+    label state#db-b "committed" with
+    send coord > client "OK"
+
+scenario coord-crash "Coordinator crashes after Prepare" from=commit/vote-yes
+  step crash "Coordinator crashes before deciding"
+    "The coordinator dies right after collecting `Vote-Yes`, before sending `Commit` or `Abort` to the participants."
+    state coord error
+    effect coord shake
+    label state#coord "CRASHED" with
+  step blocked "Participants block in-doubt"
+    "Neither database knows if the other voted No or if `COMMIT` was already logged. Both must stay blocked holding locks until the coordinator recovers — **2PC is a blocking protocol**."
+    state db-a,db-b warning
+    label state#db-a "in-doubt" with
+    label state#db-b "in-doubt" with
+    callout db-a "Cannot commit or abort safely"
+    callout db-b "Locks stuck until recovery" with
