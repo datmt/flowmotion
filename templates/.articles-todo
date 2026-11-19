@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/service-discovery
 distributed-systems/sharding-resharding
 distributed-systems/sidecar-service-mesh
 distributed-systems/snapshot-chandy-lamport

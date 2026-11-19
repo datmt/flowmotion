@@ -25,6 +25,7 @@ scenario discover "Register, discover, and call"
     state p1,p2,reg success
   step lookup "Caller queries registry for healthy endpoints"
     "Order Service asks the registry for `payments` and caches the returned healthy address list locally to avoid a registry hop on every request."
+    detail "Client-side discovery (e.g., Netflix Eureka + Ribbon) avoids a central load-balancer hop, but couples callers to the registry protocol—so polyglot stacks often use **server-side discovery** (a router or load balancer queries the registry) instead."
     send caller > reg "lookup payments"
     send reg > caller "[10.0.1.1, 10.0.1.2]"
     state caller active
@@ -37,6 +38,7 @@ scenario discover "Register, discover, and call"
 scenario stale-instance "Stale registry entry causes failover" from=discover/route
   step crash "Payments B crashes before TTL expires"
     "Payments B dies unexpectedly. Until its heartbeat TTL expires — and until callers refresh their local caches — `10.0.1.2` remains listed as healthy."
+    detail "In Netflix Eureka's defaults, instances renew leases every **30s**, leases expire after **90s**, the server response cache refreshes every **30s**, and clients fetch registry updates every **30s**. Those windows add up, which is why callers must tolerate stale entries."
     state p2 error
     effect p2 shake
     callout reg "Still cached until TTL expires"
