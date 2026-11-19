@@ -162,6 +162,9 @@ export function parseDsl(text: string): { doc?: FlowDoc; issues: DslIssue[] } {
         if (!step.narr) {
           if (!verb.q) throw new DslError("Step needs a quoted narration line first", verb.col, 'Put `"narration text"` right under the step line.');
           step.o.narration = verb.s; step.narr = true; at.set(`${step.p}/narration`, n);
+        } else if (verb.s === "detail" && !verb.q) {
+          if (!need(1, "text").q) throw new DslError("detail text must be quoted", toks[1]!.col, 'Write `detail "longer explanation"`.');
+          step.o.detail = toks[1]!.s; at.set(`${step.p}/detail`, n);
         } else {
           at.set(`${step.p}/actions/${step.o.actions.length}`, n);
           step.o.actions.push(action(toks, raw.length));
@@ -242,6 +245,7 @@ export function printDsl(doc: FlowDoc): string {
     L.push("", join("scenario", s.id, q(s.title), s.branchFrom && `from=${s.branchFrom.scenario}/${s.branchFrom.afterStep}`));
     for (const st of s.steps) {
       L.push(join("  step", st.id, q(st.title), st.hold !== undefined && `hold=${st.hold}`), `    ${q(st.narration)}`);
+      if (st.detail) L.push(`    detail ${q(st.detail)}`);
       for (const a of st.actions) L.push("    " + actionLine(a));
     }
   }

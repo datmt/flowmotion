@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import { parseDsl, printDsl } from "./index.ts";
+import { compile, parseDsl, printDsl } from "./index.ts";
 
 const dir = new URL("../../../templates/", import.meta.url);
 for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((x) => x.endsWith(".flow")))
@@ -72,4 +72,12 @@ test("docs/guide.md DSL example parses cleanly", () => {
   const r = parseDsl(ex);
   expect(r.issues.filter((i) => i.severity === "error")).toEqual([]);
   expect(guide.length).toBeLessThan(24_000); // ~6000 tokens
+});
+
+test("step detail round-trips and compiles through", async () => {
+  const src = `flow "T"\n\nnode a "A" service\n\nscenario flow "S"\n  step s1 "One"\n    "Narration."\n    detail "More, with \`code\`."\n    state a active\n`;
+  const r = parseDsl(src);
+  expect(r.doc!.scenarios[0]!.steps[0]!.detail).toBe("More, with `code`.");
+  expect(printDsl(r.doc!)).toContain('detail "More, with `code`."');
+  expect((await compile(r.doc!)).compiled!.scenarios[0]!.steps[0]!.detail).toBe("More, with `code`.");
 });

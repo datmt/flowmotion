@@ -20,8 +20,9 @@ Open an issue with the **Flow request** form, or build one yourself (below).
    source "https://..."          # repeat; the facts must be checkable here
    related <domain>/<slug>       # optional
    ```
-4. Check: `pnpm install && pnpm test` (compiles every flow: 0 errors, at most 1 warning, metadata present). `node --experimental-strip-types packages/cli/src/main.ts validate <file>` for a quick one.
-5. Open a PR. It is reviewed against the rubric below.
+4. Write the lesson article next to it, `templates/<domain>/<slug>.md`, per `docs/article-guide.md` (fixed headings, 400-900 words, sourced).
+5. Check: `pnpm install && pnpm test` (compiles every flow: 0 errors, at most 1 warning, metadata present). `node --experimental-strip-types packages/cli/src/main.ts validate <file>` for a quick one.
+6. Open a PR. It is reviewed against the rubric below.
 
 ### Review rubric
 
@@ -29,6 +30,7 @@ Open an issue with the **Flow request** form, or build one yourself (below).
 * **Teaches why.** Narration explains why a step happens, not what moved. One idea per step, 3-8 steps per scenario.
 * **Shows the failure.** At least one branch for what goes wrong, where the topic has one.
 * **Clean.** No lint warnings beyond one; every scenario previewed and legible; ~8 nodes per view.
+* **Article.** Follows `docs/article-guide.md`; every claim sourced; excerpt-ready first sentence.
 * **Scoped.** One flow per PR, only that flow's files.
 
 ### Regulated domains (banking, insurance, fintech, law, ...)

@@ -222,7 +222,7 @@ function compileScenario(doc: FlowDoc, lay: Layout, id: string): CompiledScenari
     });
 
   const stepsOut: CompiledScenario["steps"] = sched.map((s) => ({
-    id: s.step.id, title: s.step.title, narration: s.step.narration, start: s.start, end: s.end, inherited: s.inherited, changes: changesIn(s.start, s.end),
+    id: s.step.id, title: s.step.title, narration: s.step.narration, ...(s.step.detail ? { detail: s.step.detail } : {}), start: s.start, end: s.end, inherited: s.inherited, changes: changesIn(s.start, s.end),
     branches: doc.scenarios.filter((b) => b.id !== id && b.branchFrom?.scenario === s.scenario && b.branchFrom.afterStep === s.step.id).map((b) => ({ scenario: b.id, title: b.title })),
   }));
   return { id, title: sc.title, duration, steps: stepsOut, cells, tracks: out, packets, pulses, effects, callouts, camera };

@@ -527,6 +527,11 @@
                   "minLength": 1,
                   "maxLength": 400
                 },
+                "detail": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1200
+                },
                 "actions": {
                   "maxItems": 12,
                   "type": "array",

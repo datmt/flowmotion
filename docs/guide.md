@@ -37,7 +37,7 @@ scenario fail "What if it fails?" from=happy/checkout
     "..."
 ```
 
-Rules: 2-space indent; a line starting with `#` is a comment (no trailing comments); strings are double-quoted (`\"`, `\n`); a bare word is a string, so cell values are always strings (`1` is "1"). Lists are comma-joined without spaces (`a,b#2..4`). Options are `key=value` or bare flags. Values of `array` and `values` go after a bare `=`. Each step has one quoted narration line, then one action per line. Errors come back with line and column and a hint.
+Rules: 2-space indent; a line starting with `#` is a comment (no trailing comments); strings are double-quoted (`\"`, `\n`); a bare word is a string, so cell values are always strings (`1` is "1"). Lists are comma-joined without spaces (`a,b#2..4`). Options are `key=value` or bare flags. Values of `array` and `values` go after a bare `=`. Each step has one quoted narration line, an optional `detail "longer text"` line (shown as "Learn more", <= 1200 chars), then one action per line. Errors come back with line and column and a hint.
 
 ## Entities and ids
 
@@ -92,10 +92,10 @@ Server: Streamable HTTP, stateless, no auth: `POST <base>/mcp` (the same guide i
 
 | Tool | Use |
 |---|---|
-| `flow_guide` | This guide. Call once. |
+| `flow_guide` | This guide. Call once. `topic:"article"` returns the lesson-article guide instead. |
 | `flow_create` | `dsl` (or `doc`) -> immutable snapshot: `id`, `url`, `outline`, `warnings`. |
 | `flow_edit` | `id` + `ops` (small change) or `id` + `dsl` (rewrite). Publishes a NEW id; the old one stays. Always continue from the newest id. |
-| `flow_get` | `id` (a flow id, or a catalog template as `<domain>/<slug>`), `view` = `outline` (default) / `dsl` / `full`; `ids` = only those entities or steps. Use `dsl` to read a template or an earlier flow. |
+| `flow_get` | `id` (a flow id, or a catalog template as `<domain>/<slug>`), `view` = `outline` (default) / `dsl` / `full` / `article` (a catalog flow's lesson Markdown, or null); `ids` = only those entities or steps. Use `dsl` to read a template or an earlier flow. |
 | `flow_preview` | PNGs: contact sheet per scenario, or `scenario` + `step` (0-based) for one frame. Accepts `id`, or `dsl`/`doc` to snapshot and preview in one call. |
 | `flow_export` / `flow_job` | Video (`mp4`/`webm`/`gif`, `height` 720/1080, `fps` 30/60, `captions`). Poll `flow_job` until `done`, then give the user `url`. Only on request; max 180 s. |
 
@@ -141,11 +141,12 @@ The app's left pane is a tree of this folder: one folder per domain, one DSL fil
 2. Save the final DSL as `templates/<domain>/<slug>.flow` (`flow_get` with `view:"dsl"` returns it). Reuse an existing domain folder when one fits; a new domain is a new lowercase kebab-case folder. `<slug>` is lowercase kebab-case and unique across the catalog.
 3. `meta.title` is the display name; give it a one-sentence `summary`, 2-5 `tags` (kebab-case), a `level` (beginner/intermediate/advanced) and `source` URLs (required for regulated domains: banking, insurance, fintech, law). `related <domain>/<slug> ...` links neighbours. Keep the style of its neighbours (theme, layout, 3-8 steps per scenario).
 4. Run `flowmotion validate templates/<domain>/<slug>.flow`, then `pnpm test`: it compiles every file, round-trips the DSL, and checks the metadata.
-5. Commit. The list above is generated from the folder. Redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
+5. Write its article, `templates/<domain>/<slug>.md`, following `docs/article-guide.md` (required: the test fails without it). Add `detail` to steps that need more than the narration.
+6. Commit. The list above is generated from the folder. Redeploy. The app reads the folder at build time, so a redeploy is what publishes it.
 
 ### Picking what to build
 
-`docs/backlog.md` lists every flow, built (`[x]`) and planned (`[ ]`): `slug: topic (level) - failure branch to show`. To build the next one: take the first `[ ]` line in the domain you were given (or the `**pilot**` lines first for new domains), use `<domain>/<slug>` as the file path, set `level` from the line and the failure branch as a branch scenario. When `pnpm test` passes, change its line to `- [x] <slug>` (drop the description) in the same commit. Report DSL gaps you hit instead of working around them silently.
+`docs/backlog.md` lists every flow, built (`[x]`) and planned (`[ ]`): `slug: topic (level) - failure branch to show`. To build the next one: take the first `[ ]` line in the domain you were given (or the `**pilot**` lines first for new domains), use `<domain>/<slug>` as the file path, set `level` from the line and the failure branch as a branch scenario. Write the article too (`docs/article-guide.md`). When `pnpm test` passes, change its line to `- [x] <slug>` (drop the description) in the same commit. Report DSL gaps you hit instead of working around them silently.
 
 ## Appendix: JSON FlowDoc
 
@@ -158,6 +159,6 @@ The app's left pane is a tree of this folder: one folder per domain, one DSL fil
 
 * `nodes[]`: `{id,label,kind,group?,state?,hidden?,pos?}`; `edges[]`: `{id?,from,to,label?,arrow?,dashed?,hidden?}`.
 * `arrays[]`: `{id,label?,values,keys?,orientation?}`; `grids[]`: `{id,rows,rowLabels?,colLabels?}`; `tokens[]`: `{id,label?,at}`; `code[]`: `{id,title?,language,code,pos?}`.
-* `scenarios[]`: `{id,title,branchFrom?:{scenario,afterStep},steps:[{id,title,narration,actions,hold?}]}`.
+* `scenarios[]`: `{id,title,branchFrom?:{scenario,afterStep},steps:[{id,title,narration,detail?,actions,hold?}]}`.
 * Actions are `{"do":"send","from":"orch","to":"payment","label":"Charge"}`; the DSL verbs above map 1:1 (`"do":"state"`, `"do":"show"`, `"do":"hide"`, `"do":"label"`, `"do":"pulse"`, `"do":"effect"`, `"do":"focus"`, `"do":"callout"`, `"do":"send"`, `"do":"move"`, `"do":"swap"`, `"do":"values"`, `"do":"highlight"`) (`targets` arrays, `start:"with"`, `delay`, `dur`, `ease`).
 * Closed objects only: extra keys are errors. The JSON Schema is served at `/schema/flow-2.1.json`.

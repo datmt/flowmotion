@@ -110,6 +110,7 @@ export const Step = z.strictObject({
   id: Id,
   title: z.string().min(1).max(60),
   narration: z.string().min(1).max(400),
+  detail: z.string().min(1).max(1200).optional(), // "Learn more" text under the narration; same `code` and **bold** markup
   actions: z.array(Action).max(12),
   hold: z.number().min(0).max(30).optional(),
 });

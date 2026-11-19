@@ -23,7 +23,7 @@ export interface CompiledFlow {
 
 export interface CompiledScenario {
   id: string; title: string; duration: number;
-  steps: { id: string; title: string; narration: string; start: number; end: number; inherited: boolean; changes: StepChange[]; branches: { scenario: string; title: string }[] }[];
+  steps: { id: string; title: string; narration: string; detail?: string; start: number; end: number; inherited: boolean; changes: StepChange[]; branches: { scenario: string; title: string }[] }[];
   cells: { id: string; owner: string }[]; // cell instances, e.g. "nums@3" owned by "nums"
   tracks: Track[];
   packets: { edge: string; reverse: boolean; t0: number; t1: number; ease: Ease; label?: string }[];

@@ -34,6 +34,7 @@ ol.steps button{border:0;padding:2px 4px;text-align:left;width:100%}
 .now{border-left:1px solid var(--line);padding:12px 16px;overflow:auto;max-height:640px}
 .now h2{margin:0 0 6px;font-size:20px;line-height:1.25}
 .narr{font-size:15px;line-height:1.55}
+.narr details{margin-top:.6em}.narr summary{cursor:pointer;color:var(--accent,#2563eb);font-size:13px}.narr details div{margin-top:.4em;color:color-mix(in srgb,var(--fg) 85%,transparent)}
 .narr code{font-family:'JetBrains Mono',monospace;background:color-mix(in srgb,var(--fg) 10%,transparent);padding:0 .25em;border-radius:3px}
 .now h3{margin:14px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.65}
 .now ul{margin:0;padding-left:18px}.now li code{font-family:'JetBrains Mono',monospace;font-size:12px}
@@ -112,7 +113,7 @@ export class FlowPlayerElement extends HTMLElement {
     const stageEl = h("div", { class: "stage" });
     stageEl.style.aspectRatio = c.meta.aspect.replace(":", "/");
     const stateH = h("h3", { textContent: "State" }), title = h("h2"), body = h("div"), changes = h("ul"), state = h("div");
-    const narr = h("div", { class: "narr", ariaLive: "polite" } as object, body);
+    const more_ = h("div"), moreD = h("details", {}, h("summary", { textContent: "Learn more" }), more_), narr = h("div", { class: "narr", ariaLive: "polite" } as object, body, moreD);
     const playBtn = h("button", { class: "play", textContent: "▶", ariaLabel: "Play" } as object);
     const prev = h("button", { class: "prev", textContent: "◀", ariaLabel: "Previous step" } as object);
     const next = h("button", { class: "next", textContent: "▶▶", ariaLabel: "Next step" } as object);
@@ -153,6 +154,7 @@ export class FlowPlayerElement extends HTMLElement {
       title.textContent = `${p.step + 1}/${s.steps.length} · ${st.title}`;
       this.dispatchEvent(new CustomEvent("flow-step", { detail: { scenario: p.scenario, step: p.step }, bubbles: true, composed: true }));
       fmt(body, st.narration);
+      moreD.hidden = !st.detail; moreD.open = false; if (st.detail) fmt(more_, st.detail);
 
       strip.replaceChildren(...s.steps.map((x, i) => {
         const b = h("button", { onclick: () => p.goToStep(i), title: x.title }, h("b", { textContent: String(i + 1) }), x.title);
