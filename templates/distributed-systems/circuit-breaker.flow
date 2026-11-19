@@ -19,6 +19,7 @@ scenario trip "Failures trip the breaker"
     state payments success
   step failing "Payments starts failing"
     "Payments begins timing out. The breaker records each failure; the threshold is 3 in a row."
+    detail "Simple breakers trip on a consecutive failure count that resets on success. Production breakers often track error rate (such as a 50% failure rate) or set separate thresholds per failure class (for example, 10 timeouts versus 3 connection failures) while ignoring normal domain errors."
     state payments error
     send client > breaker "charge"
     send breaker > payments "charge"
@@ -26,6 +27,7 @@ scenario trip "Failures trip the breaker"
     state breaker warning
   step open "Open: fail fast"
     "Threshold reached, so the breaker **opens**. New calls are rejected instantly and Payments gets room to recover."
+    detail "Failing fast keeps callers from tying up resources waiting on timeouts and stops extra traffic from hitting an already struggling supplier. Callers still need a fallback strategy—returning an error, queuing work like a payment authorization for later, or serving acceptable stale data."
     label breaker "Breaker: OPEN"
     state breaker error
     send client > breaker "charge"

@@ -1,7 +1,6 @@
 # Flows still missing their article (<slug>.md). Remove a line when you add the article.
 algorithms/binary-search
 databases/database-deadlock
-distributed-systems/circuit-breaker
 distributed-systems/consistent-hashing
 distributed-systems/cqrs-event-sourcing
 distributed-systems/crdt-counter
