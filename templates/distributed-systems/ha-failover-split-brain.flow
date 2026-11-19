@@ -28,6 +28,7 @@ scenario clean-failover "Fenced failover preserves single writer"
     state p1,p2,disk success
   step fail-and-fence "Primary A fails; controller fences A first"
     "Primary A stops responding. Before promoting Standby B, the Fencing Controller cuts A's power or revokes its storage lease (**STONITH**: Shoot The Other Node In The Head)."
+    detail "Hardware fencing eliminates ambiguity: power fencing shuts off the node through IPMI, a remote PDU, or a watchdog timer, while storage-level SCSI-3 persistent reservations revoke the node's reservation key so the SAN rejects any further I/O from it."
     state p1 error
     send fence > p1 "FENCE / power-off"
     label roles#p1 "FENCED"
@@ -45,6 +46,7 @@ scenario clean-failover "Fenced failover preserves single writer"
 scenario split-brain "Partition without fencing causes split brain" from=clean-failover/replicate
   step partition "Heartbeat link breaks while both nodes live"
     "The network link between A and B fails, so B stops hearing heartbeats — yet **Primary A is still alive** and accepting writes from clients!"
+    detail "A strict majority quorum requires `floor(N/2) + 1` votes. In a two-node cluster, a link break splits the cluster 1 versus 1, so neither side holds a majority without an external witness or quorum device acting as a third tie-breaker."
     state p1-p2 error
     callout p2 "No heartbeat: thinks A is dead!"
   step dual-primary "Unfenced B promotes -> two active primaries"

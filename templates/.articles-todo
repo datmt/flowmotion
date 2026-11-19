@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/ha-failover-split-brain
 distributed-systems/hedged-requests
 distributed-systems/hinted-handoff
 distributed-systems/inbox-idempotency
