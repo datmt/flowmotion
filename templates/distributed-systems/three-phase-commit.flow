@@ -33,6 +33,7 @@ scenario commit "Three non-blocking phases"
     label phase#coord "pre-commit" with
   step ack-pre "Participants enter pre-committed state"
     "Both nodes acknowledge `PreCommit`. Once a node reaches `pre-commit`, it knows everyone voted Yes and can safely commit on a later timeout."
+    detail "Skeen's 1981 non-blocking invariant relies on this buffer state: no participant can commit while another might still be in `init`, and if any surviving node reached `pre-commit`, a recovery coordinator knows every participant voted `Yes`."
     send p1 > coord "ACK"
     send p2 > coord "ACK" with
     state p1,p2 active
@@ -57,6 +58,7 @@ scenario partition "Network partition breaks safety" from=commit/vote-yes
     callout p2 "Partitioned: never sees PreCommit"
   step diverge "Timeouts choose opposite outcomes"
     "Both nodes time out. Node A is in `pre-commit`, so 3PC tells it to **commit**. Node B is still in `waiting`, so 3PC tells it to **abort**."
+    detail "This split-brain is why pure 3PC is rarely used in production: its non-blocking proof assumes bounded delays without partitions. Real distributed SQL stores instead run 2PC over consensus-replicated groups (Paxos or Raft), as in Google Spanner."
     state p1 success
     label phase#p1 "COMMITTED" with
     state p2 error
