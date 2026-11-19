@@ -41,6 +41,7 @@ scenario stampede "Thundering herd hits the database"
 scenario coalescing "Request coalescing (singleflight) shields DB" from=stampede/expire
   step first-wins "Singleflight lets only the first miss fetch"
     "All three requests miss cache, but the app tracks in-flight keys (`singleflight`). Client 1 starts the DB fetch while Clients 2 and 3 attach to the same pending promise."
+    detail "In-process request coalescing (such as Go's `singleflight.Group.Do`) suppresses duplicate calls for the same key inside one server instance, sharing both the returned value and any error with waiting callers. Across a multi-server fleet, each instance can still issue one miss unless paired with a distributed per-key lock or probabilistic early expiration."
     send c1 > app "GET home"
     send c2 > app "GET home" with
     send c3 > app "GET home" with
