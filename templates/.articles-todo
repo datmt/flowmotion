@@ -2,7 +2,6 @@
 algorithms/binary-search
 databases/database-deadlock
 distributed-systems/crdt-counter
-distributed-systems/lamport-clocks
 distributed-systems/leader-election-bully
 distributed-systems/leader-lease
 distributed-systems/load-balancer-algorithms

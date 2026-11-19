@@ -26,6 +26,7 @@ scenario order "Happens-before guarantees L(a) < L(b)"
     state b,clk#b active with
   step b-to-c "Node B sends (m2, t=2) to Node C"
     "Node B forwards its causal successor `m2 (t=2)`. Node C jumps to `max(0, 2) + 1 = 3`, preserving `e1 -> e2 -> e3 => 1 < 2 < 3`."
+    detail "Lamport's implementation rule IR1 requires incrementing a process's clock between any two successive local events. Treating receive-and-forward as one relay event gives `1 < 2 < 3`; when receiving `m1` and sending `m2` are distinct events on Node B, B increments to `3` before sending `m2 (t=3)` and Node C advances to `4`."
     send b > c "m2 (t=2)"
     label clk#c "3"
     state a,b,c,clk success with
@@ -45,5 +46,6 @@ scenario out-of-order "Out-of-order message and concurrency limit" from=order/a-
     callout b "max(4, 1) + 1 = 5 (monotonic)"
   step no-converse "L(a) < L(b) does NOT prove causality"
     "Notice that `L(e1)=1 < L(B's 4th event)=4`, even though those two events were completely independent! Lamport clocks give a partial order only one way; use **vector clocks** to detect concurrency."
+    detail "Lamport proved the converse (`C(a) < C(b) => a -> b`) cannot hold for scalar clocks: if two events `p2 -> p3` on one process are both concurrent with `q3` on another, the converse would force `C(p2) = C(q3) = C(p3)`, contradicting `C(p2) < C(p3)`."
     focus a,b dim
     callout a "1 < 4, yet A and B were concurrent"
