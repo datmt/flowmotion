@@ -39,6 +39,7 @@ scenario decide "Single proposer chooses a value"
     send p1 > a2 "Accept(1, X)" with
   step chosen "Phase 2b: Value X is chosen"
     "A1 and A2 check `1 >= promised`, record `(1, X)`, and reply `Accepted`. Once a majority accepts, `X` is chosen; any future quorum overlaps here and must adopt `X`."
+    detail "Safety rests on quorum intersection and Lamport's invariant P2c: any future majority quorum overlaps `{A1, A2}` in at least one acceptor, so any higher ballot's Phase 1 is guaranteed to discover `(1, X)` and must propose the value with the highest accepted ballot returned by its promise quorum."
     label accepted#a1 "1:X"
     label accepted#a2 "1:X" with
     state a1,a2,p1 success
