@@ -28,6 +28,7 @@ scenario parallel "One consumer per partition in a group"
     state c1,c2,c3 success
   step commit-off "Consumers commit processed offsets"
     "After processing, each consumer commits its latest offset to `__consumer_offsets` so a future takeover knows exactly where to resume."
+    detail "In Kafka's consumer API, the committed offset written to `__consumer_offsets` is actually the next offset to fetch (`last_processed + 1`), so after finishing offset `32` the stored position points directly to `33` on takeover."
     pulse c1,c2,c3
     callout c3 "Committed P2 offset = 32"
 
@@ -41,6 +42,7 @@ scenario consumer-crash "Consumer crash triggers group rebalance" from=parallel/
     callout c3 "Heartbeat timeout -> rebalance"
   step reassign "Coordinator reassigns Partition 2 to Consumer 1"
     "Remaining members join the new generation. The assignor hands Partition 2 to Consumer 1 (cooperative rebalance avoids stopping P0 and P1 unnecessarily)."
+    detail "Classic eager rebalancing forces every consumer in the group to stop and revoke all partitions before receiving a fresh assignment. Incremental cooperative rebalancing (`CooperativeStickyAssignor`) leaves stable assignments (P0 and P1) running uninterrupted and moves only the affected partition."
     show p2-c1
     label owners#p2 "C1"
     state owners#p2 warning with
