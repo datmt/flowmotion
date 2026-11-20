@@ -61,3 +61,11 @@ test("PRD examples are valid", () => {
   expect(validate(saga)).toMatchObject({ ok: true, issues: [] });
   expect(validate(bsearch)).toMatchObject({ ok: true, issues: [] });
 });
+
+const gridDoc = (a: any) => ({ version: "2.1", meta: { title: "g" }, nodes: [], edges: [], grids: [{ id: "g", rows: [["1", "2", "3"], ["4", "5", "6"]] }],
+  scenarios: [{ id: "s", title: "S", steps: [{ id: "a", title: "A", narration: "n", actions: [a] }] }] });
+const gcodes = (a: any) => validate(gridDoc(a) as any).issues.map((i) => i.code);
+test("grid range ok in targets", () => expect(gcodes({ do: "state", targets: ["g#0.1..1.2"], state: "active" })).toEqual([]));
+test("grid range out of bounds", () => expect(gcodes({ do: "state", targets: ["g#0.0..2.2"], state: "active" })).toContain("cell_out_of_bounds"));
+test("grid range backwards", () => expect(gcodes({ do: "state", targets: ["g#1.1..0.0"], state: "active" })).toContain("bad_ref"));
+test("grid range not allowed as single target", () => expect(gcodes({ do: "label", target: "g#0.0..1.1", text: "x" })).toContain("range_not_allowed"));

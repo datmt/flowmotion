@@ -3,7 +3,7 @@ import { ICON_RE } from "./icons/index.ts";
 
 export const ID_RE = /^[a-z][a-z0-9-]{0,39}$/;
 // entity | id#3 | id#2..5 | id#key | id#1.2   (PRD §3.2)
-export const REF_RE = /^[a-z][a-z0-9-]{0,39}(#(\d+(\.\.\d+|\.\d+)?|[a-z][a-z0-9-]{0,39}))?$/;
+export const REF_RE = /^[a-z][a-z0-9-]{0,39}(#(\d+\.\d+\.\.\d+\.\d+|\d+(\.\.\d+|\.\d+)?|[a-z][a-z0-9-]{0,39}))?$/;
 const LINES_RE = /^(\d+(-\d+)?(,\d+(-\d+)?)*)?$/;
 
 export const Id = z.string().regex(ID_RE);

@@ -5,7 +5,8 @@ export type ParsedRef =
   | { kind: "index"; entity: string; index: number }
   | { kind: "range"; entity: string; from: number; to: number }
   | { kind: "key"; entity: string; key: string }
-  | { kind: "grid"; entity: string; row: number; col: number };
+  | { kind: "grid"; entity: string; row: number; col: number }
+  | { kind: "gridRange"; entity: string; r1: number; c1: number; r2: number; c2: number }; // inclusive rectangle
 
 /** Returns null if `ref` is malformed. */
 export function parseRef(ref: string): ParsedRef | null {
@@ -13,6 +14,7 @@ export function parseRef(ref: string): ParsedRef | null {
   const [entity = "", rest] = ref.split("#");
   if (rest === undefined) return { kind: "entity", entity };
   let m;
+  if ((m = /^(\d+)\.(\d+)\.\.(\d+)\.(\d+)$/.exec(rest))) return { kind: "gridRange", entity, r1: +m[1]!, c1: +m[2]!, r2: +m[3]!, c2: +m[4]! };
   if ((m = /^(\d+)\.\.(\d+)$/.exec(rest))) return { kind: "range", entity, from: +m[1]!, to: +m[2]! };
   if ((m = /^(\d+)\.(\d+)$/.exec(rest))) return { kind: "grid", entity, row: +m[1]!, col: +m[2]! };
   if (/^\d+$/.test(rest)) return { kind: "index", entity, index: +rest };

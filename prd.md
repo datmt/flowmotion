@@ -48,6 +48,7 @@ export type Ref = string; // an entity Id, or a cell reference:
                           //   "nums#2..5"  inclusive range of array cells (in `targets` only)
                           //   "vars#lo"    array cell by key
                           //   "dp#1.2"     grid cell, row.col (0-based)
+                          //   "dp#0.0..2.2" inclusive rectangle of grid cells (in `targets` only)
 
 export type NodeKind = "service" | "state" | "decision" | "db" | "queue" | "actor" | "external" | "value";
 export type StateName = "idle" | "active" | "success" | "error" | "warning" | "pending" | "disabled";

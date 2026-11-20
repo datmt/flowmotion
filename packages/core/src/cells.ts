@@ -30,6 +30,12 @@ export function resolveCells(sim: CellSim, ref: string): string[] | undefined {
       const r = o.order.slice(p.from, p.to + 1);
       return p.to < o.order.length ? r : undefined;
     }
+    case "gridRange": {
+      if (!o.cols) return undefined;
+      const ids: string[] = [];
+      for (let r = p.r1; r <= p.r2; r++) for (let c = p.c1; c <= p.c2; c++) { const id = c < o.cols ? o.order[r * o.cols + c] : undefined; if (!id) return undefined; ids.push(id); }
+      return ids;
+    }
     case "key": { const i = o.keys?.indexOf(p.key) ?? -1; return i >= 0 && o.order[i] ? [o.order[i]!] : undefined; }
     case "grid": { const id = o.cols ? o.order[p.row * o.cols + p.col] : undefined; return id ? [id] : undefined; }
     default: return undefined;

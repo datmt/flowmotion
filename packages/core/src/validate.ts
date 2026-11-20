@@ -123,8 +123,16 @@ export function validate(input: unknown): ValidateResult {
       return p;
     }
     if (!o.cell) return void err(path, "wrong_target_type", `Cell reference '${ref}' is not allowed here; expected ${o.entity.join(" or ")}.`);
-    if (p.kind === "range" && !o.range) return void err(path, "range_not_allowed", `Range '${ref}' is only allowed in 'targets'.`, "Use a single cell like 'nums#3'.");
+    if ((p.kind === "range" || p.kind === "gridRange") && !o.range) return void err(path, "range_not_allowed", `Range '${ref}' is only allowed in 'targets'.`, "Use a single cell like 'nums#3'.");
     if (owner.type !== "array" && owner.type !== "grid") return void err(path, "wrong_target_type", `'${p.entity}' is a ${owner.type}, which has no cells.`);
+    if (p.kind === "gridRange") {
+      if (owner.type !== "grid") return void err(path, "wrong_target_type", `'${p.entity}' is an array; use '${p.entity}#<from>..<to>'.`);
+      if (p.r1 > p.r2 || p.c1 > p.c2) return void err(path, "bad_ref", `Range '${ref}' runs backwards.`, `Use '${p.entity}#<row>.<col>..<row>.<col>' with top-left first.`);
+      const g = doc.grids![owner.i]!;
+      if (p.r2 >= g.rows.length || p.c2 >= g.rows[0]!.length)
+        return void err(path, "cell_out_of_bounds", `Range ${ref} is outside the ${g.rows.length}×${g.rows[0]!.length} grid '${p.entity}'.`);
+      return p;
+    }
     if (p.kind === "grid") {
       if (owner.type !== "grid") return void err(path, "wrong_target_type", `'${p.entity}' is an array; use '${p.entity}#<index>' not row.col.`);
       const g = doc.grids![owner.i]!;
@@ -265,7 +273,7 @@ export function validate(input: unknown): ValidateResult {
           let oob = false;
           for (const r of actionRefs(a)) {
             const pr = parseRef(r.ref)!;
-            if (pr.kind === "entity" || pr.kind === "grid" || pr.kind === "key" || resolveCells(sim, r.ref)) continue;
+            if (pr.kind === "entity" || pr.kind === "grid" || pr.kind === "gridRange" || pr.kind === "key" || resolveCells(sim, r.ref)) continue;
             oob = true;
             if (!f.inherited) {
               const len = sim.get(pr.entity)!.order.length;

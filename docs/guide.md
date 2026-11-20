@@ -45,7 +45,7 @@ Rules: 2-space indent; a line starting with `#` is a comment (no trailing commen
 * `keys=` on an array makes named cells (a variables panel). Layout: `layered` (default), `tree` (BSTs, use `direction=TB`), `stress` (general graphs). `edges=straight` draws diagonal lines instead of orthogonal routes, best for fully connected graphs like neural nets.
 * States: idle, active, success, error, warning, pending, disabled.
 * IDs: kebab-case `^[a-z][a-z0-9-]{0,39}$`, unique across the whole document. Reference by id, never by position.
-* Refs: entity id, or cell `nums#3`, range `nums#2..5` (in target lists only), keyed `vars#lo`, grid `dp#1.2`.
+* Refs: entity id, or cell `nums#3`, range `nums#2..5` (in target lists only), keyed `vars#lo`, grid `dp#1.2`, grid rectangle `dp#0.0..2.2` (row.col..row.col, top-left first, in target lists only).
 * Limits: 300 entities, 64 cells per array, 16x16 per grid, 180 s per scenario, 1-8 scenarios, 1-40 steps each, 0-12 actions per step, narration <= 400 chars.
 
 ## Design rules

@@ -20,11 +20,26 @@ edge conv > pool
 edge pool > feat
 
 array dims "Formula: ⌊(W−F+2P)/S⌋ + 1" keys=w-in,kernel,pad,stride,w-out = 4 3 1 1 4
-grid out "Pooled map (2×2)"
-  rowlabels r0 r1
-  collabels c0 c1
+grid img "Padded input (4×4 + P=1)"
+  row 0 0 0 0 0 0
+  row 0 1 2 0 1 0
+  row 0 0 1 3 1 0
+  row 0 2 1 0 2 0
+  row 0 1 0 1 3 0
+  row 0 0 0 0 0 0
+grid ker "Kernel 3×3"
+  row 0 1 0
+  row 1 2 1
+  row 0 1 0
+grid out "Feature map (4×4)"
+  row – – – –
+  row – – – –
+  row – – – –
+  row – – – –
+grid pooled "Max-pooled (2×2)"
   row – –
   row – –
+token win "window" at=img#0.0
 
 scenario conv-pool "Same-padding convolution + 2×2 max pooling"
   step pad-input "Add zero-padding around borders"
@@ -32,19 +47,50 @@ scenario conv-pool "Same-padding convolution + 2×2 max pooling"
     send inp > pad "4×4 grid"
     state inp,pad active
     callout pad "P = 1 → 6×6 padded input"
+    state img#0.0..2.5,img#2.0..5.5,img#5.4,img#5.5 pending with
   step slide "Slide 3×3 filter with stride S = 1"
     "Applying `(4 − 3 + 2·1) / 1 + 1 = **4**`, the convolution outputs a `4×4` activation map—exact \"same\" spatial size with shared filter weights across positions."
     detail "Every output cell computes the dot product of the same 3x3 learned kernel against a local 3x3 patch (plus bias). Weight sharing cuts parameter count drastically compared to dense layers and makes feature detection translation-equivariant."
     send pad > conv "6×6 padded"
     state conv active
+    state img#0.0..2.2 active
+    state ker active with
+    label out#0.0 "4" with
     callout conv "Output = 4×4 (exact integer)"
-  step maxpool "Downsample with 2×2 max pooling"
-    "A `2×2` MaxPool (`S = 2`) picks the strongest activation inside each non-overlapping `2×2` window, halving spatial size to `2×2` (`[8, 6; 4, 9]`)."
-    send conv > pool "4×4 activations"
-    label out#0.0 "8"
+    move win to img#0.1
+    state img#0.0..2.2 idle
+    state img#0.1..2.3 active with
     label out#0.1 "6" with
+  step fill "Slide to every position"
+    "The same kernel visits all `4×4 = 16` positions, left to right then top to bottom. Each stop writes one number into the feature map."
+    state img#0.1..2.3 idle
+    label out#1.1 "8"
+    label out#0.2 "6" with
+    label out#0.3 "3" with
     label out#1.0 "4" with
-    label out#1.1 "9" with
+    label out#1.2 "8" with
+    label out#1.3 "8" with
+    label out#2.0 "6" with
+    label out#2.1 "5" with
+  step fill-rest "Finish the last positions"
+    "The window reaches the bottom-right corner. All `16` outputs are in; the map is `4×4`, the same size as the input."
+    label out#2.2 "7"
+    label out#2.3 "8" with
+    label out#3.0 "4" with
+    label out#3.1 "3" with
+    label out#3.2 "5" with
+    label out#3.3 "9" with
+  step maxpool "Downsample with 2×2 max pooling"
+    "A `2×2` MaxPool (`S = 2`) picks the strongest activation inside each non-overlapping `2×2` window, halving spatial size to `2×2` (`[8, 8; 6, 9]`)."
+    send conv > pool "4×4 activations"
+    state out#0.0,out#0.1,out#1.0,out#1.1 active
+    label pooled#0.0 "8"
+    state out#0.2,out#0.3,out#1.2,out#1.3 active with
+    label pooled#0.1 "8" with
+    state out#2.0,out#2.1,out#3.0,out#3.1 active with
+    label pooled#1.0 "6" with
+    state out#2.2,out#2.3,out#3.2,out#3.3 active with
+    label pooled#1.1 "9" with
     state pool active
   step output "Emit compact, aligned feature map"
     "The resulting `2×2` map retains dominant local features while cutting spatial activations by 4× for deeper layers."
