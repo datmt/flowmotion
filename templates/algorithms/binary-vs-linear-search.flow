@@ -1,0 +1,106 @@
+flow "Binary vs linear search"
+summary "Linear search checks items one by one; binary search halves a sorted list each probe, so it needs far fewer probes."
+tags algorithms search arrays
+level beginner
+source "https://en.wikipedia.org/wiki/Binary_search_algorithm"
+source "https://en.wikipedia.org/wiki/Linear_search"
+related algorithms/binary-search
+
+array lin "Linear search (left to right)" = 3 7 11 15 19 23 29 34 41 47 52 58 64 71 80
+array bin "Binary search (halve the range)" = 3 7 11 15 19 23 29 34 41 47 52 58 64 71 80
+array probes "Probes used" keys=linear,binary = 0 0
+token i "i" at=lin#0
+token lo "lo" at=bin#0
+token mid "mid" at=bin#7
+token hi "hi" at=bin#14
+
+scenario main "Find 64 both ways"
+  step goal "The race"
+    "Find 64 in a sorted list of 15 numbers, two ways. A probe is one comparison with the target; fewer probes is faster."
+    detail "Linear search starts at the left and checks every item until it hits the target. Binary search keeps a range [lo, hi], checks the middle item mid, and throws away the half that cannot hold the target. Both lists hold the same numbers."
+    focus lin,bin,probes dim
+    pulse lin#12
+    pulse bin#12
+  step lin-1 "Linear: first probe"
+    "Linear search starts at i = 0. 3 is not 64, so move on."
+    focus lin,probes dim
+    callout lin#0 "3 ≠ 64"
+    state lin#0 disabled
+    label probes#linear "1" with
+  step lin-2 "Linear: second probe"
+    "i = 1: 7 is not 64 either. Each probe rules out only one item."
+    move i to lin#1
+    callout lin#1 "7 ≠ 64"
+    state lin#1 disabled
+    label probes#linear "2" with
+  step lin-rest "Linear: the long walk"
+    "It keeps stepping right through 11, 15, … 58 and finds 64 at index 12 on probe 13."
+    move i to lin#12 dur=2
+    state lin#2..11 disabled
+    state lin#12 success
+    callout lin#12 "64 = 64 after 13 probes"
+    label probes#linear "13" with
+  step bin-1 "Binary: probe 1"
+    "mid = (0 + 14) / 2 = 7, and 34 < 64, so 64 is in the right half. Drop indexes 0-7 and set lo = 8."
+    focus bin,probes dim
+    pulse bin#7
+    callout bin#7 "mid=(0+14)/2=7: 34<64"
+    state bin#0..7 disabled
+    move lo to bin#8
+    label probes#binary "1" with
+  step bin-2 "Binary: probe 2"
+    "mid = (8 + 14) / 2 = 11, and 58 < 64, so drop indexes 8-11 and set lo = 12."
+    move mid to bin#11
+    callout bin#11 "mid=(8+14)/2=11: 58<64"
+    state bin#8..11 disabled
+    move lo to bin#12
+    label probes#binary "2" with
+  step bin-3 "Binary: probe 3"
+    "mid = (12 + 14) / 2 = 13, and 71 > 64, so the target is to the left. Drop index 13-14 and set hi = 12."
+    move mid to bin#13
+    callout bin#13 "mid=(12+14)/2=13: 71>64"
+    state bin#13..14 disabled
+    move hi to bin#12
+    label probes#binary "3" with
+  step bin-4 "Binary: found"
+    "mid = (12 + 12) / 2 = 12, and 64 = 64. Found on probe 4."
+    move mid to bin#12
+    callout bin#12 "mid=(12+12)/2=12: 64=64"
+    state bin#12 success
+    label probes#binary "4" with
+  step lesson "13 probes vs 4"
+    "Linear probes grow with n; binary probes grow with log2(n), so 1,000,000 sorted items need about 20. The catch: the list must be sorted."
+    focus probes dim
+    pulse probes#linear
+    pulse probes#binary
+
+scenario unsorted "What if it is not sorted?" from=main/goal
+  step shuffle "Break the order"
+    "Swap 64 with 15. The list is no longer sorted, and 64 now sits at index 3."
+    focus bin dim
+    swap bin#3 bin#12
+    callout bin#3 "64 now here"
+  step bin-miss "Binary: probe 1"
+    "mid = 7 and 34 < 64, so binary search assumes everything on the left is smaller and drops indexes 0-7, including the 64 at index 3."
+    pulse bin#7
+    callout bin#7 "34<64: go right"
+    state bin#0..7 disabled
+    state bin#3 error
+    move lo to bin#8
+    label probes#binary "1" with
+  step bin-end "Binary: gives up"
+    "It keeps going right, lands on 15 at index 12, then lo passes hi. Result: not found, though 64 is in the list."
+    move mid to bin#12
+    move lo to bin#13
+    move hi to bin#12
+    state bin#8..14 disabled
+    callout bin#12 "15<64: lo=13 > hi=12"
+    label probes#binary "4" with
+  step lin-ok "Linear still works"
+    "Linear search ignores order and finds 64 at index 3 on probe 4. Binary search is only valid on sorted data."
+    focus lin,probes dim
+    move i to lin#3
+    state lin#0..2 disabled
+    state lin#3 success
+    callout lin#3 "64 = 64"
+    label probes#linear "4" with

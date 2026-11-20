@@ -131,6 +131,7 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 
 ## algorithms
 - [x] binary-search
+- [x] binary-vs-linear-search
 - [ ] quicksort: partition (beginner) - worst-case pivot
 - [ ] merge-sort: divide, merge (beginner) - already-sorted input
 - [ ] heap-sort: heapify (intermediate) - degenerate heap
