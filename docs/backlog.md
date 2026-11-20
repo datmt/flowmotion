@@ -228,21 +228,21 @@ Regulated domains (banking, fintech, insurance, construction, law): `source` mus
 
 ## machine-learning
 - [x] backprop
-- [ ] gradient-descent: optimiser (beginner) - learning rate too high
-- [ ] sgd-momentum-adam: optimisers (intermediate) - oscillation
-- [ ] overfitting-regularisation: train vs val (beginner) - overfit
-- [ ] attention: self-attention (advanced) - causal mask
-- [ ] transformer-block: layer flow (advanced) - residual removed
-- [ ] tokenization-bpe: BPE merges (intermediate) - unknown word
-- [ ] rag-pipeline: retrieve then generate (intermediate) - irrelevant retrieval
-- [ ] kv-cache-inference: autoregressive decoding (advanced) - cache eviction
-- [ ] cnn-convolution: convolution, pooling (beginner) - stride/padding error
-- [ ] k-means: clustering (beginner) - bad initial centroids
-- [ ] decision-tree-split: Gini (beginner) - overfit depth
-- [ ] train-test-leakage: data leakage (intermediate) - leaked feature
-- [ ] rlhf-pipeline: preference training (advanced) - reward hacking
-- [ ] agent-tool-loop: LLM tool calling (intermediate) - tool error recovery
-- [ ] feature-store-online-offline: serving (advanced) - training/serving skew
+- [x] gradient-descent
+- [x] sgd-momentum-adam
+- [x] overfitting-regularisation
+- [x] attention
+- [x] transformer-block
+- [x] tokenization-bpe
+- [x] rag-pipeline
+- [x] kv-cache-inference
+- [x] cnn-convolution
+- [x] k-means
+- [x] decision-tree-split
+- [x] train-test-leakage
+- [x] rlhf-pipeline
+- [x] agent-tool-loop
+- [x] feature-store-online-offline
 
 ## banking
 - [ ] ach-payment: ACH lifecycle, US (intermediate) - return R01 insufficient funds  **pilot**

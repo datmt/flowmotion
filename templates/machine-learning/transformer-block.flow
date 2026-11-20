@@ -1,0 +1,84 @@
+flow "Transformer block"
+summary "Combines layer normalisation, multi-head attention, a feed-forward network, and residual shortcuts that keep gradients alive across deep stacks."
+tags transformers residual-connections deep-learning
+level advanced
+source "https://arxiv.org/abs/1706.03762"
+source "https://arxiv.org/abs/1512.03385"
+source "https://arxiv.org/abs/2002.04745"
+related machine-learning/attention machine-learning/backprop
+
+layout direction=LR
+
+node x "Input x" value
+node ln1 "LayerNorm 1" service
+node mha "Multi-Head Attn" service tone=primary
+node add1 "Add (+x)" state
+node ln2 "LayerNorm 2" service
+node ffn "Feed-Forward" service
+node add2 "Add (+h)" state
+
+edge x > ln1
+edge ln1 > mha
+edge mha > add1
+edge x > add1 id=skip1 dashed
+edge add1 > ln2
+edge ln2 > ffn
+edge ffn > add2
+edge add1 > add2 id=skip2 dashed
+
+array grads "Backprop gradient norm (24 blocks)" keys=layer-24,layer-12,layer-1,status = 1.00 – – ready
+
+scenario pre-ln "Pre-LN block with residual shortcuts"
+  step attn-sublayer "Normalise and mix tokens with attention"
+    "In a Pre-LN Transformer block, `x` is normalised per token by **LayerNorm 1**, then **Multi-Head Attention** mixes context across sequence positions."
+    detail "Xiong et al. (2020) showed that placing LayerNorm inside the residual branch (Pre-LN) keeps initial gradients well-behaved across depth, whereas the original Post-LN placement produces large gradients near the top layers that require learning-rate warmup."
+    send x > ln1 "x"
+    send ln1 > mha "LN(x)"
+    state x,ln1,mha active
+  step res1 "First residual adds identity shortcut"
+    "The skip connection adds the original `x` directly to `MHA(LN(x))`. The sub-layer only needs to learn a refinement delta rather than reconstructing `x`."
+    send mha > add1 "Δattn"
+    send x > add1 "x (skip)" via=skip1 with
+    state add1 active
+    callout add1 "h = x + MHA(LN(x))"
+  step ffn-sublayer "Feed-forward sub-layer and second skip"
+    "`h` passes through **LayerNorm 2** and a position-wise **Feed-Forward** MLP (applied identically to each token), then the second residual adds `h` back."
+    send add1 > ln2 "h"
+    send ln2 > ffn "LN(h)"
+    send ffn > add2 "Δffn"
+    send add1 > add2 "h (skip)" via=skip2 with
+    state ln2,ffn,add2 active
+    callout add2 "out = h + FFN(LN(h))"
+  step grad-highway "Identity skips form a gradient highway"
+    "During backprop across 24 stacked blocks, `∂(x + F(x))/∂x = 1 + ∂F/∂x`. The `+1` path carries strong gradients all the way back to Layer 1 (`0.84`)."
+    send add2 > add1 "grad" via=skip2
+    send add1 > x "grad" via=skip1
+    label grads#layer-12 "0.91"
+    label grads#layer-1 "0.84" with
+    label grads#status "healthy" with
+    state x,ln1,mha,add1,ln2,ffn,add2 success
+    callout x "Gradients reach Layer 1 intact"
+
+scenario no-residual "Residual connections removed" from=pre-ln/attn-sublayer
+  step drop-skips "Remove both residual shortcuts"
+    "Delete the skip connections (`x → Add` and `h → Add`). Every layer now feeds purely sequentially: `out = FFN(LN(MHA(LN(x))))` with no identity bypass."
+    hide skip1,skip2
+    send mha > add1 "no +x"
+    send add1 > ln2
+    send ln2 > ffn
+    send ffn > add2 "no +h"
+    state add1,add2 warning
+    callout add1 "No identity shortcut"
+  step vanish "Gradients decay through 24 sub-layers"
+    "Without `+1` shortcuts, backprop multiplies 24 non-linear Jacobians in series. Gradient norm shrinks from `1.00` at Layer 24 to `0.04` at Layer 12 and `0.0001` at Layer 1."
+    detail "As He et al. (2015) demonstrated with plain deep networks, forcing stacked non-linear layers to approximate even an identity mapping creates severe optimisation degradation—training error rises as depth increases, independent of overfitting."
+    label grads#layer-12 "0.04"
+    label grads#layer-1 "0.0001" with
+    label grads#status "vanished" with
+    state add2,ffn,ln2,add1,mha,ln1 error
+    effect x shake
+    callout x "Early layers get ~0 gradient"
+  step degrade "Deep stack fails to train (degradation)"
+    "Early token representations barely move while top layers thrash. Deeper models end up with higher training loss than shallow ones until residuals are restored."
+    state x error
+    callout grads "Training stalls across depth"

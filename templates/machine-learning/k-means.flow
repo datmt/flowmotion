@@ -1,0 +1,84 @@
+flow "K-Means clustering"
+summary "Alternates nearest-centroid assignment and mean recomputation to minimise within-cluster inertia, and traps in poor local minima when initial centroids start poorly."
+tags clustering unsupervised k-means
+level beginner
+source "https://scikit-learn.org/stable/modules/clustering.html#k-means"
+source "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html"
+related machine-learning/gradient-descent
+
+layout direction=LR
+
+node init "Choose K centroids" service
+node assign "Assign nearest" service tone=primary
+node update "Recompute means" service
+node check "Centroids moved?" decision
+node done "Final clusters" state
+
+edge init > assign
+edge assign > update
+edge update > check
+edge check > assign dashed
+edge check > done
+
+array pts "Points (K = 3)" = 0 1 10 11 20 21
+array meta "Centroids & inertia" keys=c1,c2,c3,inertia = – – – –
+
+scenario lloyd "k-means++ init reaches global optimum"
+  step seed "k-means++ spreads initial centroids"
+    "Six 1D points form three natural pairs (`{0,1}`, `{10,11}`, `{20,21}`). **k-means++** picks centroids far apart (`c1 = 0`, `c2 = 10`, `c3 = 21`) instead of clustering them together."
+    detail "k-means++ picks the first centroid uniformly at random, then samples each subsequent centroid with probability proportional to its squared distance from the nearest existing centroid—making well-separated seeds far more likely."
+    state init active
+    label meta#c1 "0.0"
+    label meta#c2 "10.0" with
+    label meta#c3 "21.0" with
+    callout init "Well-separated initial seeds"
+  step assign-step "Assign each point to its nearest centroid"
+    "Lloyd's assignment step maps every point to its closest centroid: `{0, 1} → c1`, `{10, 11} → c2`, and `{20, 21} → c3`."
+    send init > assign "c1=0, c2=10, c3=21"
+    state assign active
+    state pts#0..1 active
+    state pts#2..3 warning
+    state pts#4..5 success
+  step update-step "Recompute each centroid as cluster mean"
+    "Each centroid moves to the arithmetic mean of its assigned points: `c1 = 0.5`, `c2 = 10.5`, `c3 = 20.5`. Total squared distance (**inertia**) drops to **1.5**."
+    send assign > update "3 clusters"
+    label meta#c1 "0.5"
+    label meta#c2 "10.5" with
+    label meta#c3 "20.5" with
+    label meta#inertia "1.5" with
+    state update active
+  step converge "No assignments change: converged!"
+    "Re-checking distances yields identical assignments, so Lloyd's algorithm terminates cleanly at the global optimum (`inertia = 1.5`)."
+    send update > check "Stable means"
+    send check > done "Converged"
+    state init,assign,update,check,done success
+    callout done "Optimal inertia = 1.5"
+
+scenario bad-init "Bad random init traps in local minimum" from=lloyd/seed
+  step bad-seed "Random init places two seeds in one cluster"
+    "Naive random seeding picks `c1 = 0`, `c2 = 1`, and `c3 = 11`—two centroids land inside `{0, 1}`, leaving only one centroid for both `{10, 11}` and `{20, 21}`."
+    label meta#c1 "0.0"
+    label meta#c2 "1.0" with
+    label meta#c3 "11.0" with
+    state init warning
+    callout init "c1 & c2 collide in left pair!"
+  step bad-assign "Right two clusters merge under c3"
+    "Nearest-centroid assignment puts `0 → c1`, `1 → c2`, and forces all four right points (`10, 11, 20, 21`) into `c3` because `10` is closer to `11` than to `1`."
+    send init > assign "c1=0, c2=1, c3=11"
+    state pts#0 active
+    state pts#1 warning
+    state pts#2..5 error
+    state assign warning
+  step local-min "Trapped in fixed-point local minimum"
+    "Updating means yields `c1 = 0.0`, `c2 = 1.0`, `c3 = 15.5` (`inertia = **101.0**`, 67× worse!). Because `10` is still closer to `15.5` than to `1.0`, nothing moves—Lloyd's stops trapped!"
+    detail "K-Means inertia is non-convex, so Lloyd's algorithm guarantees convergence only to a local minimum, not the global one. Using `init='k-means++'` and multiple restarts (`n_init`) lets scikit-learn keep the run with lowest inertia."
+    send assign > update "Skewed clusters"
+    send update > check "0 moves"
+    send check > done "Stuck!"
+    label meta#c1 "0.0"
+    label meta#c2 "1.0" with
+    label meta#c3 "15.5" with
+    label meta#inertia "101.0" with
+    state update,check,done error
+    effect done shake
+    callout done "Trapped: inertia 101.0 vs 1.5"

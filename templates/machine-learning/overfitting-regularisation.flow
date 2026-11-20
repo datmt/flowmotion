@@ -1,0 +1,82 @@
+flow "Overfitting and regularisation"
+summary "L2 regularisation and early stopping keep validation loss low as training progresses, while an unconstrained model memorises noise."
+tags regularization overfitting generalization
+level beginner
+source "https://scikit-learn.org/stable/modules/linear_model.html#ridge-regression-and-classification"
+source "http://neuralnetworksanddeeplearning.com/chap3.html"
+related machine-learning/gradient-descent machine-learning/backprop
+
+layout direction=LR
+
+node data "Dataset split" db
+node train "Training fit" service tone=primary
+node reg "L2 penalty + stop" decision
+node val "Validation eval" service
+node deploy "Model checkpoint" state
+edge data > train
+edge data > val
+edge train > reg
+edge reg > val
+edge val > deploy
+
+array metrics "Training vs Validation" keys=epoch,train-loss,val-loss,w-norm = 0 0.85 0.86 1.0
+
+scenario regularised "Regularised model generalises"
+  step split "Hold out a validation set"
+    "Split data into a training set (for updates) and a held-out validation set (for honest generalisation checks). Initialise small weights (`‖w‖ = 1.0`)."
+    state data active
+    send data > train "Train split"
+    send data > val "Val split" with
+    callout val "Never used for weight updates"
+  step early-epochs "Early epochs learn real signal"
+    "By epoch 10, both training loss (`0.24`) and validation loss (`0.27`) drop together. The model is capturing genuine patterns shared across splits."
+    label metrics#epoch "10"
+    label metrics#train-loss "0.24" with
+    label metrics#val-loss "0.27" with
+    label metrics#w-norm "3.8" with
+    state train,val active
+    send train > reg "Epoch 10 weights"
+    send reg > val "Evaluate"
+  step apply-l2 "L2 penalty restrains weight growth"
+    "Adding `α·‖w‖²` (Ridge / weight decay) penalises large coefficients unless they substantially reduce error, keeping the fitted function smooth."
+    detail "In L2 regularisation, the objective becomes `loss + alpha * sum(w_j^2)`. Each update shrinks weights slightly toward zero, trading a small amount of bias for a large drop in variance on noisy or collinear features."
+    state reg active
+    label metrics#epoch "20"
+    label metrics#train-loss "0.18" with
+    label metrics#val-loss "0.21" with
+    label metrics#w-norm "4.4" with
+    callout reg "Shrinks weights, lowers variance"
+  step early-stop "Early stopping saves best checkpoint"
+    "Validation loss reaches its minimum (`0.21`) and flattens. Early stopping halts training and promotes this checkpoint with a narrow train–val gap."
+    send val > deploy "Best checkpoint"
+    state reg,val,deploy success
+    callout deploy "Low train–val gap (0.18 vs 0.21)"
+
+scenario overfit "No regularisation: overfits training noise" from=regularised/early-epochs
+  step disable-reg "Remove penalty and keep training"
+    "Set `α = 0` and ignore validation stopping. Free to grow (`‖w‖ = 14.6`), the model bends sharply to fit random noise in individual training samples."
+    state reg disabled
+    label metrics#epoch "40"
+    label metrics#train-loss "0.06" with
+    label metrics#val-loss "0.45" with
+    label metrics#w-norm "14.6" with
+    send train > reg "Unconstrained"
+    send reg > val "Evaluate"
+    state train active
+    state val warning
+    callout val "Val loss rising while train drops!"
+  step diverge-curves "Validation loss rebounds sharply"
+    "By epoch 80, training loss hits **0.02**, but validation loss climbs to **0.68** (`‖w‖ = 26.2`). The model has memorised the training set instead of generalising."
+    detail "This divergence is the classic signature of overfitting: low bias on training points paired with high variance on unseen inputs. The extra capacity fits sampling noise that does not repeat in the validation split."
+    label metrics#epoch "80"
+    label metrics#train-loss "0.02" with
+    label metrics#val-loss "0.68" with
+    label metrics#w-norm "26.2" with
+    state val error
+    effect val shake
+    callout metrics "Train 0.02 vs Val 0.68"
+  step bad-deploy "Fails on unseen production data"
+    "Deploying the final epoch ships a brittle, high-variance model. Slight input shifts cause wild predictions despite near-zero training error."
+    send val > deploy "Overfit weights"
+    state deploy error
+    callout deploy "High variance on new data"

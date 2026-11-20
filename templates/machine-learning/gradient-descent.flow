@@ -1,0 +1,93 @@
+flow "Gradient descent"
+summary "Iteratively nudges parameters opposite the loss gradient to reach a minimum, and diverges when the learning rate overshoots."
+tags optimization gradients training
+level beginner
+source "https://arxiv.org/abs/1609.04747"
+source "http://neuralnetworksanddeeplearning.com/chap1.html"
+related machine-learning/backprop machine-learning/sgd-momentum-adam
+
+layout direction=LR
+
+node param "Parameter w" value tone=primary
+node loss "Loss L(w)" service
+node grad "Gradient dL/dw" service
+node update "Update rule" state
+edge param > loss
+edge loss > grad
+edge grad > update
+edge update > param
+
+array vars "State: L(w) = (w − 3)²" keys=w,loss,grad,lr = 0.00 9.00 – 0.25
+
+code loop python "Gradient descent step"
+  | # L(w) = (w - 3)**2
+  | grad = 2 * (w - 3)
+  | w = w - lr * grad
+
+scenario converge "Converge with lr = 0.25"
+  step init "Start away from the minimum"
+    "Minimise `L(w) = (w − 3)²` starting at `w = 0.00`, where `L = 9.00`. The true minimum is at `w* = 3`, with learning rate `lr = 0.25`."
+    detail "Gradient descent only observes the local value and slope of the objective at the current parameter `w`. For this convex quadratic, the exact derivative is `dL/dw = 2(w - 3)`, which points uphill whenever `w > 3` and downhill whenever `w < 3`."
+    highlight loop "1"
+    state param active
+    callout param "Target minimum: w* = 3"
+  step step-1 "Step 1: compute slope and move downhill"
+    "At `w = 0.00`, the slope is `dL/dw = −6.00`. Stepping opposite the gradient gives `w = 0 − 0.25·(−6) = **1.50**`, cutting loss from `9.00` to **2.25**."
+    highlight loop "2-3"
+    send param > loss "w = 0.00"
+    send loss > grad "L = 9.00"
+    label vars#grad "−6.00" with
+    send grad > update "−6.00"
+    send update > param "w = 1.50"
+    label vars#w "1.50" with
+    label vars#loss "2.25" with
+    state loss,grad,update active
+  step step-2 "Step 2: smaller slope, smaller step"
+    "At `w = 1.50`, the slope halves to `−3.00`. The same `lr = 0.25` now produces a gentler step to `w = **2.25**`, dropping loss to **0.56**."
+    highlight loop "2-3"
+    send param > loss "w = 1.50"
+    send loss > grad "L = 2.25"
+    label vars#grad "−3.00" with
+    send grad > update "−3.00"
+    send update > param "w = 2.25"
+    label vars#w "2.25" with
+    label vars#loss "0.56" with
+  step step-3 "Step 3: settle near the minimum"
+    "At `w = 2.25`, `dL/dw = −1.50`, updating `w` to **2.63** (`L = 0.14`). Each step halves the remaining error, converging smoothly to `w* = 3`."
+    detail "For a quadratic `L(w) = (w - 3)^2` with second derivative `2`, each iteration multiplies the error `(w - 3)` by `(1 - 2 * lr)`. Whenever `0 < lr < 1`, `|1 - 2 * lr| < 1` so the error shrinks geometrically toward zero."
+    highlight loop "2-3"
+    send grad > update "−1.50"
+    label vars#grad "−1.50" with
+    send update > param "w = 2.63"
+    label vars#w "2.63" with
+    label vars#loss "0.14" with
+    state param,loss,grad,update success
+    callout param "Error halves every step"
+
+scenario lr-too-high "Learning rate too high: overshoot and diverge" from=converge/init
+  step overshoot-1 "Step 1 with lr = 1.2: leap past the minimum"
+    "Raise `lr` to **1.2**. From `w = 0.00` (`dL/dw = −6.00`), the update leaps to `w = 0 − 1.2·(−6) = **7.20**` — far past `w* = 3`, nearly doubling loss to **17.64**."
+    highlight loop "2-3"
+    label vars#lr "1.20"
+    send grad > update "−6.00"
+    label vars#grad "−6.00" with
+    send update > param "w = 7.20"
+    label vars#w "7.20" with
+    label vars#loss "17.64" with
+    state param,loss warning
+    callout loss "Loss doubled: 9.00 → 17.64"
+  step overshoot-2 "Step 2: steeper slope flings w back across"
+    "Further from the minimum, the gradient is even steeper: `dL/dw = +8.40`. Updating with `lr = 1.2` flings `w` to **−2.88**, pushing loss up to **34.57**."
+    highlight loop "2-3"
+    send grad > update "+8.40"
+    label vars#grad "+8.40" with
+    send update > param "w = −2.88"
+    label vars#w "−2.88" with
+    label vars#loss "34.57" with
+    state param,loss,update error
+    effect param shake
+  step diverge "Divergence: error grows 1.4× every step"
+    "Because `|1 − 2·lr| = 1.4 > 1`, every update reverses sign and amplifies the distance from `w* = 3` by 40%. Loss explodes toward infinity instead of converging."
+    detail "The gradient gives only the local direction of steepest ascent, not how far the linear approximation stays valid. When `lr` exceeds `2 / L_smooth` (here `2 / 2 = 1.0`), the quadratic curvature causes the step to land higher on the opposite wall than where it started."
+    state grad error
+    callout loss "Diverges to +∞"

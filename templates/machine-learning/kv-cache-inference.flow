@@ -1,0 +1,79 @@
+flow "KV cache in autoregressive inference"
+summary "Caches past attention keys and values in GPU memory so each decoded token takes linear work instead of quadratic recomputation, until full VRAM forces eviction."
+tags llm inference kv-cache
+level advanced
+source "https://arxiv.org/abs/2211.05102"
+source "https://arxiv.org/abs/2309.06180"
+related machine-learning/attention machine-learning/transformer-block
+
+layout direction=LR
+
+node tok "Current token" value
+node qkv "Project q, k, v" service
+node cache "KV Cache (VRAM)" db tone=primary
+node attn "Causal attention" service
+node out "Next token" state
+
+edge tok > qkv
+edge qkv > cache
+edge qkv > attn
+edge cache > attn
+edge attn > out
+edge out > tok dashed
+
+array slots "KV Cache slots (cap = 4)" = – – – –
+
+scenario decode "Prefill once, then reuse cached KV per token"
+  step prefill "Prefill prompt in parallel"
+    "During **prefill**, prompt tokens (`The`, `cat`) run through the Transformer in parallel. Their Key and Value vectors are stored in VRAM cache slots 0 and 1."
+    send tok > qkv "The, cat"
+    send qkv > cache "Write KV(0..1)"
+    values slots = KV:The KV:cat – –
+    state tok,qkv,cache active
+    callout cache "Prompt KV cached once"
+  step decode-1 "Decode step 1: compute only 1 new token"
+    "The model emits `sat` and feeds it back. Instead of re-running `The cat`, it projects only `q, k, v` for `sat`, appends `KV:sat`, and attends over slots 0–2."
+    detail "Because causal attention prevents earlier tokens from attending to later ones, the Key and Value tensors of past tokens never change as new tokens are generated. Caching them eliminates redundant `O(t^2)` projection work across all layers."
+    send out > tok "sat"
+    send tok > qkv "sat (1 token)"
+    send qkv > cache "Append KV:sat"
+    send cache > attn "KV(0..2)" with
+    send qkv > attn "q(sat)" with
+    values slots = KV:The KV:cat KV:sat –
+    state attn,out active
+  step decode-2 "Decode step 2: stream cached KV from HBM"
+    "Next token `on` projects one query `q(on)`, appends `KV:on` to slot 3, and reads all 4 cached KV entries. Decode work grows linearly (`O(t)`) per step."
+    send out > tok "on"
+    send tok > qkv "on (1 token)"
+    send qkv > cache "Append KV:on"
+    send cache > attn "KV(0..3)" with
+    values slots = KV:The KV:cat KV:sat KV:on
+    state slots#0..3 active
+  step memory-bound "Fast decode, but VRAM-capacity bound"
+    "KV caching slashes compute FLOPs, turning decoding from compute-bound into **memory-bandwidth and capacity bound** as sequence length and batch size grow."
+    send attn > out "the"
+    state tok,qkv,cache,attn,out success
+    callout cache "Cache full: 4 / 4 slots used"
+
+scenario eviction "VRAM full: cache eviction or preemption" from=decode/decode-2
+  step vram-full "New token hits VRAM capacity ceiling"
+    "Token `the` arrives, but all 4 VRAM KV slots are occupied (or fragmented by contiguous pre-allocation). There is no free slot to store `KV:the`."
+    send out > tok "the"
+    send tok > qkv "the"
+    send qkv > cache "Need slot!"
+    state cache,slots#0..3 warning
+    effect cache shake
+    callout cache "VRAM full: 0 free slots"
+  step evict "Evict old KV block or swap/preempt"
+    "Under memory pressure, the engine must either **evict** an older entry (`KV:The` via sliding window/LRU), **swap** blocks to CPU RAM, or **preempt** and recompute later."
+    detail "In vLLM's PagedAttention (Kwon et al., 2023), KV caches are stored in non-contiguous fixed-size blocks (reducing fragmentation waste under 4%). When physical blocks still run out, vLLM preempts lower-priority requests via CPU swapping or eviction + recomputation."
+    values slots = KV:cat KV:sat KV:on KV:the
+    state slots#0 error
+    state cache error
+    callout slots "KV:The evicted from VRAM!"
+  step impact "Context loss or recomputation latency spike"
+    "Evicting early KV entries blinds attention to dropped prefix tokens, hurting long-context accuracy; preempting and recomputing preserves exactness at the cost of latency spikes."
+    send cache > attn "Truncated KV"
+    send attn > out "Degraded output"
+    state attn,out error
+    callout out "Prefix lost or tail latency spikes"

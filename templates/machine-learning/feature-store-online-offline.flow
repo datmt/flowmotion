@@ -1,0 +1,74 @@
+flow "Feature store: online and offline"
+summary "Shares one declarative feature definition across point-in-time offline training joins and materialised low-latency online serving, eliminating training/serving skew."
+tags mlops feature-store serving
+level advanced
+source "https://docs.feast.dev/getting-started/architecture"
+source "https://docs.feast.dev/getting-started/concepts/point-in-time-joins"
+related machine-learning/train-test-leakage
+
+layout direction=LR
+
+node defs "Feature registry" service tone=primary
+node offline "Offline store (Warehouse)" db
+node train "Model training" service
+node online "Online store (Redis)" db
+node serve "Inference API" service
+
+edge defs > offline
+edge offline > train
+edge offline > online
+edge defs > online
+edge online > serve
+edge train > serve
+
+array feat "Feature: user_7d_spend" keys=train-val,serve-val,skew = – – none
+
+scenario unified "Single definition, point-in-time join, materialise"
+  step define-once "Declare feature view once"
+    "Define `user_7d_spend` once in the central feature registry so both historical batch extraction and online lookup obey identical semantics."
+    state defs active
+    send defs > offline "Schema & logic"
+    send defs > online "Schema & logic" with
+    callout defs "Single source of truth"
+  step pit-join "Point-in-time join builds leak-free training set"
+    "`get_historical_features` joins each training event timestamp against the latest offline value *at or before* that moment (`<= event_timestamp`), preventing future leakage."
+    detail "Without point-in-time joins, joining a training spine on entity ID alone pulls future feature updates into past events. Feast's temporal join reproduces the exact state known at each historical prediction timestamp."
+    send offline > train "PIT training rows"
+    label feat#train-val "$142.50"
+    state offline,train active
+    callout offline "Feature ts <= event_timestamp"
+  step materialise "Materialise latest values to online store"
+    "Scheduled `feast materialize` reads the latest feature state per entity from the offline warehouse and writes it to the low-latency online key-value store (Redis/DynamoDB)."
+    send offline > online "feast materialize"
+    state online active
+    callout online "Latest value per entity only"
+  step serve-match "Sub-millisecond serving matches training exactly"
+    "At inference time, `get_online_features` returns `$142.50` in milliseconds—matching training semantics exactly with zero training/serving skew."
+    send train > serve "Model artifact"
+    send online > serve "$142.50" with
+    label feat#serve-val "$142.50"
+    label feat#skew "0%" with
+    state defs,offline,train,online,serve success
+    callout feat "Identical train & serve values"
+
+scenario training-serving-skew "Separate pipelines cause training/serving skew" from=unified/define-once
+  step split-code "Two teams implement the same feature separately"
+    "Without a shared feature store, data science computes `user_7d_spend` in batch Pandas (UTC days), while backend rewrites it in SQL (rolling 168h, excluding refunds)."
+    state defs disabled
+    send offline > train "Pandas: $142.50"
+    send online > serve "SQL: $198.00" with
+    label feat#train-val "$142.50"
+    label feat#serve-val "$198.00" with
+    label feat#skew "+39%!" with
+    state train,serve warning
+    callout serve "Different code path online!"
+  step silent-drift "No exception fires — only silent feature drift"
+    "Both pipelines output valid floats for the exact same user, so schemas pass and no alert triggers. Yet the model receives shifted inputs (`$198.00` vs `$142.50`)."
+    state online,serve error
+    effect serve shake
+    callout feat "Silent +39% skew!"
+  step degraded-preds "Production accuracy silently degrades"
+    "Offline validation looked strong, yet live predictions misfire on every skewed feature. Fixing it demands reconciling two diverging codebases across batch and serving teams."
+    detail "Training/serving skew is especially insidious because it produces valid numeric outputs with zero runtime errors. Centralising definitions, materialising from a single pipeline, and logging served features for parity checks catch skew early."
+    state train error
+    callout train "Offline metrics hide live decay"

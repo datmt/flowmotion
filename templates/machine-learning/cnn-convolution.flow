@@ -1,0 +1,75 @@
+flow "CNN convolution and pooling"
+summary "Slides a learned filter with zero-padding to preserve feature map alignment before pooling downsamples, whereas mismatched stride and padding silently drop border pixels."
+tags cnn computer-vision deep-learning
+level beginner
+source "https://cs231n.github.io/convolutional-networks/"
+source "https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv2d.html"
+related machine-learning/backprop
+
+layout direction=LR
+
+node inp "Input 4×4" value
+node pad "Zero-pad (P)" service
+node conv "3×3 Conv (S)" service tone=primary
+node pool "2×2 MaxPool" service
+node feat "Feature map" state
+
+edge inp > pad
+edge pad > conv
+edge conv > pool
+edge pool > feat
+
+array dims "Formula: ⌊(W−F+2P)/S⌋ + 1" keys=w-in,kernel,pad,stride,w-out = 4 3 1 1 4
+grid out "Pooled map (2×2)"
+  rowlabels r0 r1
+  collabels c0 c1
+  row – –
+  row – –
+
+scenario conv-pool "Same-padding convolution + 2×2 max pooling"
+  step pad-input "Add zero-padding around borders"
+    "A `4×4` input receives `P = 1` zero-padding on all sides (`6×6` padded). With `P = (F − 1) / 2 = 1`, a `3×3` kernel centres cleanly on every border pixel."
+    send inp > pad "4×4 grid"
+    state inp,pad active
+    callout pad "P = 1 → 6×6 padded input"
+  step slide "Slide 3×3 filter with stride S = 1"
+    "Applying `(4 − 3 + 2·1) / 1 + 1 = **4**`, the convolution outputs a `4×4` activation map—exact \"same\" spatial size with shared filter weights across positions."
+    detail "Every output cell computes the dot product of the same 3x3 learned kernel against a local 3x3 patch (plus bias). Weight sharing cuts parameter count drastically compared to dense layers and makes feature detection translation-equivariant."
+    send pad > conv "6×6 padded"
+    state conv active
+    callout conv "Output = 4×4 (exact integer)"
+  step maxpool "Downsample with 2×2 max pooling"
+    "A `2×2` MaxPool (`S = 2`) picks the strongest activation inside each non-overlapping `2×2` window, halving spatial size to `2×2` (`[8, 6; 4, 9]`)."
+    send conv > pool "4×4 activations"
+    label out#0.0 "8"
+    label out#0.1 "6" with
+    label out#1.0 "4" with
+    label out#1.1 "9" with
+    state pool active
+  step output "Emit compact, aligned feature map"
+    "The resulting `2×2` map retains dominant local features while cutting spatial activations by 4× for deeper layers."
+    send pool > feat "2×2 map"
+    state inp,pad,conv,pool,feat success
+    callout feat "Clean 4×4 → 2×2 pipeline"
+
+scenario stride-padding-error "Stride/padding mismatch drops borders" from=conv-pool/pad-input
+  step bad-params "Drop padding (P = 0) and set stride S = 2"
+    "Change to `P = 0` and `S = 2` on the `4×4` input with a `3×3` filter. Plugging into `(W − F + 2P)/S + 1` gives `(4 − 3 + 0)/2 + 1 = **1.5**` — not an integer!"
+    label dims#pad "0"
+    label dims#stride "2" with
+    label dims#w-out "1 (⌊1.5⌋)" with
+    state pad disabled
+    state conv warning
+    callout conv "(4−3+0)/2 + 1 = 1.5!"
+  step floor-drop "Floor division silently discards borders"
+    "PyTorch `Conv2d` floors the fraction to `1×1`: the kernel stops after the top-left `3×3` patch, silently ignoring the rightmost column and bottom row!"
+    detail "Both CS231n and PyTorch's `Conv2d` specification use floor division `floor((W - F + 2P) / S) + 1` when strides do not tile the input evenly. No exception is raised during convolution; border pixels are simply dropped."
+    send pad > conv "4×4 unpadded"
+    state conv error
+    effect conv shake
+    callout conv "Right & bottom borders dropped"
+  step shape-crash "Downstream pooling fails on 1×1 map"
+    "Passing the `1×1` output into `2×2` MaxPool fails (`input size 1×1 smaller than kernel 2×2`)—or breaks residual skip-connection shape alignment."
+    send conv > pool "1×1 (too small!)"
+    state pool,feat error
+    callout pool "Shape error: 1×1 < 2×2 kernel"

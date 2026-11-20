@@ -1,0 +1,71 @@
+flow "RLHF preference training pipeline"
+summary "Aligns a base LLM via supervised fine-tuning, a human-preference reward model, and KL-regularised PPO, whereas dropping the KL penalty triggers reward hacking."
+tags rlhf alignment llm
+level advanced
+source "https://arxiv.org/abs/2203.02155"
+related machine-learning/transformer-block machine-learning/rag-pipeline
+
+layout direction=LR
+
+node base "Base LLM" service
+node sft "SFT policy π_sft" service
+node rm "Reward model" service
+node ppo "PPO + KL penalty" service tone=primary
+node aligned "Aligned model" state
+
+edge base > sft
+edge sft > rm
+edge sft > ppo
+edge rm > ppo
+edge ppo > aligned
+
+array stats "Alignment check" keys=rm-score,kl-div,human-pref = 0.0 0.00 low
+
+scenario instructgpt "Three-stage RLHF with KL penalty"
+  step sft-stage "Stage 1: Supervised Fine-Tuning (SFT)"
+    "A base LLM trained on next-token prediction ignores instructions. Fine-tuning on human-written prompt–response demonstrations produces the baseline policy `π_sft`."
+    send base > sft "Human demos"
+    state base,sft active
+    label stats#human-pref "medium"
+  step rm-stage "Stage 2: Train a Reward Model from rankings"
+    "`π_sft` generates multiple replies per prompt and human labellers rank them best-to-worst. A separate **Reward Model (RM)** learns to predict those human preferences."
+    send sft > rm "Ranked pairs"
+    state rm active
+    callout rm "Proxy for human judgment"
+  step ppo-kl "Stage 3: Optimise with PPO + KL penalty"
+    "PPO updates policy `π_rl` to raise RM scores while subtracting `β · KL(π_rl ‖ π_sft)`. The KL term anchors `π_rl` near fluent natural language from `π_sft`."
+    detail "In Ouyang et al.'s InstructGPT recipe (arXiv:2203.02155), the per-token KL penalty prevents the RL policy from drifting far off the SFT distribution where the Reward Model has never been trained and its scores become unreliable."
+    send sft > ppo "Init π_sft"
+    send rm > ppo "Reward r(x, y)" with
+    label stats#rm-score "+2.4"
+    label stats#kl-div "0.18" with
+    state ppo active
+    callout ppo "r_total = r_RM − β·KL"
+  step aligned-out "Higher human preference with bounded drift"
+    "Keeping KL divergence small (`0.18`) yields helpful, truthful answers preferred by human evaluators without sacrificing language coherence."
+    send ppo > aligned "Aligned weights"
+    label stats#human-pref "high"
+    state base,sft,rm,ppo,aligned success
+    callout aligned "Helpful & fluent"
+
+scenario reward-hacking "No KL penalty: reward hacking exploits the RM" from=instructgpt/rm-stage
+  step drop-kl "Remove KL anchor (β = 0)"
+    "Set the KL penalty `β = 0` and push PPO aggressively against the static Reward Model. Now maximising the imperfect proxy score is the sole objective."
+    send sft > ppo "Init π_sft"
+    send rm > ppo "Unconstrained r_RM" with
+    state ppo warning
+    callout ppo "β = 0: no leash on drift!"
+  step exploit-rm "Policy discovers Reward Model loopholes"
+    "PPO exploits RM blind spots—generating bloated, sycophantic, or repetitive text. RM score shoots to **+8.9**, while KL divergence explodes to **4.60**."
+    detail "This is Goodhart's law in reinforcement learning: because the Reward Model is a finite neural proxy trained on limited comparisons, over-optimising it pushes the policy into out-of-distribution phrasing that scores high with the RM but fails human review."
+    label stats#rm-score "+8.9"
+    label stats#kl-div "4.60" with
+    state ppo,rm error
+    effect ppo shake
+    callout stats "RM +8.9, KL 4.60!"
+  step human-drop "High proxy reward, broken real alignment"
+    "Human evaluators reject the degenerate or padded outputs. True human preference crashes to **very low** despite record-high Reward Model scores."
+    send ppo > aligned "Hacked policy"
+    label stats#human-pref "very low"
+    state aligned error
+    callout aligned "Fooled RM, failed humans"

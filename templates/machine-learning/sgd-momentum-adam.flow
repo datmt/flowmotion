@@ -1,0 +1,75 @@
+flow "SGD, Momentum, and Adam"
+summary "Momentum cancels zig-zag gradients across steep ravines and Adam adds per-parameter scaling, whereas plain SGD oscillates."
+tags optimization adam momentum
+level intermediate
+source "https://arxiv.org/abs/1412.6980"
+source "https://arxiv.org/abs/1609.04747"
+source "https://docs.pytorch.org/docs/stable/generated/torch.optim.SGD.html"
+related machine-learning/gradient-descent machine-learning/backprop
+
+layout direction=LR
+
+node grad "Gradient (gx, gy)" value
+node mom "1st moment m" service
+node var "2nd moment v" service
+node upd "Parameter update" state tone=primary
+edge grad > mom
+edge grad > var
+edge mom > upd
+edge var > upd
+
+array state "Ravine: L = 0.5x² + 10y²" keys=x,y,gx,gy,step-x,step-y = −4.00 1.00 −4.0 20.0 – –
+
+scenario adam-flow "Momentum + adaptive scaling (Adam)"
+  step ravine "Ill-conditioned ravine"
+    "On `L(x, y) = 0.5x² + 10y²`, the canyon is 20× steeper along `y` than `x`. At `(−4.0, 1.0)`, `gx = −4.0` while `gy = +20.0`."
+    detail "Ravines are common in neural networks when features or layers operate on different curvature scales. The minimum sits at `(0, 0)`, so the optimiser must make steady progress along `x` without overshooting across `y`."
+    state grad active
+    callout grad "y is 5× steeper than x here"
+  step first-moment "Momentum smooths direction (β₁ = 0.9)"
+    "The first moment `m` keeps an exponential moving average of gradients. Consistent `x` gradients accumulate velocity, while opposing `y` signs cancel out."
+    send grad > mom "gx=−4, gy=+20"
+    state mom active
+    callout mom "m = β₁·m + (1−β₁)·g"
+  step second-moment "Adaptive scale normalises curvature (β₂ = 0.999)"
+    "Adam also tracks the moving average of squared gradients `v`. After bias correction, `√v̂` is `4.0` on `x` and `20.0` on `y`, measuring each axis's scale."
+    detail "Because `m` and `v` are initialised to zero, early estimates are biased toward zero. Kingma & Ba divide by `(1 - beta1^t)` and `(1 - beta2^t)` to compute unbiased estimates `m_hat` and `v_hat` before updating parameters."
+    send grad > var "gx²=16, gy²=400"
+    state var active
+    callout var "√v̂_x = 4, √v̂_y = 20"
+  step adaptive-step "Balanced per-axis update"
+    "Dividing `m̂` by `√v̂ + ε` normalises both slopes to unit magnitude (`−1` and `+1`). With `lr = 0.30`, both axes step smoothly (`+0.30`, `−0.30`) toward `(0, 0)`."
+    send mom > upd "m̂_x=−4, m̂_y=+20"
+    send var > upd "√v̂_x=4, √v̂_y=20" with
+    label state#step-x "+0.30"
+    label state#step-y "−0.30" with
+    label state#x "−3.70" with
+    label state#y "0.70" with
+    state upd,mom,var,grad success
+    callout upd "No zig-zag across y"
+
+scenario oscillation "Plain SGD oscillates across the ravine" from=adam-flow/ravine
+  step sgd-bounce-1 "Step 1: one global lr overshoots y"
+    "Without momentum or scaling, plain SGD (`lr = 0.09`) applies one step size everywhere: `x` creeps to `−3.64`, while `y` leaps from `+1.00` across to **−0.80**."
+    state mom,var disabled
+    send grad > mom "bypass"
+    send mom > upd "lr = 0.09"
+    label state#step-x "+0.36"
+    label state#step-y "−1.80" with
+    label state#x "−3.64" with
+    label state#y "−0.80" with
+    state upd warning
+    callout upd "y flipped sign: +1.0 → −0.8"
+  step sgd-bounce-2 "Step 2: gradient flips and bounces back"
+    "Now `gy = −16.0` points the opposite way. SGD bounces `y` back across the canyon to **+0.64**, while `x` inches slowly to `−3.31`."
+    label state#gx "−3.6"
+    label state#gy "−16.0" with
+    label state#step-x "+0.33" with
+    label state#step-y "+1.44" with
+    label state#x "−3.31" with
+    label state#y "+0.64" with
+    state upd,grad error
+    effect upd shake
+  step sgd-stall "Trapped between oscillation and crawling"
+    "Raising `lr` to speed up `x` makes `y` diverge (`lr ≥ 0.10` explodes); shrinking `lr` to calm `y` stalls `x`. Momentum and Adam break this coupling."
+    callout grad "One lr cannot fit both axes"

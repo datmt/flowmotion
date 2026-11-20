@@ -1,0 +1,72 @@
+flow "RAG pipeline (Retrieval-Augmented Generation)"
+summary "Fetches relevant external passages to ground an LLM response in verifiable facts, and degrades into hallucinations when retrieval pulls irrelevant chunks."
+tags rag retrieval llm
+level intermediate
+source "https://arxiv.org/abs/2005.11401"
+related machine-learning/attention machine-learning/tokenization-bpe
+
+layout direction=LR
+
+node user "User query" actor
+node enc "Query encoder" service
+node idx "Vector index" db
+node ctx "Context builder" decision
+node llm "Generator LLM" service tone=primary
+node out "Answer" state
+
+edge user > enc
+edge enc > idx
+edge idx > ctx
+edge ctx > llm
+edge user > llm dashed
+edge llm > out
+
+array hits "Top-3 retrieved passages" = – – –
+
+scenario grounded "Retrieve relevant passages, then generate"
+  step encode-query "Encode the user query"
+    "The user asks: `\"What is the refund window?\"`. The dense retriever encodes the query into an embedding vector to search external non-parametric memory."
+    state user,enc active
+    send user > enc "Refund window?"
+    callout enc "Dense query vector q(x)"
+  step retrieve "Fetch top-k nearest passages"
+    "Nearest-neighbour search in the vector index retrieves the top-3 matching chunks: `Policy: 30 days`, `Return rules`, and `Shipping FAQ`."
+    detail "In Lewis et al. (2020), RAG pairs a non-parametric dense index (Dense Passage Retrieval over document embeddings) with a parametric seq2seq generator so knowledge can be updated by rebuilding the index without retraining model weights."
+    send enc > idx "Top-3 search"
+    send idx > ctx "3 passages"
+    values hits = "Policy: 30d" "Return rules" "Shipping FAQ"
+    state idx,hits#0 active
+    state hits#0 success
+  step augment "Combine query with retrieved context"
+    "The context builder packs the top passages alongside the original user question into one grounded prompt, supplying up-to-date facts and provenance."
+    send ctx > llm "Context chunks"
+    send user > llm "Original query" with
+    state ctx,llm active
+  step generate "Generate grounded answer"
+    "Conditioned on both query and retrieved policy, the generator answers `\"30 days\"` with clear source grounding instead of relying on stale weights."
+    send llm > out "30-day window"
+    state user,enc,idx,ctx,llm,out success
+    callout out "Grounded in Policy doc"
+
+scenario irrelevant-retrieval "Irrelevant retrieval misleads generation" from=grounded/encode-query
+  step bad-hits "Retriever returns off-topic chunks"
+    "Poor chunking or vocabulary mismatch pulls top-3 irrelevant passages (`Gift cards`, `Store hours`, `Careers`) — none contain the refund policy."
+    send enc > idx "Top-3 search"
+    send idx > ctx "Off-topic hits"
+    values hits = "Gift cards" "Store hours" "Careers"
+    state idx,hits#0..2 warning
+    callout idx "Zero relevant passages!"
+  step no-gate "Unfiltered noise enters the prompt"
+    "Without a relevance threshold or reranker gate, all three unrelated passages are stuffed into the prompt context, crowding the generator with noise."
+    send ctx > llm "Irrelevant chunks"
+    send user > llm "Original query" with
+    state ctx error
+    state llm warning
+    callout ctx "No score threshold or reranker"
+  step hallucinate "Generator guesses or hallucinates"
+    "Lacking the actual policy in context, the LLM falls back on parametric guesswork or blends unrelated snippets, outputting a confident hallucination (`\"14 days\"`)."
+    detail "Lewis et al. noted that while marginalising over multiple passages helps when at least one relevant document is present, generation quality still depends heavily on retriever recall—when all top-k passages are off-topic, the generator cannot cite facts it never received."
+    send llm > out "14 days (wrong!)"
+    state llm,out error
+    effect out shake
+    callout out "Fluent but unsupported claim"

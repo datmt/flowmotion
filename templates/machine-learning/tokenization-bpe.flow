@@ -1,0 +1,70 @@
+flow "Byte Pair Encoding (BPE) tokenisation"
+summary "Iteratively merges the most frequent adjacent symbol pairs into subword units so rare or unseen words split cleanly instead of collapsing to unknown tokens."
+tags tokenization bpe nlp
+level intermediate
+source "https://arxiv.org/abs/1508.07909"
+related machine-learning/attention machine-learning/transformer-block
+
+layout direction=LR
+
+node corpus "Training corpus" db
+node pairs "Count symbol pairs" service
+node merge "Merge top pair" service tone=primary
+node vocab "Merge table" db
+node enc "Subword encoder" state
+edge corpus > pairs
+edge pairs > merge
+edge merge > vocab
+edge vocab > enc
+
+array word "Encoding \"lowest\"" = l o w e s t
+array rules "Learned merges" =
+
+scenario train-encode "Learn BPE merges and encode subwords"
+  step init "Start from character vocabulary"
+    "Split every training word (`low`, `lower`, `newest`, `widest`) into individual characters plus an end-of-word marker. Base vocabulary contains only characters."
+    state corpus active
+    send corpus > pairs "Characters"
+    callout word "Starts as 6 single chars"
+  step merge-1 "Merge the most frequent adjacent pair"
+    "Count every adjacent symbol pair across the corpus. The top pairs (`l + o → lo`, `e + s → es`) merge into new subword symbols and join the ordered merge table."
+    send pairs > merge "Top: l+o, e+s"
+    send merge > vocab "Record merges"
+    values word = lo w es t
+    values rules = l+o→lo e+s→es
+    state pairs,merge active
+  step merge-2 "Repeat merges to form stems and suffixes"
+    "Subsequent passes merge `lo + w → low` and `es + t → est`. Common words become single tokens, while rarer inflections decompose into reusable stems and suffixes."
+    detail "Sennrich et al. (2015) adapted BPE from lossless data compression to neural machine translation. The number of merge operations is the single hyperparameter controlling vocabulary size: more merges keep more whole words intact at the cost of a larger embedding table."
+    send pairs > merge "Top: lo+w, es+t"
+    send merge > vocab "Append rules"
+    values word = low est
+    values rules = l+o→lo e+s→es lo+w→low es+t→est
+    state vocab active
+    callout word "lowest → [low, est]"
+  step encode "Greedy subword encoding at inference"
+    "At inference time, the encoder splits input text into characters and applies the learned merge table in order, turning `\"lowest\"` into two known tokens: `[\"low\", \"est\"]`."
+    send vocab > enc "Apply merges"
+    state corpus,pairs,merge,vocab,enc success
+    callout enc "2 tokens instead of 6 chars"
+
+scenario unknown-word "Unseen word: word-level <unk> vs BPE fallback" from=train-encode/merge-2
+  step word-oov "Fixed word vocabulary fails with <unk>"
+    "When unseen compound `\"lowermost\"` arrives, a fixed word-level vocabulary has no entry and replaces the entire word with `<unk>`, erasing both stem and meaning."
+    values word = <unk>
+    state word#0 error
+    state enc error
+    effect enc shake
+    callout enc "Word vocab: meaning lost!"
+  step bpe-split "BPE composes unseen words from known subwords"
+    "BPE never needs `<unk>` for novel combinations: it applies its merge table to split `\"lowermost\"` into known pieces (`low`, `er`, `m`, `o`, `s`, `t`), preserving the `low` stem."
+    send vocab > enc "Apply merges"
+    values word = low er m o s t
+    state word#0..1 success
+    state enc warning
+    callout word "Decomposed cleanly, no <unk>"
+  step byte-fallback "Byte-level BPE eliminates <unk> completely"
+    "If a rare symbol or emoji sits outside the character alphabet, byte-level BPE (as in GPT-2) operates on raw UTF-8 bytes so *any* input encodes without `<unk>`."
+    detail "Character-level BPE can still emit `<unk>` on unseen Unicode characters. Byte-level BPE starts from the 256 raw byte values as its base alphabet, guaranteeing 100% open-vocabulary coverage across scripts, emojis, and code."
+    state enc,vocab success
+    callout vocab "Base alphabet = 256 UTF-8 bytes"

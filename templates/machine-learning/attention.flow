@@ -1,0 +1,95 @@
+flow "Scaled dot-product self-attention"
+summary "Every token queries all keys to build context-weighted values, and decoders add a causal mask before softmax to hide future tokens."
+tags transformers attention deep-learning
+level advanced
+source "https://arxiv.org/abs/1706.03762"
+related machine-learning/transformer-block machine-learning/backprop
+
+layout direction=LR
+
+node tokens "Tokens: The cat sat" value
+node qkv "Project Q, K, V" service
+node scores "QKᵀ / √d_k" service tone=primary
+node soft "Softmax" service
+node out "Weighted V" state
+edge tokens > qkv
+edge qkv > scores
+edge scores > soft
+edge soft > out
+
+grid attn "Attention matrix (Q rows × K cols)"
+  rowlabels The cat sat
+  collabels The cat sat
+  row – – –
+  row – – –
+  row – – –
+
+scenario bidirectional "Bidirectional self-attention"
+  step project "Project embeddings into Q, K, and V"
+    "Each token embedding (`The`, `cat`, `sat`) is linearly projected into a Query (`Q`), Key (`K`), and Value (`V`) vector so every token can search the sequence."
+    send tokens > qkv "3 embeddings"
+    state tokens,qkv active
+    callout qkv "Q = XWq, K = XWk, V = XWv"
+  step dot-scale "Score compatibility and scale by √d_k"
+    "Compute dot products `QKᵀ` and divide by `√d_k`. Without scaling, large `d_k` produces huge dot products that push softmax into tiny-gradient saturation."
+    detail "If query and key components are independent with mean 0 and variance 1, their dot product has variance `d_k`. Dividing by `sqrt(d_k)` restores unit variance so softmax weights remain smooth and gradients stay healthy during training."
+    send qkv > scores "Q, K"
+    state scores active
+    label attn#0.0 "1.2"
+    label attn#0.1 "0.8" with
+    label attn#0.2 "0.4" with
+    label attn#1.0 "0.9" with
+    label attn#1.1 "1.6" with
+    label attn#1.2 "1.1" with
+    label attn#2.0 "0.5" with
+    label attn#2.1 "1.8" with
+    label attn#2.2 "1.2" with
+  step weights "Normalise each row with softmax"
+    "Softmax converts each query's row into positive weights summing to `1.00`. In an encoder, every token attends across the full sequence (`The`, `cat`, and `sat`)."
+    send scores > soft "Scaled logits"
+    state soft active
+    label attn#0.0 "0.47"
+    label attn#0.1 "0.32" with
+    label attn#0.2 "0.21" with
+    label attn#1.0 "0.24" with
+    label attn#1.1 "0.47" with
+    label attn#1.2 "0.29" with
+    label attn#2.0 "0.15" with
+    label attn#2.1 "0.55" with
+    label attn#2.2 "0.30" with
+    state attn#2.1 success
+  step aggregate "Combine values into contextual outputs"
+    "Multiply the attention matrix by `V`: the output for `sat` mixes `55%` of `cat`, `30%` of `sat`, and `15%` of `The` in one parallel matrix multiply."
+    send soft > out "Weights × V"
+    state out,soft,scores,qkv,tokens success
+    callout out "sat attends 55% to cat"
+
+scenario causal-mask "Decoder causal mask blocks future tokens" from=bidirectional/dot-scale
+  step leak-risk "Unmasked scores leak future tokens"
+    "In an autoregressive decoder predicting the next token, letting `The` read `cat` or `sat` (upper triangle) would let the model cheat during training."
+    state attn#0.1,attn#0.2,attn#1.2 error
+    effect scores shake
+    callout scores "Upper triangle = future tokens!"
+  step apply-mask "Mask future positions to −∞ before softmax"
+    "Add a causal mask setting every future position (`col > row`) to `−∞` *before* softmax. Past and current positions keep their scaled scores untouched."
+    detail "Masking must happen before softmax, not after: setting logits to `-inf` ensures `exp(-inf) = 0`, so softmax renormalises the remaining visible tokens to sum cleanly to 1.0 without leaking probability mass."
+    label attn#0.1 "−∞"
+    label attn#0.2 "−∞" with
+    label attn#1.2 "−∞" with
+    state attn#0.1,attn#0.2,attn#1.2 disabled
+    state scores warning
+    callout scores "Mask: j > i → −∞"
+  step masked-softmax "Softmax turns −∞ into exact 0.00"
+    "Now `The` attends `100%` to itself, `cat` blends only `The` and `cat`, and `sat` attends to all three. Future information is strictly blocked."
+    send scores > soft "Masked logits"
+    label attn#0.0 "1.00"
+    label attn#0.1 "0.00" with
+    label attn#0.2 "0.00" with
+    label attn#1.0 "0.33" with
+    label attn#1.1 "0.67" with
+    label attn#1.2 "0.00" with
+    label attn#2.0 "0.15" with
+    label attn#2.1 "0.55" with
+    label attn#2.2 "0.30" with
+    send soft > out "Causal output"
+    state soft,out success

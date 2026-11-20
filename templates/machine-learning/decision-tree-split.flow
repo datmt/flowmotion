@@ -1,0 +1,73 @@
+flow "Decision tree Gini split"
+summary "Greedily picks the threshold that minimises weighted Gini impurity and stops at max_depth, whereas an unbounded tree splits down to noisy 1-sample leaves."
+tags decision-trees classification gini
+level beginner
+source "https://scikit-learn.org/stable/modules/tree.html#classification"
+source "https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html"
+related machine-learning/overfitting-regularisation
+
+layout algorithm=tree direction=TB
+
+node root "Root: 6A, 6B" decision tone=primary
+node l1 "x < 5: 5A, 1B" decision
+node r1 "x ≥ 5: 1A, 5B" decision
+node ll "Leaf: 5A" state hidden
+node lr "Leaf: 1B (noise)" state hidden
+node rl "Leaf: 1A (noise)" state hidden
+node rr "Leaf: 5B" state hidden
+
+edge root > l1 "Yes"
+edge root > r1 "No"
+edge l1 > ll id=e-ll hidden
+edge l1 > lr id=e-lr hidden
+edge r1 > rl id=e-rl hidden
+edge r1 > rr id=e-rr hidden
+
+array stats "Tree metrics" keys=depth,gini,train-acc,val-acc = 0 0.50 50% 50%
+
+scenario pruned "Gini split with max_depth = 1"
+  step measure-root "Measure root Gini impurity"
+    "The root holds 12 samples split evenly (`6A, 6B`). **Gini impurity** `1 − (0.5² + 0.5²) = **0.50**` — maximum class mix for two classes."
+    state root active
+    callout root "Gini = 1 − (0.5² + 0.5²) = 0.50"
+  step split-root "Pick split with lowest weighted Gini"
+    "CART scans every feature threshold and picks `x < 5`: left (`5A, 1B`) and right (`1A, 5B`) each have `Gini = 1 − ((5/6)² + (1/6)²) = **0.28**`."
+    detail "CART greedily selects the single feature and threshold that minimises the sample-weighted Gini impurity of the two child nodes: `(n_L / n) * Gini(L) + (n_R / n) * Gini(R)`. Here the split cuts weighted impurity from `0.50` down to `0.28`."
+    send root > l1 "5A, 1B"
+    send root > r1 "1A, 5B" with
+    label stats#depth "1"
+    label stats#gini "0.28" with
+    label stats#train-acc "83%" with
+    label stats#val-acc "83%" with
+    state l1,r1 active
+  step stop-depth "Stop at max_depth = 1 to generalise"
+    "With `max_depth = 1`, splitting halts here: left predicts `A` and right predicts `B`. Both training and validation accuracy hold steady at **83%**."
+    state root,l1,r1 success
+    callout l1 "Predict A (5/6)"
+    callout r1 "Predict B (5/6)" with
+
+scenario overfit-depth "Unbounded max_depth = None overfits noise" from=pruned/split-root
+  step split-left "Unbounded tree isolates left outlier"
+    "With `max_depth = None` and `min_samples_leaf = 1`, CART splits `5A, 1B` further to isolate the single noisy `1B` point into its own pure leaf."
+    show ll,lr,e-ll,e-lr
+    send l1 > ll "5A"
+    send l1 > lr "1B" with
+    label stats#depth "2"
+    label stats#gini "0.14" with
+    state lr warning
+    callout lr "1-sample noise leaf!"
+  step split-right "Right branch also isolates its single outlier"
+    "The right child splits `1A, 5B` into pure leaves `1A` and `5B`. Every leaf now has `Gini = 0.00`, driving training accuracy to **100%**."
+    show rl,rr,e-rl,e-rr
+    send r1 > rl "1A"
+    send r1 > rr "5B" with
+    label stats#gini "0.00"
+    label stats#train-acc "100%" with
+    label stats#val-acc "67%" with
+    state rl,lr error
+    effect lr shake
+  step overfit-drop "Pure leaves memorise noise and hurt validation"
+    "Training accuracy hit `100%`, yet validation accuracy fell from `83%` to **67%**. Pruning via `max_depth`, `min_samples_leaf`, or `ccp_alpha` prevents carving rules around noise."
+    detail "Scikit-learn's `DecisionTreeClassifier` defaults to `max_depth=None` and `min_samples_leaf=1`, expanding until every leaf is pure. Bounding depth, requiring multiple samples per leaf, or applying minimal cost-complexity pruning (`ccp_alpha`) trades a tiny rise in training impurity for stronger generalisation."
+    state l1,r1 error
+    callout stats "Train 100% vs Val 67%"

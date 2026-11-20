@@ -1,0 +1,74 @@
+flow "LLM agent tool-calling loop"
+summary "Cycles between model tool requests and host execution until end_turn, returning structured is_error tool results on failure so the agent can recover instead of crashing."
+tags agents tool-use llm
+level intermediate
+source "https://www.anthropic.com/engineering/building-effective-agents"
+source "https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview"
+related machine-learning/rag-pipeline
+
+layout direction=LR
+
+node user "User prompt" actor
+node llm "Agent LLM" service tone=primary
+node host "Tool runtime" service
+node api "External API" external
+node ans "Final reply" state
+
+edge user > llm
+edge llm > host
+edge host > api
+edge llm > ans
+
+array loop "Conversation loop" keys=turn,stop-reason,status = 1 – running
+
+scenario tool-call "Emit tool_use, execute, return tool_result"
+  step prompt "Send prompt + tool schemas to LLM"
+    "The user asks `\"Check order #42\"`. The host sends the prompt together with JSON tool definitions (`get_order`) to the LLM."
+    send user > llm "Order #42 + schemas"
+    state user,llm active
+    callout llm "Has schema for get_order(id)"
+  step emit-call "LLM returns structured tool_use block"
+    "Instead of guessing, the model pauses with `stop_reason: \"tool_use\"` and emits a structured call (`id: t1`, `get_order(42)`)."
+    send llm > host "tool_use t1"
+    label loop#stop-reason "tool_use"
+    state host active
+    callout host "Intercepts tool_use_id = t1"
+  step execute "Host runs tool and returns tool_result"
+    "The host runtime calls the external API, receives `{status: \"shipped\"}`, and sends a new user turn containing a `tool_result` matched to `t1`."
+    detail "Tool-use APIs enforce a strict message contract: every assistant `tool_use` block must be answered by a matching `tool_result` carrying the exact `tool_use_id` in the next user turn before the conversation can continue."
+    send host > api "GET /orders/42"
+    send api > host "200 shipped"
+    send host > llm "tool_result t1"
+    label loop#turn "2"
+    state api active
+  step synthesise "LLM finishes with end_turn"
+    "Grounded in the real API payload, the LLM stops with `stop_reason: \"end_turn\"` and replies cleanly: `\"Order #42 has shipped.\"`"
+    send llm > ans "Order #42 shipped"
+    label loop#stop-reason "end_turn"
+    label loop#status "done" with
+    state user,llm,host,api,ans success
+    callout ans "Grounded in live tool output"
+
+scenario tool-error-recovery "Tool fails: is_error lets LLM recover" from=tool-call/emit-call
+  step api-fail "External API times out"
+    "The runtime calls `GET /orders/42`, but the primary database times out. Crashing the loop or omitting `tool_result t1` would break the session contract."
+    send host > api "GET /orders/42"
+    send api > host "504 Timeout"
+    state api error
+    effect api shake
+    callout api "Primary API timed out!"
+  step return-error "Return tool_result with is_error: true"
+    "Instead of crashing, the runtime sends a matching `tool_result` (`id: t1`, `is_error: true`) with a clear, actionable message—never a raw stack trace."
+    detail "Setting `is_error: true` inside the `tool_result` block preserves valid message history while signalling to the model natively that execution failed, enabling autonomous retries, argument fixes, or fallback tool selection."
+    send host > llm "tool_result t1 (is_error)"
+    label loop#turn "2"
+    label loop#status "retrying" with
+    state host warning
+    callout host "is_error: true + clear hint"
+  step recover "LLM adapts with fallback or honest reply"
+    "Seeing `is_error: true`, the LLM calls a fallback lookup (bounded by a max-turn cap) or transparently reports the temporary outage to the user."
+    send llm > ans "Recovered reply"
+    label loop#stop-reason "end_turn"
+    label loop#status "recovered" with
+    state llm,ans success
+    callout ans "Graceful recovery, no crash"

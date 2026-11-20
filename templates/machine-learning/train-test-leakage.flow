@@ -1,0 +1,73 @@
+flow "Train–test data leakage"
+summary "Keeps test data strictly isolated by fitting scalers and encoders inside a training pipeline, whereas pre-split preprocessing or leaked features inflate test scores that collapse in production."
+tags evaluation data-leakage pipelines
+level intermediate
+source "https://scikit-learn.org/stable/common_pitfalls.html#data-leakage"
+related machine-learning/overfitting-regularisation machine-learning/feature-store-online-offline
+
+layout direction=LR
+
+node raw "Raw dataset" db
+node split "Train/Test split" decision
+node prep "Fit preprocessor" service tone=primary
+node train "Train model" service
+node eval "Evaluate & deploy" state
+
+edge raw > split
+edge split > prep
+edge prep > train
+edge prep > eval
+edge train > eval
+edge raw > prep id=leak-edge dashed hidden
+
+array scores "Model honesty" keys=test-auc,prod-auc,leaked = – – no
+
+scenario clean-pipeline "Split first, fit inside Pipeline"
+  step split-first "Split raw data before any preprocessing"
+    "Divide the raw dataset into `X_train` and `X_test` **first**, before scaling, imputing missing values, or selecting features."
+    state raw,split active
+    send raw > split "Raw rows"
+    callout split "Hold X_test completely untouched"
+  step fit-train "Fit transformers on X_train only"
+    "Inside a scikit-learn `Pipeline`, `StandardScaler.fit()` computes mean `μ` and std `σ` exclusively from `X_train`—never peeking at `X_test`."
+    detail "Bundling transformers and the estimator inside `make_pipeline(StandardScaler(), LogisticRegression())` guarantees that even during `cross_val_score`, every validation fold is scaled strictly using statistics fitted on its matching training folds."
+    send split > prep "X_train only"
+    send prep > train "Scaled X_train"
+    state prep,train active
+    callout prep "μ, σ fitted on train only"
+  step transform-eval "Transform X_test with frozen train stats"
+    "Apply `.transform(X_test)` using the frozen training `μ, σ` and score the trained model on genuinely unseen test rows."
+    send prep > eval "Transformed X_test"
+    send train > eval "Trained model" with
+    state eval active
+  step honest-metric "Test metric predicts production performance"
+    "Test AUC (`0.84`) aligns closely with real production AUC (`0.83`). Because no test or future information leaked, offline evaluation is trustworthy."
+    label scores#test-auc "0.84"
+    label scores#prod-auc "0.83" with
+    label scores#leaked "no" with
+    state raw,split,prep,train,eval success
+    callout scores "Honest offline estimate"
+
+scenario leaked-feature "Leaked preprocessing and target proxy" from=clean-pipeline/split-first
+  step pre-split-leak "Fit scaler before split + include target proxy"
+    "Calling `scaler.fit_transform(X)` on the *entire* dataset leaks `X_test`'s distribution into training. Adding a post-outcome column (e.g. `refund_flag`) leaks the label itself!"
+    show leak-edge
+    send raw > prep "All rows + future col" via=leak-edge
+    send prep > train "Contaminated train"
+    label scores#leaked "yes!"
+    state prep,train warning
+    callout prep "Test stats & target leaked!"
+  step inflated-test "Offline test score jumps artificially to 0.98"
+    "Evaluated on the contaminated test split, the model exploits the leaked feature and posts a dazzling **0.98** AUC—deceptively beating the clean `0.84` model."
+    send prep > eval "Leaked X_test"
+    send train > eval "Over-optimistic model" with
+    label scores#test-auc "0.98"
+    state eval warning
+    callout eval "Illusory 0.98 test AUC!"
+  step prod-collapse "Production AUC crashes when leakage disappears"
+    "In live production, future outcome columns are unavailable at prediction time and inputs are genuinely unseen: live AUC plunges from `0.98` to **0.61**!"
+    detail "Two distinct leakage families cause this crash: train-test contamination (fitting scalers, imputers, or feature selectors before splitting) and target leakage (including features recorded only after the predicted event occurs)."
+    label scores#prod-auc "0.61"
+    state prep,train,eval error
+    effect eval shake
+    callout scores "0.98 test → 0.61 prod crash!"
